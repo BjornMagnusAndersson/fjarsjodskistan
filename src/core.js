@@ -457,6 +457,7 @@
     shoes:    { z: 42, thumb: [128, 640, 144, 110] },
     sweater:  { z: 46, thumb: [60, 232, 280, 270] },
     jacket:   { z: 52, thumb: [54, 228, 292, 300] },
+    bracelet: { z: 56, thumb: [75, 416, 52, 52] },     // over sleeves and jackets, under mittens (left wrist in the tile)
     mittens:  { z: 58, thumb: [72, 422, 256, 82] },
     scarf:    { z: 60, thumb: [140, 210, 130, 190] },
     necklace: { z: 70, thumb: [156, 236, 88, 90] },
@@ -479,6 +480,7 @@
     { id: 'face',     is: 'Andlitsmálning' },
     { id: 'earrings', is: 'Eyrnalokkar' },
     { id: 'necklace', is: 'Hálsmen' },
+    { id: 'bracelet', is: 'Armbönd' },
     { id: 'top',      is: 'Bolir' },
     { id: 'sweater',  is: 'Peysur' },
     { id: 'jacket',   is: 'Jakkar' },

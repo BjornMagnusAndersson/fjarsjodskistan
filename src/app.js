@@ -467,7 +467,8 @@
       if (c.friend) el.dataset.friend = c.k;
       // on tall phone screens the animals stand further away on the hillside, so the doll has the foreground
       const spot = portrait && c.k !== 'seal' ? PORTRAIT_SPOTS[i % PORTRAIT_SPOTS.length] : null;   // the seal stays on its beach rock
-      el.style.left = (spot ? spot[0] : c.x) + '%'; el.style.top = (spot ? spot[1] : c.y) + '%'; el.style.height = (portrait ? c.h * .62 : c.h * wideScale()) + '%';
+      // sc.ground: lowest line where the land starts (the sea is above it in Reykjavík), in % of the stage
+      el.style.left = (spot ? spot[0] : c.x) + '%'; el.style.top = Math.max(spot ? spot[1] : c.y, sc.ground || 0) + '%'; el.style.height = (portrait ? c.h * .62 : c.h * wideScale()) + '%';
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', c.k);
       el.innerHTML = `<div class="inner">${CREATURES[c.k](c.lantern)}</div>`;
       el.querySelectorAll('.tail,.head').forEach(n => n.style.animationDelay = (-i * .7) + 's');
@@ -507,7 +508,8 @@
       let placed = false;
       for (let tries = 0; tries < 4 && !placed; tries++) {
         const r0 = el.getBoundingClientRect(), w = r0.width, h = r0.height;
-        const fits = (left, top) => { const r = { left, right: left + w, top, bottom: top + h }; return left >= sr.left + 4 && left + w <= sr.right - 4 && top >= sr.top + sr.height * .45 && !blockers.some(b => hit(grow(r, pad), b)); };
+        const ground = sr.top + sr.height * ((SCENES[state.scene] || {}).ground || 0) / 100;   // feet must stand on land
+        const fits = (left, top) => { const r = { left, right: left + w, top, bottom: top + h }; return left >= sr.left + 4 && left + w <= sr.right - 4 && top >= sr.top + sr.height * .45 && top + h >= ground && !blockers.some(b => hit(grow(r, pad), b)); };
         // try the planned height first, then a bit further back up the hill or nearer; at each, step outwards left and right
         for (const dy of [0, -.05, -.1, .04, -.15]) {
           const top = r0.top + dy * sr.height;

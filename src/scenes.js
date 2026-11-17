@@ -156,6 +156,189 @@
     </svg>`;
   }
 
+  /* ---- town helpers (Reykjavík and Kópavogur) ---- */
+  /** Darker outline colour for a scene fill. */
+  const sink = h => { const A = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), B = [59, 40, 56]; return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * .45).toString(16).padStart(2, '0')).join(''); };
+  /**
+   * Little Icelandic house: painted wall, steep corrugated-iron roof, white windows.
+   * x = left, base = ground line, w/h = wall size. smoke = chimney with rising puffs.
+   */
+  function house(x, base, w, h, wall, roof, smoke = false, delay = 0) {
+    const top = base - h, peak = top - w * .48;
+    let s = `<path d="M${x},${base} V${top} H${x + w} V${base}Z" fill="${wall}" stroke="${sink(wall)}" stroke-width="2.5"/>`;
+    if (smoke) s += `<rect x="${x + w * .66}" y="${peak + w * .12}" width="${w * .12}" height="${w * .3}" fill="#9a8a86" stroke="#6a5a58" stroke-width="2"/>` +
+      [0, 1, 2].map(i => `<circle class="smoke" style="animation-delay:${delay - i * 1.4}s" cx="${x + w * .72}" cy="${peak + w * .06}" r="${w * .09}" fill="#fff" opacity=".7"/>`).join('');
+    s += `<path d="M${x - 5},${top + 2} L${x + w / 2},${peak} L${x + w + 5},${top + 2}Z" fill="${roof}" stroke="${sink(roof)}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    // corrugated iron: thin lines down the roof
+    for (let i = 1; i < 6; i++) { const t = i / 6; s += `<path d="M${x + w / 2},${peak + 4} L${(x - 5 + (w + 10) * t).toFixed(0)},${top}" stroke="${sink(roof)}" stroke-width="1" opacity=".35"/>`; }
+    const win = (wx, wy, ww, wh) => `<rect x="${wx}" y="${wy}" width="${ww}" height="${wh}" fill="#bfe3f2" stroke="#fff" stroke-width="3"/><path d="M${wx + ww / 2},${wy} V${wy + wh} M${wx},${wy + wh / 2} H${wx + ww}" stroke="#fff" stroke-width="2"/>`;
+    const ww = w * .24, wh = h * .3;
+    s += win(x + w * .14, top + h * .2, ww, wh) + win(x + w * .62, top + h * .2, ww, wh);
+    if (w > 46) s += `<rect x="${x + w * .4}" y="${base - h * .42}" width="${w * .2}" height="${h * .42}" rx="3" fill="${sink(wall)}"/>`;
+    // little attic window in the gable
+    s += `<circle cx="${x + w / 2}" cy="${top - w * .17}" r="${w * .07}" fill="#bfe3f2" stroke="#fff" stroke-width="2"/>`;
+    return s;
+  }
+
+  /* ---------------- Scene 5: Reykjavík harbour ---------------- */
+  function reykjavik() {
+    const r = rng(11);
+    const waves = [0, 1, 2].map(i => `<g class="wave" style="animation-duration:${8 + i * 2}s;animation-delay:${-i * 2.1}s"><path d="M-200,${598 + i * 30} q50,-10 100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0 t100,0" fill="none" stroke="#fff" stroke-width="${3.5 - i * .5}" opacity="${.5 - i * .1}"/></g>`).join('');
+    const gulls = [0, 1, 2].map(i => `<g class="drift" style="animation-duration:${45 + i * 14}s;animation-delay:${-i * 17}s"><path d="M${250 + i * 330},${200 + i * 36} q14,-12 28,0 q14,-12 28,0" fill="none" stroke="#4d5866" stroke-width="4" stroke-linecap="round"/></g>`).join('');
+    /** Small fishing boat that rocks on the water. */
+    const boat = (x, y, hull, delay) => `<g class="boat" style="animation-delay:${delay}s">` +
+      `<path d="M${x - 46},${y - 18} H${x + 50} L${x + 38},${y} H${x - 38}Z" fill="${hull}" stroke="${sink(hull)}" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M${x - 40},${y - 12} H${x + 46}" stroke="#fff" stroke-width="3"/>` +
+      `<rect x="${x - 22}" y="${y - 42}" width="30" height="24" rx="3" fill="#fbfaf6" stroke="#9a9ca6" stroke-width="2"/><rect x="${x - 17}" y="${y - 37}" width="9" height="8" fill="#8fc6e2"/><rect x="${x - 4}" y="${y - 37}" width="9" height="8" fill="#8fc6e2"/>` +
+      `<path d="M${x + 22},${y - 18} V${y - 66}" stroke="#7a7f8a" stroke-width="3"/><path d="M${x + 22},${y - 64} L${x + 40},${y - 58} L${x + 22},${y - 52}Z" fill="#ef6f6c"/></g>`;
+    // Hallgrímskirkja: tall concrete tower with stepped columns falling away on both sides like basalt
+    let church = '';
+    const cx = 1010, base = 548;
+    for (let i = 5; i >= 0; i--) {
+      const top = 312 + i * 40, w = 15;
+      for (const s of [-1, 1]) {
+        const x = s < 0 ? cx - 34 - (i + 1) * w : cx + 34 + i * w;
+        church += `<rect x="${x}" y="${top}" width="${w}" height="${base - top}" fill="${i % 2 ? '#e9e6e0' : '#dcd8d1'}" stroke="#a9a49c" stroke-width="1.8"/>` +
+          `<path d="M${x + w / 2},${top + 6} V${base - 6}" stroke="#c4bfb6" stroke-width="1.4"/>`;
+      }
+    }
+    church += `<path d="M${cx - 34},${base} V250 L${cx},150 L${cx + 34},250 V${base}Z" fill="#efece6" stroke="#a9a49c" stroke-width="2.2" stroke-linejoin="round"/>` +
+      `<path d="M${cx - 12},${base} V270 M${cx + 12},${base} V270" stroke="#cfcac2" stroke-width="2"/>` +
+      `<rect x="${cx - 18}" y="262" width="36" height="22" rx="4" fill="#5e6b7a"/><path d="M${cx - 12},262 v22 M${cx},262 v22 M${cx + 12},262 v22" stroke="#efece6" stroke-width="3"/>` +
+      `<circle cx="${cx}" cy="306" r="11" fill="#fdfbf6" stroke="#8a857e" stroke-width="2"/><path d="M${cx},306 v-7 M${cx},306 h5" stroke="#4a4a52" stroke-width="2" stroke-linecap="round"/>` +
+      `<path d="M${cx},150 V122 M${cx - 8},131 H${cx + 8}" stroke="#a9a49c" stroke-width="4" stroke-linecap="round"/>` +
+      `<path d="M${cx - 9},${base} V${base - 46} Q${cx},${base - 60} ${cx + 9},${base - 46} V${base}Z" fill="#7a6a5e"/>`;
+    // Harpa: glass concert hall on the waterfront; some panes glint in colours (three groups twinkle in turn)
+    const HARPA = 'M1236,692 V586 L1300,540 L1470,532 L1536,566 V692Z';
+    let panes = '';
+    for (let gx = 0; gx < 3; gx++) {
+      panes += `<g class="twinkle" style="animation-delay:${-gx * 1.1}s">`;
+      for (let k = 0; k < 9; k++) {
+        const px = 1250 + Math.floor(r() * 270), py = 556 + Math.floor(r() * 120);
+        panes += `<rect x="${px}" y="${py}" width="16" height="12" fill="${['#ffe27a', '#9ff0d0', '#d7b4ff'][gx]}" opacity=".85"/>`;
+      }
+      panes += '</g>';
+    }
+    let grid = '';
+    for (let x = 1252; x < 1536; x += 18) grid += `M${x},540 V692`;
+    for (let y = 552; y < 692; y += 14) grid += `M1236,${y} H1536`;
+    // the Sun Voyager: a steel boat skeleton on a stone by the shore
+    const solfar = `<g transform="translate(150,700)"><path d="M-70,0 H80 L70,14 H-60Z" fill="#9aa0aa" stroke="#6c7280" stroke-width="2"/>` +
+      `<path d="M-90,-30 Q0,-6 100,-34" stroke="#cdd3dc" stroke-width="6" fill="none" stroke-linecap="round"/>` +
+      `<path d="M100,-34 L118,-62 M-90,-30 L-104,-50" stroke="#cdd3dc" stroke-width="5" stroke-linecap="round"/>` +
+      [-60, -35, -10, 15, 40, 65].map(x => `<path d="M${x},${-14 - Math.abs(x) * .1} L${x - 6},${-46}" stroke="#b7bec9" stroke-width="4" stroke-linecap="round"/>`).join('') +
+      `<path d="M-60,-46 Q0,-40 60,-48" stroke="#e4e8ee" stroke-width="2.5" fill="none" opacity=".8"/></g>`;
+    // colourful houses on the hill below the church: [left, ground line, width, height, wall, roof, chimney smoke?, smoke delay]
+    const houses = [
+      [940, 616, 46, 42, '#f7d16a', '#c4504a', true, 0], [1090, 594, 50, 44, '#8fc6e2', '#c4504a'], [1150, 602, 46, 40, '#f4f1ea', '#4f9a6a', true, -2],
+      [1560, 560, 48, 42, '#f7d16a', '#5a7fae'], [928, 682, 56, 52, '#a58be0', '#4f9a6a'], [992, 684, 50, 44, '#f48c7a', '#4a5f8a'],
+      [1050, 688, 54, 48, '#9edb8a', '#c4504a', true, -3], [1112, 692, 48, 44, '#6fb3e6', '#e2564c'], [1172, 696, 56, 50, '#ef8a7a', '#5a7fae'],
+    ].map(h => house(...h)).join('');
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="r-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86c8ee"/><stop offset="1" stop-color="#e6f6fc"/></linearGradient>
+      <linearGradient id="r-sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f88bb"/><stop offset="1" stop-color="#78bddc"/></linearGradient>
+      <linearGradient id="r-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7fb4c9"/><stop offset=".5" stop-color="#3f7393"/><stop offset="1" stop-color="#2c5671"/></linearGradient>
+      <linearGradient id="r-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86c96f"/><stop offset="1" stop-color="#57a24b"/></linearGradient>
+      <clipPath id="r-water"><rect x="0" y="0" width="1600" height="636"/></clipPath></defs>
+      <rect width="1600" height="1000" fill="url(#r-sky)"/>
+      ${sun(1440, 150, 52)}${cloud(300, 130, .9, 110, -25)}${cloud(1000, 80, .6, 130, -80)}${gulls}
+      ${rainbow(820, 640, 400)}
+      <path d="M-60,600 V478 Q80,440 210,450 Q330,418 470,432 Q600,410 720,446 Q830,462 920,520 L920,600Z" fill="#8ea6c4"/>
+      <path d="M196,462 q-6,12 -12,22 M212,460 q2,12 6,24 M456,444 q-8,14 -14,26 M472,442 q0,14 4,28 M488,446 q6,10 14,18 M640,448 q-6,10 -10,18 M654,448 q2,10 6,18" stroke="#fff" stroke-width="7" stroke-linecap="round" fill="none" opacity=".85"/>
+      <rect y="566" width="1600" height="140" fill="url(#r-sea)"/>${waves}
+      <g clip-path="url(#r-water)"><g class="whale"><g transform="translate(690,640)">
+        <path d="M0,0 C-2,-30 -6,-52 -20,-70 C-36,-84 -60,-80 -70,-72 C-52,-70 -30,-62 -12,-40 C-6,-36 6,-36 12,-40 C30,-62 52,-70 70,-72 C60,-80 36,-84 20,-70 C6,-52 2,-30 0,0Z" fill="#3e5b78" stroke="#263a52" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M-58,-74 C-40,-74 -22,-64 -12,-48" stroke="#7d9cba" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M-30,-12 q-10,-14 -4,-26 M30,-12 q10,-14 4,-26" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/></g></g></g>
+      <ellipse class="foam" cx="690" cy="638" rx="46" ry="6" fill="#fff" opacity=".5"/>
+      ${boat(830, 662, '#e2564c', 0)}
+      <path d="M880,706 C930,600 960,550 1060,542 Q1350,520 1600,530 L1600,720 L880,720Z" fill="#9cc37e"/>
+      ${church}${houses}
+      <path d="${HARPA}" fill="url(#r-glass)" stroke="#1f3f56" stroke-width="3" stroke-linejoin="round"/>
+      <path d="${grid}" stroke="#a9d3e6" stroke-width="1.2" opacity=".45"/>${panes}
+      <path d="M1300,540 L1470,532 L1536,566 L1300,572Z" fill="#fff" opacity=".18"/>
+      <g transform="translate(1520,532)"><path d="M0,0 V-70" stroke="#c9ccd4" stroke-width="4"/>
+        <g class="flag"><path d="M2,-70 H50 V-38 H2Z" fill="#2457a6"/><path d="M2,-54 H50 M18,-70 V-38" stroke="#fff" stroke-width="9"/><path d="M2,-54 H50 M18,-70 V-38" stroke="#d72830" stroke-width="5"/></g></g>
+      <path d="M0,706 H1600 V722 H0Z" fill="#8e939c"/><path d="M0,706 H1600" stroke="#b9bdc4" stroke-width="3"/>
+      ${solfar}
+      <path d="M0,722 L1600,722 L1600,1000 L0,1000Z" fill="url(#r-grass)"/>
+      <path d="M-20,1000 Q500,830 1000,860 T1620,800 L1620,850 Q1100,890 1000,905 T-20,1060Z" fill="#d9d4ca" opacity=".9"/>
+      ${Array.from({ length: 36 }, (_, i) => `<circle cx="${(i * 431) % 1600}" cy="${760 + (i * 113) % 230}" r="${3 + (i % 3)}" fill="${['#ffd84d', '#fff', '#f48cc0'][i % 3]}"/>`).join('')}
+    </svg>`;
+  }
+
+  /* ---------------- Scene 6: Kópavogur park ---------------- */
+  function kopavogur() {
+    /** Birch tree that sways a little. */
+    const birch = (x, y, s, delay) => `<g class="sway" style="transform-origin:${x}px ${y}px;animation-delay:${delay}s;animation-duration:4.6s">` +
+      `<path d="M${x - 6 * s},${y} Q${x - 3 * s},${y - 80 * s} ${x},${y - 150 * s} Q${x + 3 * s},${y - 80 * s} ${x + 6 * s},${y}Z" fill="#f4f1ea" stroke="#9a948a" stroke-width="2"/>` +
+      `<path d="M${x - 3 * s},${y - 30 * s} h5 M${x - 2 * s},${y - 70 * s} h4 M${x - 1 * s},${y - 105 * s} h3" stroke="#4a4a52" stroke-width="3" stroke-linecap="round"/>` +
+      [[-34, -150, 46], [26, -165, 42], [-6, -200, 50], [30, -118, 34], [-36, -112, 32]].map(([dx, dy, rr], i) =>
+        `<circle cx="${x + dx * s}" cy="${y + dy * s}" r="${rr * s}" fill="${i % 2 ? '#7cc45e' : '#94d36f'}" stroke="#5a9a4a" stroke-width="2"/>`).join('') + `</g>`;
+    /** Duck family: mother and two ducklings swimming back and forth on the stream. */
+    const duck = (x, y, k, body, head, beak) => `<g transform="translate(${x},${y}) scale(${k})">` +
+      `<ellipse cx="0" cy="0" rx="20" ry="11" fill="${body}" stroke="${sink(body)}" stroke-width="2"/><path d="M-20,-4 l-8,-6 l2,9z" fill="${body}" stroke="${sink(body)}" stroke-width="2"/>` +
+      `<circle cx="14" cy="-13" r="9" fill="${head}" stroke="${sink(head)}" stroke-width="2"/><path d="M21,-13 l10,2 l-10,4z" fill="${beak}" stroke="${sink(beak)}" stroke-width="1.5"/>` +
+      `<circle cx="16" cy="-15" r="2" fill="#2a1d26"/><circle cx="16.6" cy="-15.6" r=".7" fill="#fff"/><path d="M-8,-2 q8,-6 14,2" stroke="${sink(body)}" stroke-width="2" fill="none"/></g>`;
+    const ducks = `<g class="duck"><g class="boat" style="animation-duration:2.6s">` + duck(980, 706, 1, '#b98a5a', '#4f9a6a', '#f6a23a') +
+      duck(944, 712, .62, '#ffe066', '#ffe066', '#f6a23a') + duck(916, 714, .58, '#ffe066', '#ffe066', '#f6a23a') + `</g></g>`;
+    // Kópavogskirkja: white church on its hill, tall arched front with a stained-glass window
+    const kirk = `<g transform="translate(870,560)">
+      <path d="M-92,40 V-6 Q-62,-70 -32,-6 V40Z" fill="#ecebe6" stroke="#a9a49c" stroke-width="2.5"/>
+      <path d="M92,40 V-6 Q62,-70 32,-6 V40Z" fill="#ecebe6" stroke="#a9a49c" stroke-width="2.5"/>
+      <path d="M-58,40 V-30 Q0,-190 58,-30 V40Z" fill="#f7f6f2" stroke="#a9a49c" stroke-width="3"/>
+      <path d="M-30,38 V-28 Q0,-130 30,-28 V38Z" fill="url(#k-glass)" stroke="#8a857e" stroke-width="2.5"/>
+      <path d="M-10,38 V-80 M10,38 V-80 M-30,0 H30 M-26,-40 H26" stroke="#efece6" stroke-width="3" opacity=".8"/>
+      <path d="M0,-112 V-150 M-11,-138 H11" stroke="#a9a49c" stroke-width="5" stroke-linecap="round"/></g>`;
+    // tall glass tower and apartment blocks behind the valley
+    let tower = `<path d="M1300,620 V270 L1340,240 L1380,262 V620Z" fill="url(#k-tower)" stroke="#3a5a72" stroke-width="2.5"/>`;
+    for (let y = 280; y < 620; y += 16) tower += `<path d="M1302,${y} H1378" stroke="#bfe0ee" stroke-width="1.2" opacity=".5"/>`;
+    tower += `<path d="M1312,272 V610" stroke="#fff" stroke-width="5" opacity=".35"/>`;
+    const block = (x, y, w, h, bal) => { let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f2efe8" stroke="#a9a49c" stroke-width="2"/>`;
+      for (let fy = y + 14; fy < y + h - 14; fy += 24) for (let fx = x + 10; fx < x + w - 16; fx += 26) s += `<rect x="${fx}" y="${fy}" width="16" height="12" fill="#a9d3e6"/><rect x="${fx - 2}" y="${fy + 12}" width="20" height="5" fill="${bal}"/>`;
+      return s; };
+    const blocks = block(1110, 470, 120, 150, '#f48c7a') + block(1420, 500, 110, 120, '#6fb3e6') + block(1220, 520, 70, 100, '#f7d16a');
+    // swing set: A-frame with one swing that swings
+    const swing = `<g transform="translate(1440,640)"><path d="M-80,160 L-60,0 L-40,160 M80,160 L60,0 L40,160" stroke="#d0473f" stroke-width="9" stroke-linecap="round" fill="none"/>
+      <path d="M-66,0 H66" stroke="#8a5a34" stroke-width="10" stroke-linecap="round"/>
+      <g class="swing" style="transform-origin:0px 0px"><path d="M-14,0 V108 M14,0 V108" stroke="#7a7f8a" stroke-width="3"/><rect x="-22" y="106" width="44" height="9" rx="4" fill="#f7d16a" stroke="#c49a2a" stroke-width="2"/></g></g>`;
+    // slide on the left
+    const slide = `<g transform="translate(150,640)"><path d="M-40,150 V0 H-10 V150" stroke="#6fb3e6" stroke-width="8" fill="none"/><path d="M-40,40 H-10 M-40,80 H-10 M-40,120 H-10" stroke="#6fb3e6" stroke-width="6"/>
+      <path d="M-10,0 Q40,10 70,140 L94,150 L84,160 L56,148 Q30,30 -10,18Z" fill="#f48cc0" stroke="#c4568c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-46,0 H-4" stroke="#8a5a34" stroke-width="8" stroke-linecap="round"/></g>`;
+    // kite on a long string
+    const kite = `<path d="M600,250 Q640,520 700,760" stroke="#fff" stroke-width="1.6" fill="none" opacity=".7"/>
+      <g class="kite" style="transform-origin:600px 250px"><path d="M600,190 L640,250 L600,320 L560,250Z" fill="#f48cc0" stroke="#c4568c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M600,190 V320 M560,250 H640" stroke="#fff" stroke-width="2.5"/><path d="M600,190 L640,250 L600,250Z" fill="#f7d16a" opacity=".85"/>
+      <path d="M600,320 q-14,20 0,40 q14,20 0,40" stroke="#6fb3e6" stroke-width="3" fill="none"/>
+      ${[[600, 340, '#ef6f6c'], [600, 372, '#7fcf8a'], [600, 404, '#a58be0']].map(([x, y, c]) => `<path d="M${x - 8},${y} l8,-6 l8,6 l-8,6z" fill="${c}"/>`).join('')}</g>`;
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="k-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ccdf0"/><stop offset="1" stop-color="#eef8fc"/></linearGradient>
+      <linearGradient id="k-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset=".35" stop-color="#f48cc0"/><stop offset=".7" stop-color="#8f7fe0"/><stop offset="1" stop-color="#5aa9ec"/></linearGradient>
+      <linearGradient id="k-tower" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7fb4d0"/><stop offset=".6" stop-color="#4f86a8"/><stop offset="1" stop-color="#3a6788"/></linearGradient>
+      <linearGradient id="k-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd06f"/><stop offset="1" stop-color="#5aa64c"/></linearGradient>
+      <linearGradient id="k-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6ec0e6"/><stop offset="1" stop-color="#3f92c4"/></linearGradient></defs>
+      <rect width="1600" height="1000" fill="url(#k-sky)"/>
+      ${sun(380, 140, 50)}${cloud(900, 120, .8, 100, -40)}${cloud(1350, 200, .55, 120, -10)}
+      ${rainbow(860, 620, 420)}
+      <path d="M0,560 Q200,470 420,520 Q600,460 820,510 Q1050,450 1280,510 Q1450,480 1600,520 L1600,640 L0,640Z" fill="#a9b8d8"/>
+      <path d="M380,500 l-20,16 l16,-2 l8,10 l10,-20Z M1050,462 l-16,14 l14,-2 l6,8 l8,-16Z" fill="#fff" opacity=".85"/>
+      ${blocks}${tower}
+      <path d="M600,660 Q870,500 1140,660Z" fill="#7dbf63"/>
+      ${kirk}
+      ${kite}
+      <path d="M0,640 Q500,600 1000,640 T1600,630 L1600,1000 L0,1000Z" fill="url(#k-grass)"/>
+      <path d="M-60,692 Q300,704 560,700 Q900,680 1200,700 T1660,720 L1660,752 Q1300,730 1200,734 T560,734 Q300,738 -60,726Z" fill="url(#k-water)" stroke="#3f86b6" stroke-width="2"/>
+      ${[0, 1, 2].map(i => `<path d="M${640 + i * 300},${712 + i * 3} q40,-6 80,0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="16 22" class="flow" style="animation-duration:${2.2 + i * .4}s"/>`).join('')}
+      ${ducks}
+      <g transform="translate(1180,716)"><path d="M-70,6 Q0,-46 70,6" stroke="#8a5a34" stroke-width="12" fill="none"/><path d="M-70,-10 Q0,-62 70,-10" stroke="#b47a45" stroke-width="5" fill="none"/>
+        ${[-50, -25, 0, 25, 50].map(x => `<path d="M${x},${-Math.round(26 - x * x / 120)} V${Math.round(-10 - (26 - x * x / 120) * .6 + 20)}" stroke="#b47a45" stroke-width="4"/>`).join('')}</g>
+      ${birch(1020, 650, 1, 0)}${birch(1590, 660, 1.1, -1.5)}${birch(440, 655, .85, -2.4)}
+      ${slide}${swing}
+      ${Array.from({ length: 40 }, (_, i) => `<circle cx="${(i * 389) % 1600}" cy="${780 + (i * 97) % 210}" r="${3 + (i % 3)}" fill="${['#ffd84d', '#fff', '#b59be6'][i % 3]}"/>`).join('')}
+    </svg>`;
+  }
+
   /* =====================================================================
      Creatures: each returns a standalone SVG whose feet (or rock) sit on
      the bottom edge of its viewBox; the app places them by bottom-centre.
@@ -666,6 +849,13 @@
     night: { name: 'Norðurljós', svg: night, wind: 5, snow: true, creatures: [
       { k: 'fox', x: 56, y: 92, h: 10 }, { k: 'unicorn', x: 84, y: 82, h: 17, flip: true },
       { k: 'elf', x: 66, y: 74, h: 10, lantern: true }, { k: 'puffin', x: 48, y: 96, h: 10 }] },
+    // ground: creatures' feet stay below this line (% of the stage), so nobody stands on the sea or the stream
+    reykjavik: { name: 'Reykjavík', svg: reykjavik, wind: 2.8, ground: 76, creatures: [
+      { k: 'seal', x: 62, y: 80, h: 11 }, { k: 'puffin', x: 50, y: 95, h: 10 }, { k: 'unicorn', x: 84, y: 86, h: 16, flip: true },
+      { k: 'elf', x: 73, y: 88, h: 10, peek: true }] },
+    kopavogur: { name: 'Kópavogur', svg: kopavogur, wind: 3.2, ground: 77, creatures: [
+      { k: 'unicorn', x: 70, y: 86, h: 16 }, { k: 'sheep', x: 56, y: 94, h: 11 }, { k: 'puffin', x: 48, y: 97, h: 10 },
+      { k: 'elf', x: 84, y: 90, h: 10, peek: true }] },
   };
 
   root.SCENES = SCENES;

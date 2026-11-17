@@ -142,6 +142,22 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .rainbow.shimmer { opacity: .65; animation: shimmer 5s ease-in-out infinite; }
 .rainbow.show { opacity: 1 !important; animation: none; }
 .tw { animation: twinkle 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+/* town scenes: boats rock, the whale tail rises now and then, the flag waves, chimneys puff,
+   the kite dances, the swing swings and the duck family swims back and forth */
+.boat { animation: boat 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.whale { animation: whale 18s ease-in-out infinite; }
+.flag { animation: flag 1.5s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 0% 50%; }
+.smoke { animation: smoke 4.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.kite { animation: kite 6s ease-in-out infinite; }
+.swing { animation: swing 2.4s ease-in-out infinite alternate; }
+.duck { animation: duck 26s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes boat { 0%, 100% { transform: translateY(0) rotate(-2.5deg); } 50% { transform: translateY(6px) rotate(2.5deg); } }
+@keyframes whale { 0%, 55%, 100% { transform: translateY(100px); } 66%, 84% { transform: translateY(0); } }
+@keyframes flag { from { transform: skewY(-5deg) scaleX(.94); } to { transform: skewY(5deg) scaleX(1.02); } }
+@keyframes smoke { 0% { transform: translateY(0) scale(.5); opacity: 0; } 20% { opacity: .75; } 100% { transform: translateY(-70px) scale(1.6); opacity: 0; } }
+@keyframes kite { 0%, 100% { transform: translate(0, 0) rotate(-6deg); } 50% { transform: translate(40px, -24px) rotate(7deg); } }
+@keyframes swing { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
+@keyframes duck { 0% { transform: translateX(0) scaleX(1); } 49% { transform: translateX(260px) scaleX(1); } 50% { transform: translateX(260px) scaleX(-1); } 99% { transform: translateX(0) scaleX(-1); } 100% { transform: translateX(0) scaleX(1); } }
 
 /* creature idles */
 .creature .tail { animation: tail 2.6s ease-in-out infinite alternate; }
@@ -219,6 +235,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   .bar.top-left { top: max(8px, env(safe-area-inset-top, 0px)); }
   .tab { width: 50px; height: 50px; border-width: 3px; padding: 4px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+}
+
+/* narrow phones: six scene buttons and the jar must fit in one row */
+@media (max-width: 460px) {
+  .bar.top-left { gap: 6px; }
+  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 42px; height: 42px; border-width: 3px; }
+  .bar.top-left .btn.jar-btn { margin-left: 2px; }
 }
 
 /* mini scenes on the picker buttons stay still */

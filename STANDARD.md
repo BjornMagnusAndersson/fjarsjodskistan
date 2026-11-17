@@ -86,6 +86,7 @@ A shape should be reusable: several items share one shape with different colours
 | shoes | 42 | shoes and boots |
 | sweater | 46 | |
 | jacket | 52 | snowsuit: slot jacket, `occupies: ['jacket','bottom']` |
+| bracelet | 56 | bracelets and bangles (`src/garments/wrists.js`): drawn in wrist space with `onWrist`, like mittens |
 | mittens | 58 | |
 | scarf | 60 | |
 | necklace | 70 | |
@@ -99,7 +100,7 @@ A shape should be reusable: several items share one shape with different colours
 
 ## Categories (`cat` = the chest tab)
 
-hat, crown, hairband, glasses, face, earrings, necklace, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
+hat, crown, hairband, glasses, face, earrings, necklace, bracelet, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
 
 ## Style rules (approved look)
 
