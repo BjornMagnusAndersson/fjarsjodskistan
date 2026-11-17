@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 tools/*.png
 .claude/
+CLAUDE.md
+.venv/
+tools/*.html

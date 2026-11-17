@@ -81,6 +81,19 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .btn:focus-visible, .tab:focus-visible, .tile:focus-visible { outline: 4px solid #2c6bb2; outline-offset: 2px; }
 .btn.pop { animation: pop .5s ease; }
 
+/* heart jar (end of the scene row) and the friends it brings */
+.btn.jar-btn { width: 58px; height: 58px; padding: 2px; margin-left: 6px; }
+.btn.jar-btn svg { width: 100%; height: 100%; }
+.btn.jar-btn[hidden] { display: none; }
+.btn.jar-btn.glow { animation: jarGlow .5s ease-in-out 3 alternate; }
+.ghost.heart-fly { width: 9vmin; height: 9vmin; }
+.ghost.friend-fly { width: 22vmin; height: 22vmin; }
+.creature.arriving { visibility: hidden; }
+.card.friend-card { width: 130px; height: 130px; padding: 8px; display: flex; align-items: center; justify-content: center; font: inherit; }
+.card.friend-card svg { width: 100%; height: 100%; }
+.card.friend-card.hop { animation: hop .7s ease; }
+@keyframes jarGlow { to { transform: scale(1.18) rotate(-4deg); box-shadow: 0 0 0 8px rgba(242, 195, 77, .55), 0 4px 18px rgba(242, 160, 60, .5); } }
+
 /* saved outfits strip */
 .gallery { position: absolute; left: 0; right: 0; top: 0; padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
   display: flex; gap: 12px; overflow-x: auto; z-index: 30; background: rgba(255, 246, 228, .96); box-shadow: 0 6px 20px rgba(40, 20, 10, .3);
@@ -194,12 +207,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   .bar.left-low { bottom: max(12px, env(safe-area-inset-bottom, 0px)); gap: 8px; }
   .bar.left-low .btn { width: 50px; height: 50px; border-width: 3px; }
   .bar.left-low .btn svg { width: 30px; height: 30px; }
-  .bar.top-left .btn.scene-btn { width: 50px; height: 50px; }
+  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 50px; height: 50px; }
 }
 
 /* short landscape screens (phones on their side): smaller buttons, left column starts below the scene picker */
 @media (max-height: 520px) and (min-aspect-ratio: 4/5) {
-  .bar.top-left .btn.scene-btn { width: 44px; height: 44px; border-width: 3px; }
+  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 44px; height: 44px; border-width: 3px; }
   .bar.left-low { bottom: auto; top: calc(max(8px, env(safe-area-inset-top, 0px)) + 54px); gap: 6px; }
   .bar.left-low .btn { width: min(44px, calc((100vh - 86px) / 5.5)); height: min(44px, calc((100vh - 86px) / 5.5)); border-width: 3px; }
   .bar.left-low .btn svg { width: 62%; height: 62%; }

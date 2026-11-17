@@ -312,6 +312,74 @@
       `</g>` + sparkles);
   }
 
+  /**
+   * Sitting plush friend (reward friends from the heart jar), front view, viewBox 120×130
+   * (bunny ears reach higher, so it uses a taller box). Round head, pear body, little arms,
+   * two feet with paw pads. Options:
+   *   p id prefix, fur [light, base, dark], belly, muzzle, nose, earIn (inner ear),
+   *   ears 'round' | 'cat' | 'bunny' | 'floppy' (earColor), mane [colours] (lion), spikes [light, dark] (hedgehog),
+   *   tail 'lion' | 'cat' | 'puff' | 'curl', whiskers, stripes, stitch (teddy seams), bow colour.
+   */
+  function plush(o) {
+    const p = o.p, [fl, fb, fd] = o.fur, line = o.line || cink(fd, .5);
+    const fur = `url(#${p}-fur)`;
+    const defs = rad(`${p}-fur`, [[0, fl], [.6, fb], [1, fd]], .4, .3, .85) +
+      rad(`${p}-belly`, [[0, '#ffffff'], [.5, o.belly], [1, cmix(o.belly, fd, .35)]], .45, .3, .8) +
+      (o.mane ? rad(`${p}-mane`, [[0, o.mane[0]], [.6, o.mane[1]], [1, o.mane[2]]], .5, .45, .6) : '') +
+      (o.spikes ? rad(`${p}-spk`, [[0, o.spikes[0]], [1, o.spikes[1]]], .5, .6, .7) : '');
+    const mirror = (d) => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => r1(120 - x) + ',' + y);
+    let back = '', ears = '';
+    // tail (behind the body, wags)
+    if (o.tail === 'lion') back += `<g class="tail" style="transform-origin:88px 112px">` + stroke('M88,112C104,114 110,100 104,88', fd, 5) + shape(fluff(ring(104, 84, 7, 7, 7), .4), o.mane ? `url(#${p}-mane)` : fd, line, 1.6) + `</g>`;
+    if (o.tail === 'cat') back += `<g class="tail" style="transform-origin:88px 114px">` + stroke('M88,114C108,116 112,96 104,84', line, 9) + stroke('M88,114C108,116 112,96 104,84', fb, 6) + `</g>`;
+    if (o.tail === 'curl') back += `<g class="tail" style="transform-origin:88px 110px">` + stroke('M88,110C104,108 106,92 98,90C92,90 94,98 98,98', line, 8) + stroke('M88,110C104,108 106,92 98,90C92,90 94,98 98,98', fb, 5) + `</g>`;
+    if (o.tail === 'puff') back += shape(fluff(ring(92, 114, 9, 8, 8), .4), '#ffffff', line, 1.6);
+    // lion mane: a big fluffy ring behind the head
+    if (o.mane) back += shape(fluff(ring(60, 48, 42, 40, 16, 0, .05), .32), `url(#${p}-mane)`, cink(o.mane[2], .45), 2);
+    // hedgehog spikes: a spiky coat behind head and body
+    if (o.spikes) {
+      const pts = [];
+      // symmetric arc over the top, from lower left round to lower right, alternating spike tips and dips
+      for (let i = 0; i <= 22; i++) { const a = Math.PI - .3 + (Math.PI + .6) * i / 22, r = i % 2 ? 1.22 : 1; pts.push([r1(60 + Math.cos(a) * 46 * r), r1(78 + Math.sin(a) * 58 * r)]); }
+      pts.push([98, 118], [22, 118]);
+      back += shape('M' + pts.map(q => q.join(',')).join('L') + 'Z', `url(#${p}-spk)`, cink(o.spikes[1], .45), 2) +
+        stroke(pts.slice(1, 22).filter((_, j) => j % 2 === 0).map(([x, y]) => `M${r1(60 + (x - 60) * .7)},${r1(78 + (y - 78) * .7)}L${x},${y}`).join(''), o.spikes[0], 1.6, .6);
+    }
+    // ears
+    const earIn = o.earIn || cmix(fb, '#f7a6b8', .5);
+    if (o.ears === 'round') ears = `<circle cx="35" cy="26" r="12" fill="${fur}" stroke="${line}" stroke-width="2"/><circle cx="85" cy="26" r="12" fill="${fur}" stroke="${line}" stroke-width="2"/>` +
+      oval(36, 27, 6.5, 6.5, earIn) + oval(84, 27, 6.5, 6.5, earIn);
+    if (o.ears === 'cat') { const e = 'M30,38L33,8L54,26Z', i = 'M35,32L37,16L48,26Z'; ears = shape(e, fur, line, 2) + shape(mirror(e), fur, line, 2) + shape(i, earIn, 'none', 0) + shape(mirror(i), earIn, 'none', 0); }
+    if (o.ears === 'bunny') { const e = 'M44,26C34,10 34,-18 44,-22C54,-18 54,10 50,26Z', i = 'M45,20C39,8 39,-12 44,-15C49,-12 49,8 48,20Z'; ears = shape(e, fur, line, 2) + shape(mirror(e), fur, line, 2) + shape(i, earIn, 'none', 0) + shape(mirror(i), earIn, 'none', 0); }
+    let front = '';
+    if (o.ears === 'floppy') { const e = 'M34,28C20,30 14,52 20,64C28,70 36,58 38,40Z', ec = o.earColor || fd; front = shape(e, ec, cink(ec, .45), 2) + shape(mirror(e), ec, cink(ec, .45), 2); }
+    const arm = 'M34,78C24,84 22,98 30,104C38,106 42,96 42,86Z';
+    const feet = [42, 78].map(x => oval(x, 117, 14, 9, fur, 1, ` stroke="${line}" stroke-width="2"`) +
+      oval(x, 119, 6, 4, o.pad || earIn) + [-6, 0, 6].map(dx => oval(x + dx, 112.5, 2.2, 1.8, o.pad || earIn)).join('')).join('');
+    const whiskers = o.whiskers ? stroke('M49,56L34,52M49,59L34,60', cink(fb, .4), 1.2, .7) + stroke(mirror('M49,56L34,52M49,59L34,60'), cink(fb, .4), 1.2, .7) : '';
+    const headStripes = o.stripes ? stroke('M54,20l2,7M60,19v8M66,20l-2,7', fd, 2.4, .7) : '';
+    const armStripes = o.stripes ? stroke('M27,92q5,2 10,0M83,92q5,2 10,0', fd, 2, .6) : '';
+    const stitch = o.stitch ? `<path d="M60,74V116" stroke="${cink(o.belly, .3)}" stroke-width="1.4" stroke-dasharray="3 3" fill="none"/>` : '';
+    const bow = o.bow ? shape('M60,70l-11,-7v14z M60,70l11,-7v14z', o.bow, cink(o.bow, .5), 1.8) + `<circle cx="60" cy="70" r="3.4" fill="${o.bow}" stroke="${cink(o.bow, .5)}" stroke-width="1.6"/>` : '';
+    const vb = o.ears === 'bunny' ? '0 -26 120 156' : '0 0 120 130';
+    return svgOf(vb, p, defs,
+      oval(60, 126, 42, 5, `url(#${p}-sh)`) + back +
+      // body, belly, arms and feet
+      shape('M60,60C84,60 96,82 96,100C96,118 82,124 60,124C38,124 24,118 24,100C24,82 36,60 60,60Z', fur, line, 2.2) +
+      oval(60, 100, 20, 17, `url(#${p}-belly)`) + stitch +
+      shape(arm, fur, line, 2) + shape(mirror(arm), fur, line, 2) + armStripes + feet +
+      // head (nods from the neck)
+      `<g class="head" style="transform-origin:60px 70px">` + ears +
+        shape('M60,19C80,19 91,32 91,47C91,62 78,72 60,72C42,72 29,62 29,47C29,32 40,19 60,19Z', fur, line, 2.2) + front +
+        oval(52, 30, 10, 6, `url(#${p}-glow)`, .5) + headStripes +
+        oval(60, 57, 13, 9.5, o.muzzle) +
+        bigEye(p, 48, 43, 4.4, 5.2) + bigEye(p, 72, 43, 4.4, 5.2) +
+        shape('M55,51.5q5,-3 10,0q-1,4 -5,5q-4,-1 -5,-5Z', o.nose, cink(o.nose, .45), 1.2) +
+        stroke('M60,56.5v2.5M55.5,59.5q4.5,3.5 9,0', cink(o.muzzle, .6), 1.5) + whiskers +
+        oval(40, 54, 6, 4, `url(#${p}-blush)`) + oval(80, 54, 6, 4, `url(#${p}-blush)`) +
+      `</g>` + bow);
+  }
+
   const C = {
     /** Atlantic puffin, upright, side view facing right: black back and cap, white face disc with a grey cheek, big striped beak, orange feet. */
     puffin: () => {
@@ -540,6 +608,49 @@
     },
   };
 
+  /* ---- Reward friends (they come out of the heart jar, one per full jar) ---- */
+  Object.assign(C, {
+    /** Lion teddy: golden plush with a big orange mane, tufted tail and a stitched belly. */
+    lion: () => plush({ p: 'cr-lion', fur: ['#ffe9a8', '#f4c35a', '#d18f2c'], belly: '#fff3d0', muzzle: '#fff4dc', nose: '#9a5a3a',
+      ears: 'round', earIn: '#f7d48a', mane: ['#ffb45a', '#ee8a2e', '#c4621c'], tail: 'lion', stitch: true }),
+    /** Baby unicorn, pink with a lilac and blue mane. */
+    foalpink: () => pony({ p: 'cr-foalpink', coat: ['#fff3f9', '#ffd8ec', '#e9a9c8'], line: '#c48aa8', muzzle: '#ffe8f2',
+      mane: ['#c9a8ff', '#a9dcff', '#ffffff', '#d9c4ff'], maneLine: '#9a86c8', hoof: ['#fff3b0', '#e0b84a'], unicorn: true }),
+    /** Kitten: soft grey tabby with stripes and whiskers. */
+    kitten: () => plush({ p: 'cr-kitten', fur: ['#f1f1f6', '#c9c9d6', '#9a9aae'], belly: '#ffffff', muzzle: '#ffffff', nose: '#f39ab0',
+      ears: 'cat', tail: 'cat', whiskers: true, stripes: true, bow: '#7fc6e8' }),
+    /** Bunny: white with pink ears and a fluffy tail. */
+    bunny: () => plush({ p: 'cr-bunny', fur: ['#ffffff', '#f6f1f4', '#d6cbd3'], belly: '#ffffff', muzzle: '#ffffff', nose: '#f39ab0',
+      ears: 'bunny', earIn: '#ffc4d6', tail: 'puff', bow: '#f48cc0' }),
+    /** Teddy bear: classic brown teddy with a stitched belly and a red bow. */
+    teddy: () => plush({ p: 'cr-teddy', fur: ['#d9a77a', '#b07a4c', '#7f5131'], belly: '#f0d2b0', muzzle: '#f3dcc0', nose: '#5a3a2a',
+      ears: 'round', earIn: '#e7c09a', stitch: true, bow: '#e2464c' }),
+    /** Baby unicorn, mint green with a rainbow mane. */
+    foalmint: () => pony({ p: 'cr-foalmint', coat: ['#f4fffb', '#d2f4e8', '#9fd6c2'], line: '#80b4a2', muzzle: '#eafff7',
+      mane: ['#ffb3d6', '#ffe08a', '#b9efc8', '#a9dcff', '#d3bcff'], maneLine: '#9a8ac0', hoof: ['#ffe58a', '#e0a92e'], unicorn: true }),
+    /** Hedgehog: brown spiky coat, light face and tummy. */
+    hedgehog: () => plush({ p: 'cr-hedgehog', fur: ['#fbefe0', '#ecd3b5', '#c9a582'], belly: '#fff6ea', muzzle: '#fff6ea', nose: '#3a2a2a',
+      ears: 'round', earIn: '#f2c4b4', spikes: ['#b98a62', '#6e4a30'] }),
+    /** Puppy: cream with floppy brown ears and a curly tail. */
+    puppy: () => plush({ p: 'cr-puppy', fur: ['#fff8ec', '#f1dcc0', '#cfae88'], belly: '#ffffff', muzzle: '#ffffff', nose: '#3a2a2a',
+      ears: 'floppy', earColor: '#b07a4c', tail: 'curl', bow: '#6cc6f2' }),
+  });
+  /**
+   * The order friends come out of the jar. The first one is the lion teddy (her favourite).
+   * h = height in % of the stage; voice = what a tap sounds like (see Sound in app.js).
+   * Keys are stored in her save: never rename. Add new friends at the end.
+   */
+  const FRIENDS = [
+    { k: 'lion', is: 'Ljónabangsi', h: 9, voice: 'soft' },
+    { k: 'foalpink', is: 'Bleikur einhyrningur', h: 11, voice: 'sparkle' },
+    { k: 'kitten', is: 'Kisa', h: 8.5, voice: 'mew' },
+    { k: 'bunny', is: 'Kanína', h: 10, voice: 'soft' },
+    { k: 'teddy', is: 'Bangsi', h: 8.5, voice: 'soft' },
+    { k: 'foalmint', is: 'Grænn einhyrningur', h: 11, voice: 'sparkle' },
+    { k: 'hedgehog', is: 'Broddgöltur', h: 8, voice: 'soft' },
+    { k: 'puppy', is: 'Hvolpur', h: 8.5, voice: 'yip' },
+  ];
+
   /* Where creatures stand in each scene: x/y are % of the stage (feet position), h is height in % of stage height.
      flip mirrors the creature. Each scene picks a helper that carries pieces from the chest. */
   const SCENES = {
@@ -559,4 +670,5 @@
 
   root.SCENES = SCENES;
   root.CREATURES = C;
+  root.FRIENDS = FRIENDS;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -22,6 +22,7 @@
   const BROKEN = KEY + '.broken';     // unreadable data is parked here instead of being overwritten
   const VERSION = 1;
   const MAX_OUTFITS = 200;            // ~300 bytes each, far below the browser limit
+  const JAR_SIZE = 10;                // hearts in a full jar (a full jar brings a new friend)
   /** Parse stored JSON; null when missing or unreadable. */
   function readJSON(key) {
     let raw = null;
@@ -55,8 +56,10 @@
       worn: {},                 // slot → item id
       loose: [],                // [{ id, x, y }] pieces lying in the scene, x/y in % of the stage
       outfits: [],              // [{ id, createdAt, hair, worn, scene }]
-      settings: { sound: true, calm: false },
+      settings: { sound: true, calm: false, rewards: true },
       cat: 'top',               // open chest tab
+      // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order), hairstyles already tried
+      rewards: { hearts: 0, friends: [], hairSeen: [] },
     };
   }
   const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
@@ -81,6 +84,14 @@
     if (Array.isArray(d.loose)) s.loose = d.loose.filter(p => isObj(p) && typeof p.id === 'string');
     s.outfits = cleanOutfits(d.outfits).slice(0, MAX_OUTFITS);
     if (isObj(d.settings)) Object.assign(s.settings, d.settings);
+    if (isObj(d.rewards)) {
+      const r = d.rewards, strs = a => (Array.isArray(a) ? a : []).filter(x => typeof x === 'string');
+      s.rewards.hearts = Math.max(0, Math.min(JAR_SIZE - 1, Math.floor(+r.hearts) || 0));
+      s.rewards.friends = [...new Set(strs(r.friends))];
+      s.rewards.hairSeen = [...new Set(strs(r.hairSeen))];
+    }
+    // the hairstyle she starts with does not earn a heart
+    if (!s.rewards.hairSeen.length) s.rewards.hairSeen = [s.hair];
     return s;
   }
   const state = upgrade(Store.load());
@@ -123,6 +134,19 @@
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
     whoosh() { this.tone(500, .25, 'triangle', .02, 0, 900); },
+    /** A heart lands in the jar: two soft bell notes. */
+    heart() { this.tone(1318, .3, 'sine', .035); this.tone(1568, .4, 'sine', .03, .1); },
+    /** Full jar: a short music-box tune (C major, up and back down to a happy end). */
+    melody() { [1047, 1319, 1568, 2093, 1568, 1319, 1568, 2093].forEach((f, i) => { this.tone(f, .45, 'sine', .035, i * .17); this.tone(f / 2, .5, 'triangle', .012, i * .17); }); },
+    /** A friend lands in the scene. */
+    arrive() { this.tone(523, .25, 'sine', .04, 0, 784); this.sparkle(); },
+    /** What a friend sounds like when tapped (voice from FRIENDS). */
+    voice(v) {
+      if (v === 'mew') this.tone(900, .28, 'sine', .035, 0, 620);
+      else if (v === 'yip') { this.tone(700, .09, 'triangle', .03, 0, 1000); this.tone(760, .09, 'triangle', .03, .14, 1080); }
+      else if (v === 'sparkle') this.sparkle();
+      else { this.tone(523, .22, 'sine', .035); this.tone(784, .3, 'sine', .03, .12); }
+    },
   };
 
   /* ---------------------------------------------------------------
@@ -189,8 +213,12 @@
   /** A thumbnail flies from one rect to another (used when pieces go home). */
   function flyThumb(id, from, to, ms = 600, carrier) {
     const it = DOLL.byId[id]; if (!it) return Promise.resolve();
-    const el = document.createElement('div'); el.className = 'ghost';
-    el.innerHTML = (carrier ? `<div style="position:absolute;left:-10%;top:-75%;width:80%;height:80%">${carrier}</div>` : '') + DOLL.renderThumb(it);
+    return flyMarkup((carrier ? `<div style="position:absolute;left:-10%;top:-75%;width:80%;height:80%">${carrier}</div>` : '') + DOLL.renderThumb(it), from, to, ms);
+  }
+  /** Any picture flies from one rect to another in an arc (pieces, hearts, friends). cls adds a size class. */
+  function flyMarkup(markup, from, to, ms = 600, cls = '') {
+    const el = document.createElement('div'); el.className = 'ghost' + (cls ? ' ' + cls : '');
+    el.innerHTML = markup;
     document.body.appendChild(el); syncDefs();
     const [x0, y0] = centre(from), [x1, y1] = centre(to), lift = Math.min(y0, y1) - 120;
     const anim = el.animate([
@@ -275,7 +303,11 @@
       for (const h of DOLL.hairstyles) {
         const t = document.createElement('button'); t.className = 'tile' + (state.hair === h ? ' worn' : ''); t.setAttribute('aria-label', h);
         t.innerHTML = DOLL.renderHairThumb(h);
-        t.addEventListener('click', () => { state.hair = h; Sound.snap(); happy(); renderGrid(); renderTabs(); persist(); });
+        t.addEventListener('click', () => {
+          const first = !state.rewards.hairSeen.includes(h), from = t.getBoundingClientRect();
+          state.hair = h; Sound.snap(); happy(); renderGrid(); renderTabs(); persist();
+          if (first) { state.rewards.hairSeen.push(h); giveHeart(from); }   // first try of a hairstyle earns a heart
+        });
         gridEl.appendChild(t);
       }
     } else {
@@ -429,9 +461,10 @@
     sceneEl.innerHTML = sc.svg();
     stage.style.setProperty('--wind', sc.wind + 's');
     critterLayer.innerHTML = '';
-    sc.creatures.forEach((c, i) => {
+    sc.creatures.concat(friendsHere()).forEach((c, i) => {
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
+      if (c.friend) el.dataset.friend = c.k;
       // on tall phone screens the animals stand further away on the hillside, so the doll has the foreground
       const spot = portrait && c.k !== 'seal' ? PORTRAIT_SPOTS[i % PORTRAIT_SPOTS.length] : null;   // the seal stays on its beach rock
       el.style.left = (spot ? spot[0] : c.x) + '%'; el.style.top = (spot ? spot[1] : c.y) + '%'; el.style.height = (portrait ? c.h * .62 : c.h * wideScale()) + '%';
@@ -467,7 +500,9 @@
       grow(chestRect(), 6),
       grow(document.querySelector('.bar.left-low').getBoundingClientRect(), 6),
     ];
-    const els = [...critterLayer.children].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    // her friends are placed first so they always find a spot; then left to right
+    const els = [...critterLayer.children].sort((a, b) => (b.dataset.friend ? 1 : 0) - (a.dataset.friend ? 1 : 0) ||
+      a.getBoundingClientRect().left - b.getBoundingClientRect().left);
     for (const el of els) {
       let placed = false;
       for (let tries = 0; tries < 4 && !placed; tries++) {
@@ -508,6 +543,7 @@
     const cls = c.k === 'horse' ? 'react-tolt' : c.k === 'elf' ? 'react-wave' : 'react';
     el.classList.remove('react', 'react-tolt', 'react-wave'); void el.offsetWidth; el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 1100);
+    if (c.friend) { Sound.voice(c.voice); sparkleAt(el.getBoundingClientRect(), 4); return; }
     ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.tone(300, .2, 'triangle', .04, 0, 420),
        unicorn: () => { Sound.sparkle(); showRainbow(); sparkleAt(el.getBoundingClientRect(), 10); },
        elf: () => { Sound.bell(); surprise(el); } })[c.k]?.();
@@ -539,6 +575,7 @@
     const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, worn: Object.assign({}, state.worn), scene: state.scene };
     state.outfits = [o, ...state.outfits.filter(x => x !== o)].slice(0, MAX_OUTFITS);
     Sound.save(); sparkleAt(dollRect(), 14); happy(1600);
+    if (!same) setTimeout(() => giveHeart(dollRect()), 350);   // a new outfit earns a heart for the jar
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
     persist(); if (!galleryEl.hidden) renderGallery();
   }
@@ -567,10 +604,144 @@
   }
 
   /* ---------------------------------------------------------------
+     Heart jar and friends (the reward)
+     She earns a heart for each NEW outfit she saves and for each
+     hairstyle she tries for the first time. A heart flies into the jar.
+     10 hearts: a little music-box tune, and a surprise friend flies out
+     of the jar into the scene and stays (order: FRIENDS in scenes.js).
+     Nothing is ever taken away, there are no timers and no clothes are
+     locked. Parents can switch it off in the menu.
+     --------------------------------------------------------------- */
+  const jarBtn = document.createElement('button');
+  jarBtn.className = 'btn jar-btn'; jarBtn.setAttribute('aria-label', 'Hjartakrukka');
+  const friendsEl = $('#friends');
+  const HEART_D = 'M20,34 C4,24 4,10 13,8 C17,7 19,10 20,12 C21,10 23,7 27,8 C36,10 36,24 20,34Z';
+  const HEART_COLS = ['#ef5b7a', '#f48cc0', '#f7a13f', '#f2cf3b', '#5fc46d', '#4aa8e0', '#9b72e0', '#ef5b7a', '#f48cc0', '#5fc46d'];
+  /** A small heart centred at cx,cy (k = scale; the base heart is ~32 wide). */
+  const heartAt = (cx, cy, k, col) => `<path transform="translate(${cx - 20 * k},${cy - 21 * k}) scale(${k})" d="${HEART_D}" fill="${col}" stroke="${H.ink(col)}" stroke-width="${2.4 / k * .5}"/>`;
+  // where the hearts sit inside the jar, bottom row first
+  const JAR_SPOTS = [[21, 57], [31, 58], [41, 57], [26, 49.5], [36, 49.5], [20, 42], [31, 42], [42, 42], [26, 34.5], [36, 34.5]];
+  /** The glass jar with n hearts inside, a pink ribbon on the lid and a glassy shine. */
+  function jarSVG(n) {
+    const hearts = JAR_SPOTS.slice(0, n).map(([x, y], i) => heartAt(x, y, .3, HEART_COLS[i])).join('');
+    return `<svg viewBox="0 0 60 70" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
+      `<path d="M15,22 Q11,26 11,33 V58 Q11,65 18,65 H42 Q49,65 49,58 V33 Q49,26 45,22 Z" fill="#eaf6fb" fill-opacity=".75" stroke="#7fa9bf" stroke-width="2.2"/>` +
+      hearts +
+      `<path d="M16,30 Q15,44 16,58" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/>` +
+      `<path d="M44,34 Q45,42 44,48" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity=".6"/>` +
+      `<rect x="14" y="13" width="32" height="10" rx="3.5" fill="#f9c9dc" stroke="#c46b90" stroke-width="2"/>` +
+      `<path d="M30,18 l-8,-6 v11z M30,18 l8,-6 v11z" fill="#ef5b8d" stroke="#b33c68" stroke-width="1.6" stroke-linejoin="round"/>` +
+      `<circle cx="30" cy="18" r="2.6" fill="#f48cb0" stroke="#b33c68" stroke-width="1.4"/></svg>`;
+  }
+  // hearts drawn in the jar: the saved count minus hearts still flying towards it
+  let heartsInFlight = 0, jarShown = state.rewards.hearts;
+  /** Draw the jar with the hearts that have already landed. */
+  function renderJar() {
+    jarBtn.hidden = !state.settings.rewards;
+    jarBtn.innerHTML = jarSVG(Math.max(0, Math.min(JAR_SIZE, jarShown)));
+  }
+  const jarRect = () => jarBtn.getBoundingClientRect();
+  /** Friend info by key. */
+  const friendOf = k => FRIENDS.find(f => f.k === k);
+  /** Friends shown in this scene: the newest one always, plus one more that changes from scene to scene. */
+  function friendsHere() {
+    if (!state.settings.rewards) return [];
+    const got = state.rewards.friends.filter(k => friendOf(k) && CREATURES[k]);
+    if (!got.length) return [];
+    const newest = got[got.length - 1], others = got.slice(0, -1);
+    const pick = [newest];
+    if (others.length) pick.push(others[Math.max(0, Object.keys(SCENES).indexOf(state.scene)) % others.length]);
+    return pick.map((k, i) => Object.assign({ k, x: 44 + i * 9, y: 97, friend: true }, friendOf(k)));
+  }
+
+  /**
+   * Give one heart. It is counted and saved right away (so closing the app can't lose it),
+   * then flies from `from` into the jar. A full jar starts the celebration when the heart lands.
+   */
+  function giveHeart(from) {
+    if (!state.settings.rewards) return;
+    const r = state.rewards;
+    r.hearts++;
+    let friend;                                   // undefined: jar not full yet; null: full but every friend already came
+    if (r.hearts >= JAR_SIZE) {
+      r.hearts = 0;
+      const next = FRIENDS.find(f => !r.friends.includes(f.k));
+      friend = next ? next.k : null;
+      if (next) r.friends.push(next.k);
+    }
+    flush();
+    heartsInFlight++;
+    const full = friend !== undefined;
+    const col = HEART_COLS[Math.floor(Math.random() * HEART_COLS.length)];
+    flyMarkup(`<svg viewBox="0 0 40 40">${heartAt(20, 21, 1, col)}</svg>`, from, jarRect(), 900, 'heart-fly').then(() => {
+      heartsInFlight--;
+      if (full) { jarShown = JAR_SIZE; renderJar(); celebrate(friend); }
+      else { jarShown++; Sound.heart(); renderJar(); }
+      jarBtn.classList.remove('pop'); void jarBtn.offsetWidth; jarBtn.classList.add('pop');
+    });
+  }
+
+  /** Full jar: tune and sparkles, the jar empties, and the new friend flies out into the scene. */
+  function celebrate(friend) {
+    Sound.melody();
+    jarBtn.classList.add('glow');
+    sparkleAt(jarRect(), 12);
+    setTimeout(() => {
+      jarBtn.classList.remove('glow'); jarShown = Math.max(0, state.rewards.hearts - heartsInFlight); renderJar(); sparkleAt(jarRect(), 8);
+      if (friend) {
+        renderScene();                              // the friend gets its place in the scene (hidden until it lands)
+        const el = critterLayer.querySelector(`[data-friend="${friend}"]`);
+        if (!el) return;
+        el.classList.add('arriving');
+        flyMarkup(CREATURES[friend](), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
+          el.classList.remove('arriving'); Sound.arrive(); sparkleAt(el.getBoundingClientRect(), 14);
+          el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100);
+          happy(1600);
+          if (!friendsEl.hidden) renderFriends();
+        });
+      } else {
+        // every friend is already here: they all hop and the rainbow comes out
+        critterLayer.querySelectorAll('[data-friend]').forEach(el => { el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100); });
+        showRainbow(); happy(1600);
+      }
+    }, 1500);
+  }
+
+  /** Friends shelf (tap the jar): every friend she has, and a wrapped present for the next surprise. */
+  function renderFriends() {
+    friendsEl.innerHTML = '';
+    for (const k of state.rewards.friends) {
+      const f = friendOf(k); if (!f || !CREATURES[k]) continue;
+      const card = document.createElement('button'); card.className = 'card friend-card'; card.setAttribute('aria-label', f.is);
+      card.innerHTML = CREATURES[k]();
+      card.addEventListener('click', () => { Sound.voice(f.voice); card.classList.remove('hop'); void card.offsetWidth; card.classList.add('hop'); });
+      friendsEl.appendChild(card);
+    }
+    if (FRIENDS.some(f => !state.rewards.friends.includes(f.k))) {
+      // the next friend is a surprise: a present, with the hearts collected so far underneath
+      const n = state.rewards.hearts;
+      const gift = document.createElement('div'); gift.className = 'card friend-card gift'; gift.setAttribute('aria-label', 'Óvænt');
+      gift.innerHTML = `<svg viewBox="0 0 100 124" xmlns="http://www.w3.org/2000/svg">` +
+        `<rect x="18" y="38" width="64" height="48" rx="6" fill="#9fd3f0" stroke="#4f8db3" stroke-width="2.5"/>` +
+        `<rect x="12" y="28" width="76" height="16" rx="5" fill="#bfe3f7" stroke="#4f8db3" stroke-width="2.5"/>` +
+        `<rect x="45" y="28" width="10" height="58" fill="#f48cc0" stroke="#c4568c" stroke-width="2"/>` +
+        `<path d="M50,28 C36,10 22,20 36,28 Z M50,28 C64,10 78,20 64,28 Z" fill="#f48cc0" stroke="#c4568c" stroke-width="2" stroke-linejoin="round"/>` +
+        // two rows of five hearts: coloured = collected, pale = still to come
+        Array.from({ length: JAR_SIZE }, (_, i) => heartAt(14 + (i % 5) * 18, 100 + Math.floor(i / 5) * 15, .36, i < n ? HEART_COLS[i] : '#e4dcd2')).join('') + `</svg>`;
+      friendsEl.appendChild(gift);
+    }
+  }
+  jarBtn.addEventListener('click', () => {
+    galleryEl.hidden = true;
+    friendsEl.hidden = !friendsEl.hidden;
+    if (!friendsEl.hidden) { renderFriends(); Sound.heart(); }
+  });
+
+  /* ---------------------------------------------------------------
      Parent menu (opens on a long press so little fingers don't find it)
      --------------------------------------------------------------- */
   function renderMenu() {
-    $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm;
+    $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm; $('#optRewards').checked = state.settings.rewards;
     $('#backupMsg').hidden = true;
     flush();
     $('#storeMsg').textContent = Store.ok
@@ -613,6 +784,7 @@
   });
   $('#optSound').addEventListener('change', e => { state.settings.sound = e.target.checked; persist(); });
   $('#optCalm').addEventListener('change', e => { state.settings.calm = e.target.checked; stage.classList.toggle('calm', state.settings.calm); persist(); });
+  $('#optRewards').addEventListener('change', e => { state.settings.rewards = e.target.checked; friendsEl.hidden = true; renderJar(); renderScene(); persist(); });
   $('#menuClose').addEventListener('click', () => { menuEl.hidden = true; });
   /** Full screen on a tap (Android Chrome supports it; some app views block it, then a note shows). */
   $('#menuFull').addEventListener('click', async () => {
@@ -645,7 +817,7 @@
   };
   $('#btnSave').innerHTML = ICON.heart; $('#btnGallery').innerHTML = ICON.frame; $('#btnUndress').innerHTML = ICON.undress; $('#btnTidy').innerHTML = ICON.tidy; $('#btnGear').innerHTML = ICON.gear;
   $('#btnSave').addEventListener('click', saveOutfit);
-  $('#btnGallery').addEventListener('click', () => { galleryEl.hidden = !galleryEl.hidden; if (!galleryEl.hidden) { renderGallery(); Sound.tone(698, .1); } });
+  $('#btnGallery').addEventListener('click', () => { friendsEl.hidden = true; galleryEl.hidden = !galleryEl.hidden; if (!galleryEl.hidden) { renderGallery(); Sound.tone(698, .1); } });
   $('#btnUndress').addEventListener('click', undress);
   $('#btnTidy').addEventListener('click', tidyUp);
   // scene picker buttons show a tiny version of each scene
@@ -656,12 +828,13 @@
     b.addEventListener('click', () => { if (state.scene === k) return; state.scene = k; Sound.whoosh(); sceneEl.classList.add('fading'); setTimeout(() => { renderScene(); sceneEl.classList.remove('fading'); }, 300); persist(); });
     sceneBar.appendChild(b);
   }
+  sceneBar.appendChild(jarBtn);   // the heart jar sits at the end of the scene row
   stage.addEventListener('pointerdown', () => Sound.init(), { once: true });
   // tapping the scene background closes the gallery
-  sceneEl.addEventListener('pointerdown', () => { galleryEl.hidden = true; });
+  sceneEl.addEventListener('pointerdown', () => { galleryEl.hidden = true; friendsEl.hidden = true; });
 
   /** Draw everything from state. */
-  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); stage.classList.toggle('calm', state.settings.calm); }
+  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); renderJar(); stage.classList.toggle('calm', state.settings.calm); }
   renderAll();
   trayEl.hidden = true;
 })();
