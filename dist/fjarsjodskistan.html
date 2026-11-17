@@ -77,7 +77,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
 /* buttons */
 .bar { position: absolute; display: flex; gap: 10px; z-index: 22; }
-.bar.top-left { left: max(12px, env(safe-area-inset-left, 0px)); top: max(12px, env(safe-area-inset-top, 0px)); }
+.bar.top-left { left: max(12px, env(safe-area-inset-left, 0px)); top: max(12px, env(safe-area-inset-top, 0px));
+  /* on narrow phones the scene buttons wrap onto a second row instead of running off the screen */
+  flex-wrap: wrap; max-width: calc(100vw - 24px); }
 .bar.left-low { left: max(12px, env(safe-area-inset-left, 0px)); bottom: max(12px, env(safe-area-inset-bottom, 0px)); flex-direction: column; }
 .btn { width: 64px; height: 64px; border-radius: 50%; border: 4px solid #fff; background: rgba(255, 255, 255, .85); box-shadow: 0 4px 12px rgba(30, 40, 60, .25);
   display: grid; place-items: center; cursor: pointer; padding: 0; }
