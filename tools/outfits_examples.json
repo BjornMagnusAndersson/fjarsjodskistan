@@ -1,0 +1,6 @@
+[
+ {"hair": "loose", "items": ["tee-strawberry", "jeans-blue", "maryjane-red", "glasses-heart-pink"]},
+ {"hair": "braids", "items": ["tee-strawberry", "lopi-classic", "jeans-blue", "beanie-red", "rainboots-ladybug"]},
+ {"hair": "loose", "mood": "happy", "items": ["gown-ice", "tiara-gold", "maryjane-red"]},
+ {"hair": "ponytail", "items": ["tee-strawberry", "jeans-blue", "rainjacket-yellow", "rainboots-ladybug"]}
+]

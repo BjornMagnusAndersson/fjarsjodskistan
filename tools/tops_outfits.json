@@ -1,0 +1,14 @@
+[
+ {"hair": "loose", "items": ["tee-stripes", "knit-teal", "denim-blue", "jeans-blue", "maryjane-red"]},
+ {"hair": "braids", "items": ["top-long-mint", "lopi-red", "puffer-navy", "jeans-blue", "maryjane-red"]},
+ {"hair": "ponytail", "items": ["tee-puffin", "hoodie-grey", "fleece-teal", "jeans-blue", "maryjane-red"]},
+ {"hair": "loose", "items": ["blouse-white", "cardigan-yellow", "toggle-camel", "jeans-blue", "maryjane-red"]},
+ {"hair": "braids", "items": ["polo-pink", "knit-stripes", "trench-beige", "jeans-blue", "maryjane-red"]},
+ {"hair": "ponytail", "items": ["frill-pink", "party-pink", "jeans-blue", "maryjane-red"]},
+ {"hair": "loose", "items": ["tee-bigrainbow", "lopi-grey", "longcardi-oat", "jeans-blue", "maryjane-red"]},
+ {"hair": "braids", "items": ["tee-hearts", "lopicardi-white", "puffer-pink", "jeans-blue", "maryjane-red"]},
+ {"hair": "ponytail", "items": ["tee-unicorn", "hoodie-bear", "jeans-blue", "maryjane-red"]},
+ {"hair": "loose", "items": ["sailor-navy", "jeans-blue", "maryjane-red"]},
+ {"hair": "braids", "items": ["tank-strawberry", "denim-pink", "jeans-blue", "maryjane-red"]},
+ {"hair": "ponytail", "items": ["top-long-raglan", "knit-snow", "rainjacket-blue", "jeans-blue", "maryjane-red"]}
+]

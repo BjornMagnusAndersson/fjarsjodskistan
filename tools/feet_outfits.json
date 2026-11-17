@@ -1,0 +1,14 @@
+[
+ {"hair": "loose", "items": ["tee-strawberry", "lopi-classic", "jeans-blue", "mittens-lopi-classic", "scarf-knit-red", "boots-snow-pink"]},
+ {"hair": "braids", "items": ["tee-strawberry", "jeans-blue", "rainjacket-yellow", "mittens-ski-pink", "scarf-stripes-rainbow", "boots-rain-yellow", "bag-pack-red"]},
+ {"hair": "ponytail", "items": ["tee-strawberry", "jeans-blue", "mittens-string-yellow", "scarf-puffin", "boots-wellies-puffin", "bag-pack-puffin"]},
+ {"hair": "loose", "items": ["tee-strawberry", "lopi-classic", "mittens-fluffy-lilac", "scarf-boa-pink", "shoes-glitter-pink", "bag-purse-heart"]},
+ {"hair": "braids", "items": ["tee-strawberry", "jeans-blue", "mittens-snow-blue", "scarf-lopi", "boots-felt-grey", "bag-pack-unicorn"]},
+ {"hair": "ponytail", "items": ["tee-strawberry", "lopi-classic", "jeans-blue", "mittens-knit-teal", "scarf-snood-pink", "shoes-sneaker-blue", "bag-pack-star"]},
+ {"hair": "loose", "items": ["tee-strawberry", "rainjacket-yellow", "mittens-ski-blue", "scarf-stripes-mint", "boots-riding-brown", "bag-purse-berry"]},
+ {"hair": "braids", "items": ["tee-strawberry", "mittens-knit-red", "scarf-snood-grey", "shoes-sandal-pink", "bag-purse-round"]},
+ {"hair": "ponytail", "items": ["tee-strawberry", "jeans-blue", "mittens-lopi-red", "scarf-lopi", "boots-princess-rose", "bag-pack-dots"]},
+ {"hair": "loose", "items": ["tee-strawberry", "jeans-blue", "boots-wellies-frog", "bag-pack-unicorn", "scarf-knit-red"]},
+ {"hair": "braids", "items": ["tee-strawberry", "jeans-blue", "shoes-lightup-purple", "bag-pack-star"]},
+ {"hair": "ponytail", "items": ["tee-strawberry", "shoes-slipper-bunny", "bag-purse-heart", "mittens-fluffy-lilac"]}
+]

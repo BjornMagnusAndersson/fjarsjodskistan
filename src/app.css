@@ -1,0 +1,212 @@
+/* Layout: one full-screen stage. Scene fills it, the doll stands left,
+   the treasure chest sits bottom right and opens a tray of clothes.
+   Single storybook look (no dark mode on purpose: the scenes carry their own light). */
+:root {
+  color-scheme: light;
+  --wood: #8a5a34;
+  --wood-dark: #5c3a1f;
+  --wood-light: #b77b46;
+  --gold: #f2c34d;
+  --parchment: #fff6e4;
+  --ink: #3b2838;
+  --font: "Fredoka", "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --wind: 3.4s;
+}
+html, body { height: 100%; }
+body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflow: hidden; touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+#stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+/* scene */
+.scene { position: absolute; inset: 0; transition: opacity .6s ease; }
+.scene svg { width: 100%; height: 100%; display: block; }
+.scene.fading { opacity: 0; }
+
+/* creatures */
+.creature { position: absolute; transform: translate(-50%, -100%); cursor: pointer; touch-action: none; }
+.creature svg { height: 100%; width: auto; display: block; overflow: visible; }
+.creature.flip svg { transform: scaleX(-1); }
+.creature.peek .inner { animation: peek 9s ease-in-out infinite; }
+.creature .inner { height: 100%; }
+
+/* the doll */
+.doll { position: absolute; left: 30%; bottom: 3%; height: 90%; aspect-ratio: 400 / 780; transform: translateX(-50%); }
+.doll svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.doll .bounce { animation: dollBounce .5s ease; transform-origin: 200px 760px; }
+
+/* loose pieces lying in the scene */
+#loose { position: absolute; inset: 0; z-index: 21; pointer-events: none; }
+#loose .loose { pointer-events: auto; }
+.loose { position: absolute; width: 15vmin; height: 15vmin; transform: translate(-50%, -50%); touch-action: none; cursor: grab; filter: none; }
+.loose svg, .ghost svg, .tile svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.loose::after { content: ""; position: absolute; left: 15%; right: 15%; bottom: -4%; height: 10%; border-radius: 50%; background: rgba(40, 30, 50, .18); z-index: -1; }
+.ghost { position: fixed; width: 18vmin; height: 18vmin; transform: translate(-50%, -50%) scale(1.08); pointer-events: none; z-index: 50; }
+
+/* treasure chest */
+.chest { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: max(8px, env(safe-area-inset-bottom, 0px)); width: 26vmin; height: 22vmin; cursor: pointer; z-index: 20; touch-action: none; }
+.chest svg { width: 100%; height: 100%; overflow: visible; }
+.chest .lid { transform-origin: 50% 40%; transform-box: fill-box; transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); }
+.chest.open .lid { transform: translateY(-28%) rotate(-8deg) scaleY(.55); }
+.chest .glow { opacity: 0; transition: opacity .4s; }
+.chest.open .glow { opacity: 1; }
+.chest.wiggle { animation: wiggle .5s ease; }
+
+/* tray of clothes above the chest */
+.tray { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(22vmin + 6px); width: min(46vw, 560px); top: max(12px, env(safe-area-inset-top, 0px));
+  display: flex; flex-direction: column; border-radius: 22px; z-index: 19; padding: 10px;
+  background: linear-gradient(var(--wood-light), var(--wood)); box-shadow: 0 10px 30px rgba(40, 20, 10, .35), inset 0 0 0 4px var(--wood-dark);
+  transform-origin: 85% 100%; transition: transform .35s cubic-bezier(.3, 1.3, .5, 1), opacity .25s; }
+.tray[hidden] { display: flex !important; transform: scale(.2) translateY(30%); opacity: 0; pointer-events: none; }
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 10px; scrollbar-width: none; flex: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--wood-dark); background: var(--parchment); padding: 6px; cursor: pointer; }
+.tab svg { width: 100%; height: 100%; display: block; }
+.tab[aria-selected="true"] { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(242, 195, 77, .5); transform: scale(1.08); }
+.grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; padding: 10px; border-radius: 14px;
+  background: var(--parchment); box-shadow: inset 0 2px 8px rgba(90, 50, 20, .25); align-content: start; touch-action: pan-y; }
+.tile { aspect-ratio: 1; border-radius: 16px; background: #fff; border: 3px solid #ecdcbf; padding: 6px; cursor: grab; touch-action: pan-y; }
+.tile.worn { border-color: var(--gold); background: #fff8dc; }
+
+/* buttons */
+.bar { position: absolute; display: flex; gap: 10px; z-index: 22; }
+.bar.top-left { left: max(12px, env(safe-area-inset-left, 0px)); top: max(12px, env(safe-area-inset-top, 0px)); }
+.bar.left-low { left: max(12px, env(safe-area-inset-left, 0px)); bottom: max(12px, env(safe-area-inset-bottom, 0px)); flex-direction: column; }
+.btn { width: 64px; height: 64px; border-radius: 50%; border: 4px solid #fff; background: rgba(255, 255, 255, .85); box-shadow: 0 4px 12px rgba(30, 40, 60, .25);
+  display: grid; place-items: center; cursor: pointer; padding: 0; }
+.btn svg { width: 38px; height: 38px; }
+.btn.scene-btn { width: 58px; height: 58px; overflow: hidden; padding: 0; }
+.btn.scene-btn svg { width: 100%; height: 100%; }
+.btn.scene-btn[aria-pressed="true"] { border-color: var(--gold); transform: scale(1.1); }
+.btn:focus-visible, .tab:focus-visible, .tile:focus-visible { outline: 4px solid #2c6bb2; outline-offset: 2px; }
+.btn.pop { animation: pop .5s ease; }
+
+/* saved outfits strip */
+.gallery { position: absolute; left: 0; right: 0; top: 0; padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
+  display: flex; gap: 12px; overflow-x: auto; z-index: 30; background: rgba(255, 246, 228, .96); box-shadow: 0 6px 20px rgba(40, 20, 10, .3);
+  transition: transform .35s ease; scrollbar-width: none; }
+.gallery[hidden] { display: flex !important; transform: translateY(-110%); pointer-events: none; }
+.card { flex: none; width: 92px; height: 170px; border-radius: 16px; background: linear-gradient(#cfeaf6, #e8f6e6); border: 4px solid #fff; position: relative; cursor: pointer; box-shadow: 0 3px 8px rgba(0, 0, 0, .15); }
+.card svg { width: 100%; height: 100%; }
+.card .del { position: absolute; top: -10px; right: -10px; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff; background: #e2505b; color: #fff; font: 700 22px/1 var(--font); display: none; }
+.card.deleting .del { display: block; }
+.card.deleting { animation: shake .4s ease infinite; }
+.gallery .empty { color: #8a6a4a; font-size: 18px; padding: 20px; display: flex; align-items: center; gap: 10px; }
+.gallery .empty svg { width: 40px; height: 40px; flex: none; }
+
+/* parent menu */
+.menu { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 40; width: min(340px, calc(100vw - 32px)); background: var(--parchment); border-radius: 22px; padding: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); border: 5px solid var(--wood); }
+.menu h2 { margin: 0 0 12px; font-size: 22px; text-wrap: balance; }
+.menu label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 18px; border-bottom: 1px solid #ecdcbf; }
+.menu input[type="checkbox"] { width: 28px; height: 28px; accent-color: #3f8fd2; }
+.menu .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.menu button { font: 600 17px var(--font); padding: 10px 16px; border-radius: 12px; border: 3px solid var(--wood); background: #fff; color: var(--ink); cursor: pointer; }
+.menu button.danger { border-color: #c4404a; color: #c4404a; }
+.menu p { margin: 8px 0 0; font-size: 14px; color: #7a5a4a; }
+.menu[hidden] { display: none; }
+
+/* sparkle burst */
+.spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }
+.spark svg { width: 100%; height: 100%; }
+
+/* snow */
+.snow { position: absolute; top: -5%; width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: .85; animation: fall linear infinite; pointer-events: none; }
+
+/* ---------- ambient animations (transform + opacity only) ---------- */
+.spin { animation: spin 60s linear infinite; }
+.drift { animation: drift 100s linear infinite; }
+.sway { animation: sway 3.4s ease-in-out infinite alternate; }
+.wave { animation: waveMove 8s linear infinite; }
+.foam { animation: foam 4s ease-in-out infinite; }
+.flow { animation: flow 1.4s linear infinite; }
+.mist { animation: mist 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.twinkle { animation: twinkle 3.2s ease-in-out infinite; }
+.aurora { animation: aurora 14s ease-in-out infinite alternate; }
+.aurora.slow { animation-duration: 22s; }
+.glow { animation: glowPulse 3s ease-in-out infinite; }
+.rainbow { opacity: 0; transition: opacity 1.2s ease; }
+.rainbow.cycle { animation: rainbowCycle 45s ease-in-out infinite; }
+.rainbow.shimmer { opacity: .65; animation: shimmer 5s ease-in-out infinite; }
+.rainbow.show { opacity: 1 !important; animation: none; }
+.tw { animation: twinkle 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+/* creature idles */
+.creature .tail { animation: tail 2.6s ease-in-out infinite alternate; }
+.creature .head { animation: nod 5s ease-in-out infinite; }
+.creature .wing { animation: none; }
+.creature.idle-bob .inner { animation: bob 3s ease-in-out infinite; }
+/* creature reactions */
+.creature.react .inner { animation: hop .7s ease; }
+.creature.react .wing { animation: flap .14s linear 5 alternate; }
+.creature.react .arm, .creature.react .arm2 { animation: clap .16s linear 6 alternate; }
+.creature.react-tolt .inner { animation: tolt .9s ease; }
+.creature.react-wave .arm { animation: waveArm .25s ease-in-out 4 alternate; }
+
+/* hair and doll */
+.doll .lid { transform: scaleY(0); transform-box: fill-box; transform-origin: top; animation: blink 5.5s infinite; }
+.doll .sway-b { animation: hairB var(--wind) ease-in-out infinite alternate; transform-origin: 200px 90px; }
+.doll .sway-l { animation: hairL var(--wind) ease-in-out infinite alternate; transform-origin: 146px 132px; }
+.doll .sway-r { animation: hairR var(--wind) ease-in-out infinite alternate; transform-origin: 254px 132px; animation-delay: -.6s; }
+.doll .sway-p { animation: hairP var(--wind) ease-in-out infinite alternate; transform-origin: 266px 100px; }
+
+/* calm mode: everything holds still */
+.calm *, .calm *::before, .calm *::after { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { #stage * { animation-play-state: paused !important; } }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes drift { from { transform: translateX(-400px); } to { transform: translateX(1900px); } }
+@keyframes sway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes waveMove { from { transform: translateX(0); } to { transform: translateX(-200px); } }
+@keyframes foam { 50% { transform: translateY(6px); opacity: .3; } }
+@keyframes flow { to { stroke-dashoffset: -70; } }
+@keyframes mist { 50% { transform: scale(1.15); opacity: .25; } }
+@keyframes twinkle { 50% { opacity: .25; } }
+@keyframes aurora { from { transform: translateX(-60px) skewX(-6deg); opacity: .7; } to { transform: translateX(60px) skewX(6deg); opacity: 1; } }
+@keyframes glowPulse { 50% { opacity: .55; } }
+@keyframes rainbowCycle { 0%, 70%, 100% { opacity: 0; } 78%, 92% { opacity: .9; } }
+@keyframes shimmer { 50% { opacity: .35; } }
+@keyframes tail { from { transform: rotate(-6deg); } to { transform: rotate(8deg); } }
+@keyframes nod { 0%, 80%, 100% { transform: rotate(0); } 88% { transform: rotate(6deg); } }
+@keyframes bob { 50% { transform: translateY(-4%); } }
+@keyframes hop { 30% { transform: translateY(-22%); } 55% { transform: translateY(0); } 70% { transform: translateY(-8%); } }
+@keyframes flap { to { transform: rotate(-40deg); } }
+@keyframes clap { to { transform: rotate(-25deg); } }
+@keyframes tolt { 20%, 60% { transform: translateY(-6%) translateX(6%); } 40%, 80% { transform: translateY(0) translateX(12%); } }
+@keyframes waveArm { to { transform: rotate(-30deg); } }
+@keyframes peek { 0%, 100% { transform: translateY(45%); } 15%, 55% { transform: translateY(0); } 70% { transform: translateY(45%); } }
+@keyframes blink { 0%, 94%, 100% { transform: scaleY(0); } 97% { transform: scaleY(1); } }
+@keyframes hairB { from { transform: rotate(-1deg); } to { transform: rotate(1.4deg); } }
+@keyframes hairL { from { transform: rotate(-1.5deg); } to { transform: rotate(3deg); } }
+@keyframes hairR { from { transform: rotate(-3deg); } to { transform: rotate(1.5deg); } }
+@keyframes hairP { from { transform: rotate(-3deg); } to { transform: rotate(5deg); } }
+@keyframes dollBounce { 40% { transform: translateY(-14px); } }
+@keyframes wiggle { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+@keyframes pop { 40% { transform: scale(1.25); } }
+@keyframes shake { 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
+@keyframes fall { to { transform: translateY(115vh) translateX(30px); } }
+
+/* portrait phones: the doll stands on the grass at the bottom, the tray opens at the top */
+@media (max-aspect-ratio: 4/5) {
+  .doll { left: 56%; height: 52%; bottom: 3%; }
+  .tray { left: max(12px, env(safe-area-inset-left, 0px)); width: auto; top: calc(max(12px, env(safe-area-inset-top, 0px)) + 62px); bottom: auto; height: 36%; transform-origin: 85% 0; }
+  .tray[hidden] { transform: scale(.2) translateY(-30%); }
+  .chest { width: 30vmin; height: 25vmin; }
+  .bar.left-low { bottom: max(12px, env(safe-area-inset-bottom, 0px)); gap: 8px; }
+  .bar.left-low .btn { width: 50px; height: 50px; border-width: 3px; }
+  .bar.left-low .btn svg { width: 30px; height: 30px; }
+  .bar.top-left .btn.scene-btn { width: 50px; height: 50px; }
+}
+
+/* short landscape screens (phones on their side): smaller buttons, left column starts below the scene picker */
+@media (max-height: 520px) and (min-aspect-ratio: 4/5) {
+  .bar.top-left .btn.scene-btn { width: 44px; height: 44px; border-width: 3px; }
+  .bar.left-low { bottom: auto; top: calc(max(8px, env(safe-area-inset-top, 0px)) + 54px); gap: 6px; }
+  .bar.left-low .btn { width: min(44px, calc((100vh - 86px) / 5.5)); height: min(44px, calc((100vh - 86px) / 5.5)); border-width: 3px; }
+  .bar.left-low .btn svg { width: 62%; height: 62%; }
+  .bar.top-left { top: max(8px, env(safe-area-inset-top, 0px)); }
+  .tab { width: 50px; height: 50px; border-width: 3px; padding: 4px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+}
+
+/* mini scenes on the picker buttons stay still */
+.scene-btn * { animation: none !important; }

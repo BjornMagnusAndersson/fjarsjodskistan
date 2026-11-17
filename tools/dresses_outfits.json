@@ -1,0 +1,414 @@
+[
+{
+"hair": "braids",
+"mood": "happy",
+"items": [
+"gown-rose",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "smile",
+"items": [
+"gown-sun",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"gown-lupine",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "happy",
+"items": [
+"gown-ocean",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"gown-rainbow",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "smile",
+"items": [
+"gown-aurora",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "happy",
+"items": [
+"gown-strawberry",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "smile",
+"items": [
+"gown-unicorn",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"gown-fairy",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "happy",
+"items": [
+"gown-velvet",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"gown-cloud",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"mood": "smile",
+"items": [
+"gown-puffin",
+"tiara-gold",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"frock-sundress",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"frock-pinafore",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"frock-tee",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"frock-party",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"frock-smock",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"frock-knit",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"frock-dots",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"frock-floral",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"frock-gingham",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"frock-rainbow",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"frock-puffin",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"cape-red-hood",
+"frock-tee",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"cape-stars",
+"gown-aurora",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"cape-hero",
+"frock-dots",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"cape-velvet",
+"gown-rose",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"cape-rainbow",
+"frock-rainbow",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"cape-hearts",
+"frock-party",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"wings-butterfly",
+"frock-sundress",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"wings-butterfly-blue",
+"frock-smock",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"wings-fairy",
+"gown-fairy",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"wings-bird",
+"gown-cloud",
+"maryjane-red"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"wings-dragonfly",
+"frock-floral",
+"maryjane-red"
+]
+},
+{
+"hair": "loose",
+"items": [
+"wings-puffin",
+"gown-puffin",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"items": [
+"wings-bat",
+"frock-knit",
+"maryjane-red"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"swim-ruffle"
+]
+},
+{
+"hair": "ponytail",
+"mood": "happy",
+"items": [
+"swim-strawberry"
+]
+},
+{
+"hair": "loose",
+"mood": "smile",
+"items": [
+"swim-wave"
+]
+},
+{
+"hair": "braids",
+"mood": "happy",
+"items": [
+"swim-skirt"
+]
+},
+{
+"hair": "ponytail",
+"mood": "smile",
+"items": [
+"swim-rainbow"
+]
+},
+{
+"hair": "loose",
+"mood": "happy",
+"items": [
+"swim-tankini"
+]
+},
+{
+"hair": "braids",
+"mood": "smile",
+"items": [
+"swim-puffin"
+]
+},
+{
+"hair": "ponytail",
+"mood": "happy",
+"items": [
+"swim-rashguard"
+]
+},
+{
+"hair": "loose",
+"mood": "smile",
+"items": [
+"swim-rashguard-pink"
+]
+},
+{
+"hair": "braids",
+"items": [
+"pj-moon"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"pj-hearts"
+]
+},
+{
+"hair": "loose",
+"items": [
+"pj-puffin"
+]
+},
+{
+"hair": "braids",
+"items": [
+"pj-clouds"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"pj-stripes"
+]
+},
+{
+"hair": "loose",
+"items": [
+"pj-summer"
+]
+},
+{
+"hair": "braids",
+"items": [
+"pj-nightgown"
+]
+},
+{
+"hair": "ponytail",
+"items": [
+"pj-nightgown-rose"
+]
+},
+{
+"hair": "loose",
+"items": [
+"pj-onesie-bear"
+]
+},
+{
+"hair": "braids",
+"items": [
+"pj-onesie-bunny"
+]
+}
+]
