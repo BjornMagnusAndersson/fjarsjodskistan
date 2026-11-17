@@ -19,12 +19,14 @@
 
   DOLL.shape('face-cat', {
     slot: 'face',
+    // cat face paint: a nose, a short line to the mouth and three whiskers on each cheek
     draw(it) {
       const [noseC, whiskC] = it.colors;
       const noseFill = it.rainbow
         ? H.def('g-' + it.id, '<linearGradient id="g-' + it.id + '" x1="0" y1="0" x2="1" y2="0">' +
             ['#ef5b6c', '#f6a447', '#f2cf3b', '#5fc46d', '#4aa8e0', '#9b72e0'].map((c, i) => `<stop offset="${i / 5}" stop-color="${c}"/>`).join('') + '</linearGradient>')
         : noseC;
+      // flip a path to the other cheek (every x becomes 400 - x)
       const mirror = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => (400 - x) + ',' + y);
       // one whisker: soft light halo underneath, then the paint line
       const whisker = (d, c) =>

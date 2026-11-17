@@ -20,6 +20,7 @@
   /** Left piece plus its mirrored right piece. */
   const pair = fn => fn() + mirror(fn());
 
+  // "x,y" text of a point, rounded to 1 decimal, for path strings
   const P = p => p[0].toFixed(1) + ',' + p[1].toFixed(1);
   /** Register a vertical gradient with [offset, colour] stops. Returns url(#id). */
   const addGrad = (id, stops, h) => H.def(id, `<linearGradient id="${id}" x1="0" y1="0" x2="${h ? 1 : 0}" y2="${h ? 0 : 1}">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`);
@@ -47,6 +48,7 @@
    * so there is no seam line where the shaft meets the foot) and the edge points.
    */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // how far down the shaft y is: 0 at the top, 1 at the bottom
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
@@ -90,6 +92,7 @@
         const x = 171 - i * 6.5, y = 706 + i * 4;
         return `M${x - 3.5},${y - 3.5} L${x + 2.5},${y + 3} M${x - 3.5},${y + 3} L${x + 2.5},${y - 3.5}`;
       }).join('');
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${H.clip('c-' + it.id + '-foot', foot)}">` +
@@ -132,7 +135,9 @@
       const toe = 'M144,700 L156,700 L148,750 L136,750 Z';          // across the toes (toes peek out in front)
       const cross = 'M160,700 L170,700 L168,750 L158,750 Z';        // over the middle of the foot
       const ankle = 'M155,702 Q170,710 186,702';                    // round the ankle
+      // one strap/band shape: gradient fill plus a tinted outline
       const band = d => `<path d="${d}" fill="${H.grad(c)}"/><path d="${d}" fill="none" stroke="${ink(c)}" stroke-width="2"/>`;
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${soleD}" fill="${H.grad(soleC)}" stroke="${ink(soleC)}" stroke-width="2" stroke-linejoin="round"/>` +
         `<path d="M142,737.5 Q160,741 186,736" fill="none" stroke="${shade(soleC, .35)}" stroke-width="1.6" stroke-linecap="round"/>` +
@@ -157,6 +162,7 @@
       const foot = G.footPath('L', 2, 1);
       const open = `M151,708 Q164,699 182,704 Q178,714 164,716 Q154,716 151,708 Z`;
       const bowD = 'M151,713 l-8,-6 l0,11 z M151,713 l7,-7 l1,11 z';
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` + sole('c-' + it.id, foot, FY + 11, shade(c, -.35), 20) +
         outline(foot, c, 'r') +
@@ -179,6 +185,7 @@
       const [c, glit = '#ffffff', g = '#f27aa0'] = it.colors;
       const foot = G.footPath('L', 3, 2);
       const open = `M152,708 Q165,699 182,704 Q178,713 165,715 Q155,715 152,708 Z`;
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('sparkle', c, glit, 9)}"/>` + sole('c-' + it.id, foot, FY + 11, shade(c, -.3), 20) +
         outline(foot, c, 'r') +
@@ -206,6 +213,7 @@
         `<circle cx="${x}" cy="${702 + (i === 0 || i === 5 ? 2 : 0) + (i % 2) * 1.5}" r="5.2" fill="${H.grad(fl, 'r')}" stroke="${ink(fl)}" stroke-width="1.3"/>`).join('');
       let deco = '';
       if (it.face === 'bunny') {
+        // one bunny ear at x,y, tilted by rot degrees
         const ear = (x, y, rot) => `<g transform="translate(${x},${y}) rotate(${rot})">` +
           `<ellipse cx="0" cy="-12" rx="5.5" ry="13" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
           `<ellipse cx="0" cy="-11" rx="2.6" ry="8.5" fill="${det}" opacity=".8"/></g>`;
@@ -223,6 +231,7 @@
         }
         deco = puffs + `<circle cx="148" cy="714" r="6" fill="${H.grad(det, 'r')}"/>`;
       }
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c, 'r')}"/>` + sole('c-' + it.id, foot, FY + 13, shade(c, -.25), 20) +
         outline(foot, c, 'r') +
@@ -301,6 +310,7 @@
         fluff += `<circle cx="${x.toFixed(1)}" cy="${top - 4 + (i % 2) * 6}" r="6.6" fill="${H.grad(fur, 'r')}" stroke="${ink(fur)}" stroke-width="1.2"/>`;
       }
       const tread = Array.from({ length: 9 }, (_, i) => `M${136 + i * 6},748 l3,-5 l3,5`).join('');
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` +
         `<g clip-path="${H.clip('c-' + it.id, foot)}"><rect x="${FX - 60}" y="${FY + 6}" width="120" height="30" fill="${soleC}"/>` +
@@ -336,6 +346,7 @@
       const [o0, i0] = [sh.outer[0], sh.inner[0]];
       const topCap = `M${P([o0[0] - .5, top - 6])} Q${(o0[0] + i0[0]) / 2},${top - 4} ${P([i0[0], top + 2])} L${P(i0)} L${P(o0)} Z`;
       const sy = 606, sx0 = shaftX(top, 716, 6, 2, sy, false), sx1 = shaftX(top, 716, 6, 2, sy, true);
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c)}"/>` + sole('c-' + it.id, foot, FY + 10, st, 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.grad(c, 'h')}"/><path d="${topCap}" fill="${H.grad(c, 'h')}"/>` +
@@ -368,11 +379,13 @@
       let scal = `M${x0.toFixed(1)},${top + 3}`;
       for (let i = 0; i < n; i++) scal += `q${(w / 2).toFixed(1)},-9 ${w.toFixed(1)},0`;
       scal += `L${x1.toFixed(1)},${top + 9}L${x0.toFixed(1)},${top + 9}Z`;
+      // curved strap across the boot at height y with a small gem buckle
       const band = y => {
         const a = shaftX(top, 716, 6, 2, y, false) - 1, b = shaftX(top, 716, 6, 2, y, true) + 1;
         return `<path d="M${a.toFixed(1)},${y - 3} Q${(a + b) / 2},${y + 1} ${b.toFixed(1)},${y - 3} L${b.toFixed(1)},${y + 3} Q${(a + b) / 2},${y + 7} ${a.toFixed(1)},${y + 3} Z" fill="${H.grad(st)}" stroke="${ink(st)}" stroke-width="1.5" stroke-linejoin="round"/>` +
           gem(((a + b) / 2).toFixed(1), y + 2, 3.6, g);
       };
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('sparkle', c, sp, 10)}"/>` + sole('c-' + it.id, foot, FY + 11, st, 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.pat('sparkle', c, sp, 10)}"/><path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -414,6 +427,7 @@
   DOLL.shape('feet-wellies', {
     slot: 'shoes',
     thumb: [116, 596, 168, 158],
+    // draws the wellies (rubber boots) using the chosen colours
     draw(it) {
       const [c, rim = shade(c, .25), soleC = '#3b3236'] = it.colors;
       const top = 612, sh = shaft(top, 716, 6, 3);
@@ -436,6 +450,7 @@
           `<circle cx="140" cy="720" r="2.6" fill="#f48ca0" opacity=".6"/><circle cx="162" cy="718" r="2.6" fill="#f48ca0" opacity=".6"/>`;
         motif = [[166, 640, 4], [178, 668, 3], [160, 690, 3.5], [170, 650, 2]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${shade(c, -.18)}" opacity=".6"/>`).join('');
       }
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` + sole('c-' + it.id, foot, FY + 8, soleC, 30) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.fill(it)}"/>` + motif + `<path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -469,6 +484,7 @@
         `<path d="M146,722 l3,-3 l3,3 l3,-3 l3,3" fill="none" stroke="${cuffC}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
       const poms = `<path d="M${ca + 4},${cy - 2} q-3,8 -6,14 M${ca + 4},${cy - 2} q1,9 3,15" stroke="${ink(cuffC)}" stroke-width="1.4" fill="none"/>` +
         gem(ca - 2, cy + 13, 4, pom) + gem(ca + 7, cy + 14, 4, pom);
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('knit', c, shade(c, -.12), 8)}"/>` + sole('c-' + it.id, foot, FY + 12, shade(c, -.4), 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.pat('knit', c, shade(c, -.12), 8)}"/><path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -537,6 +553,7 @@
       const st = it.style || 'knit';
       const knit = H.pat('knit', c, shade(c, -.28), 7);
       const clip = H.clip('c-' + it.id, MITT);
+      // vertical rib lines (knit cuff texture) between x0 and x1, from y0 down to y1
       const ribs = (x0, x1, y0, y1, col) => H.line(Array.from({ length: Math.round((x1 - x0) / 3.6) + 1 }, (_, i) => `M${(x0 + i * 3.6).toFixed(1)},${y0}V${y1}`).join(''), col, 1, .45);
       let body = '', cuff = '';
       if (st === 'ski') {
@@ -591,6 +608,7 @@
         cuff = `<path d="${CUFF}" fill="${H.grad(c2)}"/>` + ribs(-16, 16, -15, -1, c2) + outline(CUFF, c2) +
           (st === 'lopi' ? `<path d="M-17,-8.5 Q0,-11 17,-8.5" stroke="${mot}" stroke-width="2.2" stroke-dasharray="1.5 3" stroke-linecap="round" fill="none"/>` : '');
       }
+      // one mitten (side L or R), placed on the hand with its cuff
       const one = side => onHand(side, body + cuff);
       // mittens on a string: a cord from the inner cuff up the inside of the arm into the sleeve/armpit
       let cord = '';
@@ -635,6 +653,7 @@
       // tail ends: front tail from under the knot to y 396, the second one shorter and to the side
       const T1 = { x0: 184, y0: 268, x1: 176, y1: 396, w: 24 };
       const T2 = { x0: 202, y0: 270, x1: 210, y1: 360, w: 22 };
+      // path of one scarf tail from its start/end points and width
       const tl = t => tailD(t.x0, t.y0, t.x1, t.y1, t.w);
       /** Decorations clipped inside one tail: stripes, lopi band, fringe. */
       const deco = (t, k) => {
@@ -729,6 +748,7 @@
       const [c, light = shade(c, .4), sp = '#ffffff'] = it.colors;
       // centre line: down the left front, round under the chin, down the right front
       const pts = [];
+      // adds n+1 points along a curve from a to b (control point ctl) to the list
       const qb = (a, ctl, b, n) => { for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; pts.push([u * u * a[0] + 2 * u * t * ctl[0] + t * t * b[0], u * u * a[1] + 2 * u * t * ctl[1] + t * t * b[1]]); } };
       qb([166, 412], [160, 320], [176, 262], 9);
       qb([180, 254], [200, 274], [220, 254], 4);

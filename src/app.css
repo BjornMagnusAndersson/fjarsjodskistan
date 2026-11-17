@@ -125,6 +125,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .menu button.danger { border-color: #c4404a; color: #c4404a; }
 .menu p { margin: 8px 0 0; font-size: 14px; color: #7a5a4a; }
 .menu[hidden] { display: none; }
+.menu { max-height: calc(100vh - 32px); overflow-y: auto; }
+/* error log (Villukóðar) in the parent menu: folded away unless opened */
+.menu details { margin-top: 14px; font-size: 15px; border-top: 1px solid #ecdcbf; padding-top: 10px; }
+.menu summary { cursor: pointer; font-weight: 600; }
+.menu pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.4 ui-monospace, monospace; max-height: 200px; overflow: auto;
+  background: #fff; border-radius: 10px; padding: 8px; margin: 8px 0 0; }
 
 /* sparkle burst */
 .spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }

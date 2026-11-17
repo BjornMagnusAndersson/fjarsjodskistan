@@ -42,6 +42,7 @@
    */
   function edge(pts) {
     const dense = [];
+    // Catmull-Rom spline: smooth value between b and c at t (0 to 1), using the neighbours a and d to shape the curve
     const cr = (a, b, c, d, t) => .5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
     for (let i = 0; i < pts.length - 1; i++) {
       const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
@@ -87,6 +88,7 @@
    * Returns { d (closed path), hemD (open hem line), x0, n, w, y, amp }.
    */
   function tier(xl, top, yEnd, type, step, amp, pad = 0) {
+    // x of the skirt edge at height y, pushed outward by pad the nearer y gets to the hem
     const X = y => xl(y) - pad * Math.max(0, Math.min(1, (y - top) / Math.max(1, yEnd - top)));
     const ys = [];
     for (let y = top + 18; y < yEnd - 6; y += 18) ys.push(y);
@@ -214,10 +216,12 @@
   };
   /** Pearl: small white bead with a pearly radial gradient. */
   const pearlFill = () => H.def('dr-pearl', '<radialGradient id="dr-pearl" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f3eef6"/><stop offset="1" stop-color="#cfc3d8"/></radialGradient>');
+  // one pearl: a small circle at x,y with radius r
   const pearl = (x, y, r) => `<circle cx="${F(x)}" cy="${F(y)}" r="${F(r)}" fill="${pearlFill()}" stroke="#a99bb4" stroke-width=".9"/>`;
   /** Pearls along a quadratic curve a → (control c) → b, drawn as ONE dotted stroke (round dashes of length 0),
       a grey rim underneath and a small white highlight dot on each pearl. n = number of pearls. */
   const pearlString = (a, c, b, n, r) => {
+    // total length of the curve, measured by adding up 20 short straight steps
     const len = (() => { let L = 0, p = a; for (let i = 1; i <= 20; i++) { const t = i / 20, u = 1 - t, q = [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; L += Math.hypot(q[0] - p[0], q[1] - p[1]); p = q; } return L; })();
     const gap = F(len / Math.max(1, n - 1)), d = `M${P(a)}Q${P(c)} ${P(b)}`;
     return `<path d="${d}" fill="none" stroke="#a99bb4" stroke-width="${F(2 * r + 1.6)}" stroke-dasharray="0 ${gap}" stroke-linecap="round"/>` +
@@ -329,6 +333,7 @@
       // puff sleeves finished with a row of rose petals pointing down the arm
       const sleeves = G.shirtPath({ sleeve: .22, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const sw = armHW(.22) + 11;
+      // row of five petals across the sleeve edge, for one side
       const petalTrim = side => [-.8, -.4, 0, .4, .8].map((k, i) => {
         const [x, y] = armN(side, .225, k * sw), a = armAng(side, .225) - 90;
         return `<ellipse cx="${F(x)}" cy="${F(y)}" rx="6.5" ry="9" transform="rotate(${F(a)} ${F(x)} ${F(y)})" fill="${H.grad(i % 2 ? cream : pink)}" stroke="${ink(deep)}" stroke-width="1.4"/>`;
@@ -376,6 +381,7 @@
       // flutter sleeves: wide short sleeves; band width follows the sleeve flare
       const fl = t => armHW(t) + 6 + 14 * Math.max(0, (t - .12) / .18);
       const sleeves = G.shirtPath({ sleeve: .3, pad: 3, sleevePad: 6, sleeveFlare: 14, bottom: 380, neck: 'round' });
+      // orange band around the sleeve (positions run 0 = shoulder to 1 = wrist), for one side
       const band = side => `<path d="${G.armPath(side, .262, .3, fl(.262) - armHW(.262) + .5, fl(.3) - fl(.262))}" fill="${H.grad(orange)}"/>`;
       const folds = ['L', 'R'].map(s => [-.5, 0, .5].map(k => `M${P(armN(s, .1, k * 12))}L${P(armN(s, .28, k * 26))}`).join('')).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
@@ -420,7 +426,9 @@
       const fluff = [[130, 560], [270, 548], [176, 520], [226, 500], [150, 470], [250, 452], [200, 580]].map(([x, y]) => twinkle(x, y, 3.5)).join('');
       // long bell sleeves with a purple cuff band and white lace dots
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 3, sleeveFlare: 12, bottom: 360, neck: 'scoop' });
+      // half-width of the bell sleeve at position t along the arm (gets wider toward the wrist)
       const cw = t => armHW(t) + 3 + 12 * Math.max(0, (t - .12) / .88);
+      // purple cuff band near the wrist plus a row of six white lace dots, for one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, cw(.9) - armHW(.9) + .5, cw(1) - cw(.9))}" fill="${H.grad(purple)}"/>` +
         Array.from({ length: 6 }, (_, i) => { const p = armN(side, .87, -cw(.87) + 2 * cw(.87) * (i + .5) / 6); return `<circle cx="${F(p[0])}" cy="${F(p[1])}" r="1.8" fill="#fff"/>`; }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 344, neck: 'scoop', neckDepth: 14 });
@@ -469,6 +477,7 @@
       // wavy sleeves with foam trim + a pearl drop
       const sleeves = G.shirtPath({ sleeve: .22, pad: 3, sleevePad: 7, sleeveFlare: 6, bottom: 380, neck: 'scoop' });
       const sw = armHW(.22) + 7 + 6;
+      // row of white foam balls along the sleeve edge, for one side
       const foamTrim = side => cuffBalls(side, .225, sw - 2, 4.6, '#ffffff', '#b7e3e6', 5);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 16 });
       const ribs = Array.from({ length: 9 }, (_, i) => { const a = (210 + i * 15) * Math.PI / 180; return `M200,420L${F(200 + Math.cos(a) * 170)},${F(420 + Math.sin(a) * 170)}`; }).join('');
@@ -506,7 +515,9 @@
         .map(([x, y, r], i) => i % 3 === 0 ? H.star(x, y, r + 1, '#fff') : twinkle(x, y, r + .5)).join('');
       // see-through tulle puff sleeves with a rainbow band
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 9, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
+      // half-width of the puff sleeve at position t along the arm
       const sw = t => armHW(t) + 9 + 3 * Math.max(0, (t - .12) / .12);
+      // rainbow band around the sleeve edge, for one side
       const band = side => `<path d="${G.armPath(side, .205, .24, sw(.205) - armHW(.205) + .5, sw(.24) - sw(.205))}" fill="${H.pat('rainbow', '#fff', '#fff', 12)}"/>`;
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 14 });
       const arcs = RB.map((c, i) => `<path d="M${172 + i * 3.4},${346} a${28 - i * 3.4},${28 - i * 3.4} 0 0 1 ${56 - i * 6.8},0" fill="none" stroke="${c}" stroke-width="3.6"/>`).join('');
@@ -539,6 +550,7 @@
       const pinkG = lg(`dr-${it.id}-pk`, [[0, pinkA, 0], [.3, pinkA, .8], [.7, mix(pinkA, '#b48cf0', .5), .8], [1, '#b48cf0', 0]], 'h');
       const veil = tier(xl, top, 590, 'scallop', 26, 12, 4);
       const curtainG = lg(`dr-${it.id}-cur`, [[0, green, .55], [1, green, 0]]);
+      // one wavy aurora ribbon starting at height y0; amp = how much it waves, th = how thick it is
       const ribbon = (y0, amp, th) => {
         const top1 = `M40,${y0} C120,${y0 - amp} 200,${y0 + amp} 280,${y0 - amp * .2} S360,${y0 - amp} 380,${y0 - amp * .6}`;
         const bot = `L380,${y0 - amp * .6 + th} C360,${y0 - amp + th} 320,${y0 - amp * .2 + th * 1.2} 280,${y0 - amp * .2 + th} C200,${y0 + amp + th} 120,${y0 - amp + th} 40,${y0 + th}Z`;
@@ -551,7 +563,9 @@
         .map(([x, y], i) => i % 2 ? H.star(x, y, 3.6, star) : twinkle(x, y, 4, '#fff')).join('');
       // long sheer starry sleeves, aurora cuff, row of little stars
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 2, sleeveFlare: 4, bottom: 360, neck: 'scoop' });
+      // half-width of the sheer sleeve at position t along the arm (flares a little toward the wrist)
       const cw = t => armHW(t) + 2 + 4 * Math.max(0, (t - .12) / .88);
+      // green aurora cuff near the wrist with three little stars, for one side
       const cuff = side => `<path d="${G.armPath(side, .92, 1, cw(.92) - armHW(.92) + .5, cw(1) - cw(.92))}" fill="${H.grad(green)}"/>` +
         [-.6, 0, .6].map(k => { const p = armN(side, .84, k * cw(.84)); return H.star(p[0], p[1], 3.2, star); }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
@@ -584,17 +598,19 @@
       const top = 404, xl = edge([[top, 141.5], [450, 129], [488, 118], [570, 87], [640, 68], [704, 58]]);
       const petti = tier(xl, top, 696, 'scallop', 16, 8);
       const over = tier(xl, top, 606, 'scallop', 50, 24, 4);
-      const rick = j => { let d = `M${F(j.x0)},${j.y}`; return d; };
       // white rick-rack follows the overskirt scallops a little inside
       const rickrack = `<path d="${over.hemD}" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="4 3" stroke-linecap="round" transform="translate(0,-6)"/>`;
       const berries = joins(over).map(([x, y]) => `<path d="M${F(x)},${F(y - 2)} v8" stroke="${shade(green, -.2)}" stroke-width="2"/>` + H.berry(x, y + 18, 11) +
         `<circle cx="${F(x - 3)}" cy="${F(y + 16)}" r="1.2" fill="#ffe9a8"/><circle cx="${F(x + 3)}" cy="${F(y + 20)}" r="1.2" fill="#ffe9a8"/><circle cx="${F(x)}" cy="${F(y + 24)}" r="1.2" fill="#ffe9a8"/>`).join('');
       const blossoms = [[120, 668], [168, 656], [232, 660], [280, 664], [200, 680], [144, 640], [256, 644]].map(([x, y], i) => i % 2 ? H.berry(x, y, 8) : H.flower(x, y, 7, '#ffffff')).join('');
+      // green leafy collar: a zigzag of pointed tips across the top of the bodice
       const calyx = (() => { let d = `M${F(G.torsoX(404) - 4)},400`; const x0 = G.torsoX(404) - 4, n = 9, w = (400 - 2 * x0) / n; for (let i = 0; i < n; i++) d += `l${F(w / 2)},${i % 2 ? 16 : 22}l${F(w / 2)},${i % 2 ? -16 : -22}`; return d + `L${F(400 - x0)},396Q200,392 ${F(x0)},396Z`; })();
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'round' });
       const sw = armHW(.24) + 11;
+      // scalloped white lace edge across the sleeve, for one side
       const lace = side => { const a = armN(side, .245, -sw), b = armN(side, .245, sw); let d = `M${P(a)}`; const n = 6; for (let i = 1; i <= n; i++) { const p = [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]; const m = [a[0] + (b[0] - a[0]) * (i - .5) / n, a[1] + (b[1] - a[1]) * (i - .5) / n + 5]; d += `Q${P(m)} ${P(p)}`; } return `<path d="${d}" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>`; };
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round' });
+      // round collar for one side (s = 'L' or 'R'); the right side is the left one mirrored around x = 200
       const collar = s => { const X = x => s === 'L' ? x : 400 - x; return `<path d="M${X(200)},262 C${X(190)},262 ${X(186)},256 ${X(183)},251 C${X(170)},252 ${X(158)},262 ${X(162)},276 C${X(168)},290 ${X(192)},286 ${X(200)},264Z" fill="${H.grad(cream)}" stroke="${ink(pink)}" stroke-width="2" stroke-linejoin="round"/>`; };
       return `<path d="${petti.d}" fill="${H.pat('check', '#ffffff', pink, 14)}"/><path d="${petti.d}" fill="url(#soft-h)" opacity=".35"/>` + outline(petti.d, pink) +
         hemTrim(petti.hemD, '#ffffff', pink, 6) + blossoms +
@@ -638,6 +654,7 @@
       const tw = twinkles([[118, 690, 4], [284, 688, 4], [180, 620, 3.5], [222, 616, 3.5], [126, 590, 3], [276, 586, 3], [172, 520, 3], [228, 516, 3], [150, 470, 3], [250, 468, 3]]);
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 4, bottom: 380, neck: 'scoop' });
       const sw = armHW(.24) + 12;
+      // four gold stars across the sleeve edge, for one side
       const starTrim = side => [-.7, -.23, .23, .7].map(k => { const p = armN(side, .235, k * sw); return H.star(p[0], p[1], 4, gold); }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 14 });
       const np = neckPts('scoop', 14, 2, 10);
@@ -721,8 +738,11 @@
       const streaks = '<path d="M120,520 Q108,600 100,680 L112,680 Q118,600 128,522Z M262,500 Q274,600 284,680 L292,680 Q282,600 268,500Z" fill="#fff" opacity=".14"/>';
       const hollies = [[200, 422, .9], [180, 520, .65], [220, 520, .65], [164, 610, .7], [236, 610, .7]].map(([x, y, s]) => holly(x, y, s, holly_)).join('');
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 3, sleeveFlare: 3, bottom: 360, neck: 'round' });
+      // half-width of the sleeve at position t along the arm (flares a little toward the wrist)
       const cw = t => armHW(t) + 3 + 3 * Math.max(0, (t - .12) / .88);
+      // gold band around the sleeve, for one side
       const sband = side => `<path d="${G.armPath(side, .3, .34, cw(.3) - armHW(.3) + .4, cw(.34) - cw(.3))}" fill="${H.grad(gold)}"/>`;
+      // two rows of fluffy white balls at the wrist (a fur cuff), for one side
       const furCuff = side => cuffBalls(side, .93, cw(.93) + 1, 5.6, H.grad('#ffffff', 'r'), '#cfc6cf', 5) + cuffBalls(side, .965, cw(.965) - 1, 5, H.grad('#ffffff', 'r'), '#cfc6cf', 4);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
       let lacing = '';
@@ -771,6 +791,7 @@
       // puffy sleeves in soft blue with a cloud-puff edge at the cuff
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 10, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const sw = armHW(.24) + 12;
+      // row of fluffy white balls along the sleeve edge, for one side
       const puffs = side => `<path d="${sleeves}" fill="none"/>` + cuffBalls(side, .235, sw - 3, 6.2, H.grad('#ffffff', 'r'), '#c9cde6', 5);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 15 });
       const np = neckPts('scoop', 15, 2, 13);
@@ -804,10 +825,13 @@
       const puffins = puffin(136, 616, 1.05, 1) + puffin(200, 618, 1.15, 1) + puffin(264, 616, 1.05, -1);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 450, neck: 'round', neckDepth: 10 });
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'round' });
+      // half-width of the sleeve at position t along the arm
       const sw = t => armHW(t) + 8 + 3 * Math.max(0, (t - .12) / .12);
+      // two navy stripes around the sleeve, for one side
       const cuff = side => `<path d="${G.armPath(side, .2, .215, sw(.2) - armHW(.2) + .5, sw(.215) - sw(.2))}" fill="${navy}"/><path d="${G.armPath(side, .225, .24, sw(.225) - armHW(.225) + .5, sw(.24) - sw(.225))}" fill="${navy}"/>`;
       // sailor collar: big square-ended collar over the shoulders with a V at the front
       const collarL = 'M183,251 L200,298 L200,322 L172,306 Q152,294 146,272 Q156,258 168,254 Z';
+      // sailor collar outline for one side: the left one as written, the right one mirrored (x becomes 400 - x)
       const collar = side => { const d = side === 'L' ? collarL : collarL.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => `${400 - +x},${y}`); return d; };
       const cl = collar('L'), cr = collar('R');
       const stripeL = 'M178,258 Q160,262 154,274 Q160,292 176,301 L196,312';
@@ -865,6 +889,7 @@
   };
   /** Round "Peter Pan" collar, left half drawn and mirrored for the right. */
   const peterCollar = (c, line, y = 262) => ['L', 'R'].map(sd => {
+    // x of the same point on the right side (mirror of the left, around x = 200)
     const X = x => sd === 'L' ? x : 400 - x;
     return `<path d="M${X(200)},${y} C${X(190)},${y} ${X(186)},${y - 6} ${X(183)},${y - 11} C${X(168)},${y - 10} ${X(156)},${y + 2} ${X(161)},${y + 15} C${X(168)},${y + 29} ${X(193)},${y + 25} ${X(200)},${y + 2}Z" fill="${H.grad(c)}" stroke="${ink(line)}" stroke-width="2" stroke-linejoin="round"/>` +
       `<path d="M${X(197)},${y + 6} C${X(190)},${y + 20} ${X(172)},${y + 22} ${X(165)},${y + 13}" fill="none" stroke="${ink(line)}" stroke-width="1.3" stroke-dasharray="2 3" opacity=".6"/>`;
@@ -1005,6 +1030,7 @@
       const hemY = it.hem || 586;
       const blouseFill = it.pattern ? H.pat(it.pattern, blouse, it.patternColor || trim, it.patternSize || 14) : H.grad(blouse);
       const bl = G.shirtPath({ sleeve: it.sleeve ?? .3, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 420, neck: 'round' });
+      // band at the end of the sleeve, in a slightly darker blouse colour, for one side
       const cuff = sd => sleeveBand(sd, (it.sleeve ?? .3) - .04, it.sleeve ?? .3, it.sleeve ?? .3, 8, 3, H.grad(shade(blouse, -.05)));
       const xw = G.torsoX(404) - 2;
       const xl = edge([[398, xw], [450, 131], [486, 122], [hemY, 100]]);

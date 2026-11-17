@@ -132,6 +132,7 @@
     const r = rng(42);
     const stars = [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${-g * 1.3}s">` +
       Array.from({ length: 24 }, () => `<circle cx="${Math.round(r() * 1600)}" cy="${Math.round(r() * 520)}" r="${(1 + r() * 2.2).toFixed(1)}" fill="#fff"/>`).join('') + '</g>').join('');
+    // one band of northern lights along path d: a wide soft glow (gradient a) with a brighter core (gradient b)
     const aurora = (d, a, b, cls, delay) => `<g class="${cls}" style="animation-delay:${delay}s"><path d="${d}" fill="none" stroke="url(#${a})" stroke-width="90" stroke-linecap="round" opacity=".55"/><path d="${d}" fill="none" stroke="url(#${b})" stroke-width="30" stroke-linecap="round" opacity=".6"/></g>`;
     return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
       <linearGradient id="n-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#081634"/><stop offset=".7" stop-color="#1d3d70"/><stop offset="1" stop-color="#2e5688"/></linearGradient>
@@ -177,6 +178,7 @@
     s += `<path d="M${x - 5},${top + 2} L${x + w / 2},${peak} L${x + w + 5},${top + 2}Z" fill="${roof}" stroke="${sink(roof)}" stroke-width="2.5" stroke-linejoin="round"/>`;
     // corrugated iron: thin lines down the roof
     for (let i = 1; i < 6; i++) { const t = i / 6; s += `<path d="M${x + w / 2},${peak + 4} L${(x - 5 + (w + 10) * t).toFixed(0)},${top}" stroke="${sink(roof)}" stroke-width="1" opacity=".35"/>`; }
+    // a white-framed window with a cross, at wx,wy, size ww × wh
     const win = (wx, wy, ww, wh) => `<rect x="${wx}" y="${wy}" width="${ww}" height="${wh}" fill="#bfe3f2" stroke="#fff" stroke-width="3"/><path d="M${wx + ww / 2},${wy} V${wy + wh} M${wx},${wy + wh / 2} H${wx + ww}" stroke="#fff" stroke-width="2"/>`;
     const ww = w * .24, wh = h * .3;
     s += win(x + w * .14, top + h * .2, ww, wh) + win(x + w * .62, top + h * .2, ww, wh);
@@ -227,6 +229,7 @@
     ].map(([p, g]) => `<polygon points="${p}" fill="url(#${g})"/>`).join('');
     // honeycomb: pointy-top hexagons of radius 9 (one row every 13.5, every other row shifted half a cell)
     const HX = 9, HW = HX * Math.sqrt(3);
+    // path of one honeycomb cell (pointy-top hexagon) centred at x,y
     const hex = (x, y) => `M${x},${y - HX} L${(x + HW / 2).toFixed(1)},${y - HX / 2} V${y + HX / 2} L${x},${y + HX} L${(x - HW / 2).toFixed(1)},${y + HX / 2} V${y - HX / 2}Z`;
     const hexTile = [[HW / 2, HX], [0, 2.5 * HX], [HW, 2.5 * HX], [0, -.5 * HX], [HW, -.5 * HX], [HW / 2, 4 * HX]].map(([x, y]) => hex(+x.toFixed(1), y)).join('');
     let panes = '';
@@ -350,6 +353,7 @@
        end on the far bank (y 690), and it gets narrower further away. The ducks swim under it.
        t = 0 near end ... 1 far end. */
     const bY = t => 752 - 62 * t, bL = t => 1136 + 20 * t, bR = t => 1224 - 20 * t, bH = t => 32 - 12 * t;
+    // a point as "x,y" text
     const pt = (x, y) => `${x.toFixed(1)},${y.toFixed(1)}`;
     let bridge = `<path d="M1166,662 H1194 L1204,690 H1156Z M1136,760 H1224 Q1236,880 1290,1000 H1070 Q1124,880 1136,760Z" fill="#e6dcc4" opacity=".8"/>` +    // gravel path on both banks
       `<polygon points="${pt(bL(0), bY(0))} ${pt(bR(0), bY(0))} ${pt(bR(1), bY(1))} ${pt(bL(1), bY(1))}" fill="#c48a52" stroke="#8a5a34" stroke-width="2.5" stroke-linejoin="round"/>`;
@@ -427,10 +431,12 @@
     };
     const wins = fill(BUS.doorHalf + 40, driverX - 40)                                   // between the door and the driver
       .concat(fill(-leftSpace - 40, -BUS.doorHalf - 40).reverse());                      // behind the door (nearest first)
+    // a window (or the driver) at bus position lx, width w, in scene units
     const rect = (lx, w) => ({ x: doorX + lx * k, y: groundY + BUS.winTop * k, w: w * k, h: (BUS.winBot - BUS.winTop) * k });
     return { doorX, groundY, k, left, right, driverX, wins, leftSpace,
       windows: wins.map(o => rect(o.x, o.w)), driver: rect(driverX, BUS.driverW) };
   }
+  /** The yellow bus, drawn around the door where the doll stands (o: see busLayout). */
   function bus(o) {
     const L = busLayout(o), k = L.k, T = BUS.winTop, B = BUS.winBot;
     const rearX = -L.leftSpace - 80, noseX = L.driverX + BUS.driverW + 230;
@@ -439,6 +445,7 @@
       `<rect x="${x}" y="${T}" width="${w}" height="${B - T}" rx="18" fill="url(#bus-glass)"/>` +
       (seats ? [x + w * .28, x + w * .72].map(cx => `<rect x="${cx - 44}" y="${B - 120}" width="88" height="140" rx="22" fill="#c8453e" stroke="#8e2a26" stroke-width="5"/><path d="M${cx - 30},${B - 100} h60 M${cx - 30},${B - 70} h60" stroke="#e7766c" stroke-width="5" stroke-dasharray="6 8"/>`).join('') : '') +
       `<path d="M${x + 24},${T + 40} L${x + 70},${T + 10} M${x + 24},${T + 90} L${x + 120},${T + 18}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".18"/>`;
+    // a wheel under its dark wheel arch, centred at x
     const wheel = x => `<path d="M${x - 170},30 V-90 Q${x - 170},-170 ${x},-170 Q${x + 170},-170 ${x + 170},-90 V30Z" fill="#3a3f48"/>` +
       `<circle cx="${x}" cy="40" r="130" fill="#26292f"/><circle cx="${x}" cy="40" r="72" fill="#c9ccd4" stroke="#8a8e98" stroke-width="8"/><circle cx="${x}" cy="40" r="24" fill="#8a8e98"/>`;
     let parts = '';
@@ -501,20 +508,33 @@
       for (let x = 8; x < 1600; x += 30) s += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="${(x / 30 | 0) % 2 ? a : b}" stroke="#2f5f80" stroke-width="1"/>`;
       return s; };
     const ropes = rope(PT + 40, '#e2564c', '#fbfaf6') + rope(PT + 96, '#3f7fd0', '#f7d16a') + rope(PT + 152, '#e2564c', '#fbfaf6');
-    // the big yellow water slide: tower with stairs on the right, a winding tube down into the pool
-    const TUBE = 'M1268,346 C1150,340 1090,372 1120,410 C1150,446 1330,436 1338,492 C1346,548 1210,548 1150,566 C1098,582 1082,612 1074,636';
+    /* The big yellow water slide. It starts in a little blue start house on top of the tower (right),
+       winds down, flattens out just above the water and ends in an OPEN mouth (dark inside, yellow rim)
+       with water pouring out of it into the pool. Rings around the tube show that it is a tube.
+       Drawn 40 units higher than written (translate) so it stands on the far side of the pool. */
+    const TUBE = 'M1280,330 C1150,330 1090,372 1120,410 C1150,446 1330,436 1338,492 C1346,548 1210,548 1150,566 C1126,573 1112,574 1096,574';
     const slide = `<g transform="translate(0,-40)">
-      ${[[1150, 566, 1150, 600], [1338, 492, 1338, 600], [1120, 410, 1120, 600]].map(([x, y, , y2]) => `<path d="M${x},${y + 20} V${y2}" stroke="#8a919e" stroke-width="7"/>`).join('')}
+      ${[[1150, 566], [1338, 492], [1120, 410]].map(([x, y]) => `<path d="M${x},${y + 20} V600" stroke="#8a919e" stroke-width="7"/>`).join('')}
       <path d="M1250,600 V346 M1310,600 V346" stroke="#c9ced6" stroke-width="10"/>
       ${Array.from({ length: 11 }, (_, i) => `<path d="M1250,${590 - i * 24} L1310,${578 - i * 24}" stroke="${i % 2 ? '#e2564c' : '#fbfaf6'}" stroke-width="6" stroke-linecap="round"/>`).join('')}
-      <path d="M1240,346 H1320 V334 H1240Z" fill="#3f7fd0" stroke="#2a5a96" stroke-width="2.5"/>
-      <path d="M1244,334 V306 M1316,334 V306 M1244,310 H1316" stroke="#3f7fd0" stroke-width="5" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#c98a14" stroke-width="54" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#ffcf3a" stroke-width="46" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#ffe98a" stroke-width="10" stroke-linecap="round" transform="translate(0,-12)" opacity=".9"/>
-      <path d="${TUBE}" fill="none" stroke="#e2a514" stroke-width="3" stroke-dasharray="4 26" transform="translate(0,8)" opacity=".7"/></g>`;
-    // splash where the slide ends
-    const splash = `<g class="foam"><ellipse cx="1074" cy="${PT + 36}" rx="56" ry="10" fill="#fff" opacity=".7"/><path d="M1044,${PT + 32} q-8,-18 -2,-30 M1074,${PT + 28} q0,-22 6,-34 M1104,${PT + 32} q8,-18 4,-30" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/></g>`;
+      <path d="${TUBE}" fill="none" stroke="#c98a14" stroke-width="54"/>
+      <path d="${TUBE}" fill="none" stroke="#ffcf3a" stroke-width="46"/>
+      <path d="${TUBE}" fill="none" stroke="#eab42a" stroke-width="46" stroke-dasharray="7 47" opacity=".8"/>
+      <path d="${TUBE}" fill="none" stroke="#ffe98a" stroke-width="9" transform="translate(0,-12)" opacity=".9"/>
+      <!-- the open end: dark inside, a light rim, and a sliver of water running inside -->
+      <g transform="rotate(-6 1096 574)">
+        <ellipse cx="1096" cy="574" rx="11" ry="25" fill="#8a5a10" stroke="#ffe27a" stroke-width="4"/>
+        <ellipse cx="1099" cy="576" rx="6" ry="17" fill="#5e3c08"/>
+        <path d="M1090,590 Q1097,598 1104,588" stroke="#bfe9f7" stroke-width="5" fill="none" stroke-linecap="round"/></g>
+      <!-- start house on top of the tower -->
+      <path d="M1236,354 V300 H1324 V354Z" fill="#3f7fd0" stroke="#2a5a96" stroke-width="2.5"/>
+      <path d="M1228,302 L1280,272 L1332,302Z" fill="#e2564c" stroke="#a83a33" stroke-width="2.5" stroke-linejoin="round"/>
+      <rect x="1290" y="312" width="22" height="18" rx="3" fill="#bfe3f2" stroke="#fff" stroke-width="2.5"/>
+      <!-- water pouring out of the mouth into the pool -->
+      <path d="M1092,574 C1068,576 1050,586 1038,602 L1062,602 C1070,594 1080,592 1095,594Z" fill="#bfe9f7" opacity=".9"/>
+      <path d="M1088,582 C1070,585 1056,592 1048,601" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="10 14" class="flow"/></g>`;
+    // splash where the water from the slide lands in the pool
+    const splash = `<g class="foam"><ellipse cx="1048" cy="${PT + 6}" rx="44" ry="8" fill="#fff" opacity=".7"/><path d="M1020,${PT + 4} q-8,-14 -2,-24 M1076,${PT + 4} q8,-14 4,-24" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/></g>`;
     // friendly whale fountain in the pool, spouting water
     const whale = `<g transform="translate(780,${PT + 126})">
       <path d="M-60,14 Q-62,-34 -10,-40 Q40,-44 58,-6 Q64,10 56,14Z" fill="#5d8fd6" stroke="#36609e" stroke-width="3" stroke-linejoin="round"/>
@@ -609,6 +629,7 @@
   const stroke = (d, col, w = 1.6, op = 1) => `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${op < 1 ? ` opacity="${op}"` : ''}/>`;
   /** Soft ellipse (glows, shadows, blush, spots). */
   const oval = (cx, cy, rx, ry, fill, op = 1, more = '') => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}"${op < 1 ? ` opacity="${op}"` : ''}${more}/>`;
+  /** Round to one decimal (keeps the creature SVGs short). */
   const r1 = n => Math.round(n * 10) / 10;
   /**
    * Fluffy outline through a closed list of points (clockwise on screen):
@@ -670,6 +691,7 @@
       rad(`${p}-muz`, [[0, cmix(o.muzzle, '#ffffff', .35)], [1, o.muzzle]], .4, .3, .8) +
       `<clipPath id="${p}-bc"><path d="${BODY}"/></clipPath><clipPath id="${p}-hc"><path d="${HEAD}"/></clipPath>` +
       (o.unicorn ? lin(`${p}-horn`, [[0, '#fff3b8'], [.5, '#f6cf55'], [1, '#d9a42a']], 'h') : '');
+    // a hoof at x, width w (far = the legs on the other side, a little paler)
     const hoof = (x, w, far) => shape(`M${x},${162}h${w}c1,4 2,8 2,11h${-w - 3}c0,-4 0,-7 1,-11z`, `url(#${p}-hoof)`, cink(o.hoof[1], .4), 2, far ? ' opacity=".9"' : '');
     // tail: one full flowing shape from the croup to near the ground, with long locks on top for texture
     const TAIL = 'M62,78C44,72 28,84 24,104C20,124 22,146 16,162Q24,160 27,167Q33,158 38,165Q41,156 47,160Q44,146 46,132C48,116 46,104 54,92Z';
@@ -678,6 +700,7 @@
       stroke('M38,92C32,110 30,132 28,150M46,96C40,116 38,136 40,152', '#ffffff', 1.4, .45);
     // mane: a wavy band along the crest (poll to withers) with long locks hanging over the near side of the neck
     const crest = t => [(1 - t) * (1 - t) * 172 + 2 * (1 - t) * t * 154 + t * t * 140, (1 - t) * (1 - t) * 26 + 2 * (1 - t) * t * 40 + t * t * 78];
+    // a point beside the mane crest: t along the neck, k steps sideways
     const off = (t, k) => { const [x, y] = crest(t); return [r1(x + .85 * k), r1(y + .53 * k)]; };
     const band = [], ts = [0, .14, .28, .42, .56, .7, .84, 1];
     ts.forEach(t => band.push(off(t, 7)));
@@ -750,6 +773,7 @@
       rad(`${p}-belly`, [[0, '#ffffff'], [.5, o.belly], [1, cmix(o.belly, fd, .35)]], .45, .3, .8) +
       (o.mane ? rad(`${p}-mane`, [[0, o.mane[0]], [.6, o.mane[1]], [1, o.mane[2]]], .5, .45, .6) : '') +
       (o.spikes ? rad(`${p}-spk`, [[0, o.spikes[0]], [1, o.spikes[1]]], .5, .6, .7) : '');
+    // mirror a path from the left half of the drawing to the right half
     const mirror = (d) => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => r1(120 - x) + ',' + y);
     let back = '', ears = '';
     // tail (behind the body, wags)
@@ -808,6 +832,7 @@
     puffin: () => {
       const p = 'cr-puffin';
       const BEAK = 'M83,28C91,27 99,33 104,41C107,46 105,50 100,52C94,54 89,55 84,56C82,46 82,37 83,28Z';
+      // one webbed orange foot at x
       const foot = x => shape(`M${x - 3},128h7v9C${x + 10},138 ${x + 16},141 ${x + 20},145C${x + 16},148 ${x + 12},146 ${x + 9},148C${x + 6},149 ${x + 3},147 ${x},148C${x - 4},149 ${x - 8},148 ${x - 8},145C${x - 6},141 ${x - 4},139 ${x - 3},137Z`, `url(#${p}-foot)`, '#b24e22', 2) +
         stroke(`M${x + 1},140l7,6M${x + 4},139l12,6`, '#d65e26', 1.3, .7);
       const defs = rad(`${p}-blk`, [[0, '#5a5b70'], [.45, '#2e2e3c'], [1, '#18161f']], .32, .2, .9) +
@@ -859,6 +884,7 @@
     sheep: () => {
       const p = 'cr-sheep';
       const FLEECE = fluff(ring(76, 74, 52, 32, 16, 180, .03), .2);
+      // one leg at x (far = the leg behind, a bit darker)
       const leg = (x, far) => shape(`M${x - 4.5},92C${x - 4.5},102 ${x - 3.5},108 ${x - 3.5},117L${x + 3.5},117C${x + 3.5},108 ${x + 4.5},102 ${x + 4.5},92Z`, far ? `url(#${p}-legf)` : `url(#${p}-leg)`, '#8a7264', 1.8) +
         shape(`M${x - 3.8},116h7.6l1,6h-9.6z`, '#6a5550', '#4a3a38', 1.4);
       const defs = rad(`${p}-wool`, [[0, '#ffffff'], [.55, '#f8f2e8'], [1, '#d9cbb8']], .4, .25, .85) +
@@ -897,8 +923,10 @@
       const TAIL = fluff([[62, 68], [58, 82], [46, 90], [30, 90], [16, 82], [8, 68], [6, 52], [10, 38], [18, 28], [30, 24], [40, 28], [43, 40], [41, 52], [46, 62], [54, 66]], .2);
       const BODY = fluff([[62, 60], [80, 54], [100, 54], [116, 52], [128, 62], [126, 80], [116, 92], [96, 95], [76, 95], [60, 90], [52, 76]], .14);
       const HEAD = fluff([[116, 32], [130, 28], [144, 32], [152, 42], [158, 52], [156, 60], [146, 66], [134, 70], [122, 68], [112, 62], [106, 54], [110, 42]], .1);
+      // one leg at x (far = the leg behind, a bit darker)
       const leg = (x, far) => shape(`M${x - 6},84C${x - 6},96 ${x - 5},104 ${x - 5},110C${x - 7},114 ${x - 6},118 ${x},118C${x + 6},118 ${x + 7},114 ${x + 5},110C${x + 5},104 ${x + 6},96 ${x + 6},84Z`, far ? `url(#${p}-far)` : `url(#${p}-fur)`, line, 2) +
         stroke(`M${x - 2},114v3M${x + 2},114v3`, line, 1.1, .8);
+      // one ear at x,y tilted by angle a
       const ear = (x, y, a) => `<g transform="translate(${x},${y}) rotate(${a})">${shape('M-8,8C-9,-2 -5,-10 0,-12C5,-10 9,-2 8,8Z', `url(#${p}-fur)`, line, 2)}${shape('M-4,6C-4.5,0 -2.5,-5 0,-7C2.5,-5 4.5,0 4,6Z', '#c9bfd2', 'none', 0)}</g>`;
       const defs = rad(`${p}-fur`, [[0, '#ffffff'], [.6, '#f7f8fd'], [1, '#d2d9e8']], .38, .25, .85) +
         lin(`${p}-far`, [[0, '#dde2ee'], [1, '#c3cbdd']]) +
@@ -975,11 +1003,14 @@
     elf: (lantern) => {
       const p = 'cr-elf';
       const SK = { base: '#f7d7c3', light: '#fdeadd', shade: '#eab49c', line: '#c2857a' };
+      // one big eye at cx,cy with a shine
       const eye = (cx, cy) => oval(cx, cy, 4.8, 5.8, '#fff', 1, ' stroke="#b49094" stroke-width=".8"') +
         oval(cx, cy + .8, 4, 4.8, `url(#${p}-eye)`, 1, ' stroke="#4a2e22" stroke-width=".9"') +
         oval(cx, cy + 1, 2, 2.4, '#1e1620') + oval(cx + 1.6, cy - 1.2, 1.7, 1.5, '#fff') + `<circle cx="${cx - 1.6}" cy="${cy + 2.8}" r=".8" fill="#fff"/>` +
         stroke(`M${cx - 5.2},${cy - 1.8}Q${cx},${cy - 7.6} ${cx + 5.2},${cy - 2.2}`, '#3a2830', 1.8);
+      // one tunic sleeve along path d
       const sleeve = d => shape(d, `url(#${p}-tunic)`, '#2f6a3e', 2);
+      // one hand (mitten shape) at x,y
       const hand = (x, y) => shape(`M${x - 4.5},${y - 3}C${x - 6},${y + 2} ${x - 3},${y + 6} ${x},${y + 6}C${x + 4},${y + 6} ${x + 6},${y + 2} ${x + 4.5},${y - 3}Z`, `url(#${p}-skin)`, SK.line, 1.6);
       const defs = rad(`${p}-skin`, [[0, SK.light], [.6, SK.base], [1, SK.shade]], .4, .35, .75) +
         lin(`${p}-eye`, [[0, '#4a2a18'], [.5, '#8a5a32'], [1, '#d3a46a']]) +

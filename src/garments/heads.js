@@ -16,6 +16,7 @@
 
   /** Number formatting and point helpers. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // turn a point [x, y] into the text 'x,y' (one decimal) for use in SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
@@ -287,6 +288,7 @@
       if (it.kind === 'puffin') {
         // white face mask with two cheek lobes, dark eyes with the red eye ring and grey mark, striped beak
         const face = 'M150,96 C140,74 160,56 182,62 Q200,68 218,62 C240,56 260,74 250,96 Q200,90 150,96 Z';
+        // one bird eye at x: grey mark, red ring, dark pupil and a white glint
         const eye = x => `<path d="M${x - 10},${66} l6,4 l-6,4 Z" fill="#9aa3b4"/>` +
           `<circle cx="${x}" cy="72" r="6" fill="#e2573d"/><circle cx="${x}" cy="72" r="4.2" fill="#2a2430"/><circle cx="${x + 1.6}" cy="70.4" r="1.6" fill="#fff"/>`;
         const beak = 'M184,74 Q200,64 216,74 Q220,94 200,118 Q180,94 184,74 Z';
@@ -459,6 +461,7 @@
   DOLL.shape('head-wreath', {
     slot: 'hat',
     thumb: [104, 30, 192, 126],
+    // flower wreath: a leafy vine along the top of the head with flowers on it
     draw(it) {
       const leafC = it.colors[0];
       const arc = G.headArc(200, 340, 4, 28);
@@ -491,6 +494,7 @@
     const loopL = 'M-2,0 C-10,-16 -28,-18 -28,-3 C-28,11 -12,12 -2,0 Z';
     const tailL = 'M-3,3 Q-9,16 -15,27 L-8,26 L-5,32 Q-1,18 2,4 Z';
     const fold = 'M-6,-2 Q-15,-8 -22,-5 M-6,2 Q-14,6 -21,4';
+    // one half of the bow (m = 1 left side, m = -1 mirrored right side): a loop, a tail and a fold line
     const half = (m) => `<g transform="scale(${m},1)"><path d="${tailL}" fill="${f}" stroke="${k}" stroke-width="${sw}" stroke-linejoin="round"/>` +
       `<path d="${loopL}" fill="${f}" stroke="${k}" stroke-width="${sw}" stroke-linejoin="round"/><path d="${loopL}" fill="url(#soft-r)"/>` +
       `<path d="${fold}" stroke="${k}" stroke-width="${n1(1.3 / s)}" fill="none" opacity=".5" stroke-linecap="round"/></g>`;
@@ -502,6 +506,7 @@
   const butterfly = (cx, cy, s, col, spot, rot = 0) => {
     const k = ink(col), sw = n1(1.6 / s);
     const up = 'M0,-1 C-5,-15 -21,-18 -20,-6 C-19,1 -9,2 0,-1 Z', lo = 'M0,1 C-5,3 -16,6 -13,14 C-10,19 -3,10 0,1 Z';
+    // one side of the butterfly (m = 1 left, m = -1 mirrored right): upper wing, lower wing and two spots
     const half = m => `<g transform="scale(${m},1)"><path d="${up}" fill="${H.grad(col, 'r')}" stroke="${k}" stroke-width="${sw}"/><path d="${lo}" fill="${H.grad(shade(col, .15), 'r')}" stroke="${k}" stroke-width="${sw}"/>` +
       `<circle cx="-12" cy="-7" r="3.2" fill="${spot}"/><circle cx="-8" cy="8" r="2.2" fill="${spot}"/></g>`;
     return `<g transform="translate(${n1(cx)},${n1(cy)}) rotate(${rot}) scale(${s})">` + half(1) + half(-1) +
@@ -526,6 +531,7 @@
       const top = it.top;
       // things standing behind the band (ears, horn) are drawn first
       if (top === 'cat') {
+        // cat ear pointing out at angle a, with a lighter inner ear
         const ear = a => { const b1 = at(a - 11, 4), b2 = at(a + 11, 4), tip = at(a, 34), i1 = at(a - 6, 8), i2 = at(a + 6, 8), it2 = at(a, 26);
           return `<path d="M${P(b1)}Q${P(at(a - 6, 24))} ${P(tip)}Q${P(at(a + 6, 24))} ${P(b2)}Z" fill="${H.grad(tc)}" stroke="${ink(tc)}" stroke-width="2.2" stroke-linejoin="round"/>` +
             `<path d="M${P(i1)}Q${P(at(a - 3, 20))} ${P(it2)}Q${P(at(a + 3, 20))} ${P(i2)}Z" fill="${td}" opacity=".9"/>`; };
@@ -541,6 +547,7 @@
         const horn = `M${n1(hx - 10)},${n1(hy + 2)} L${n1(hx - 1.5)},${n1(hy - 44)} Q${n1(hx)},${n1(hy - 47)} ${n1(hx + 1.5)},${n1(hy - 44)} L${n1(hx + 10)},${n1(hy + 2)} Z`;
         const hclip = H.clip('c-' + it.id + '-horn', horn);
         const spiral = [-6, -16, -26, -36].map(dy => `M${n1(hx - 12)},${n1(hy + dy + 4)} L${n1(hx + 12)},${n1(hy + dy - 4)}`).join('');
+        // unicorn ear at angle a
         const ear = a => { const b1 = at(a - 7, 4), b2 = at(a + 7, 4), tip = at(a - (a < 270 ? 4 : -4), 24);
           return `<path d="M${P(b1)}Q${P(at(a - 4, 18))} ${P(tip)}Q${P(at(a + 4, 18))} ${P(b2)}Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`; };
         out += ear(240) + ear(300) +
@@ -640,6 +647,7 @@
 
   DOLL.shape('head-specs', {
     slot: 'glasses',
+    // glasses: a frame in the chosen shape over both eyes, with tinted lenses
     draw(it) {
       const [frame, lens = '#ffffff', deco] = it.colors;
       const kind = it.kind || 'round', [lx, ly] = G.eyes[0];
@@ -683,6 +691,7 @@
       const gid = 'gg-' + it.id;
       const lensFill = addGrad(gid, [[0, t1], [1, t2]]);
       if (it.kind === 'swim') {
+        // oval goggle cup around the eye at [x, y]
         const cup = ([x, y]) => `M${x - 19},${y + 1}a19,16 0 1 0 38,0a19,16 0 1 0 -38,0Z`;
         const strapL = 'M154,160 L112,158';
         const sl = `<path d="${strapL}" stroke="${ink(strap)}" stroke-width="7.6" stroke-linecap="round"/><path d="${strapL}" stroke="${strap}" stroke-width="5" stroke-linecap="round"/>`;
@@ -719,8 +728,10 @@
       const kind = it.kind;
       // short gold/silver hook through the lobe, for dangling kinds
       const metal = it.metal || '#f2c34d';
+      // little metal hook through the earlobe, len long, with a small ring at the top
       const hook = (len) => `<path d="M${x},${y - 1} V${y + len}" stroke="${ink(metal)}" stroke-width="2.8" stroke-linecap="round"/><path d="M${x},${y - 1} V${y + len}" stroke="${metal}" stroke-width="1.4" stroke-linecap="round"/>` +
         `<circle cx="${x}" cy="${y}" r="2.4" fill="${H.grad(metal, 'r')}" stroke="${ink(metal)}" stroke-width="1"/>`;
+      // tiny white sparkle dot at gx, gy
       const glint = (gx, gy) => `<circle cx="${n1(gx)}" cy="${n1(gy)}" r="1.3" fill="#fff" opacity=".9"/>`;
       let m = '';
       if (kind === 'stud') {
@@ -785,6 +796,7 @@
 
   DOLL.shape('head-necklace', {
     slot: 'necklace',
+    // necklace: a chain along the curve of the neck with the chosen pendant or beads (it.kind)
     draw(it) {
       const [c, c2 = '#ffffff', c3 = c2] = it.colors;
       const kind = it.kind;

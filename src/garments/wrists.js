@@ -15,6 +15,7 @@
   const BR = 14;          // half width of a bracelet round the forearm
   const Y = -6;           // bracelet centre, just above the wrist
   const SAG = 3;          // how much the front of the ring curves down (makes it look round)
+  // round a number to one decimal and turn it into text
   const n1 = v => (Math.round(v * 10) / 10).toString();
 
   /** Put local wrist-space markup on one wrist (same transform as the hand). */
@@ -125,6 +126,7 @@
   };
   DOLL.shape('wrist-charm', {
     slot: 'bracelet',
+    // charm bracelet: a thin chain ring with two or three little charms hanging from it
     draw(it) {
       const metal = it.colors[0];
       let m = `<path d="M${-BR},${Y} Q0,${Y + SAG * 2} ${BR},${Y}" stroke="${ink(metal)}" stroke-width="3" fill="none" stroke-linecap="round"/>` +

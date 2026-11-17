@@ -25,7 +25,9 @@
 
   /** Mirror x for side 'R'. */
   const X = (side, x) => (side === 'L' ? x : 400 - x);
+  /** Round a number to 1 decimal, as text. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  /** "x,y" text of a point, rounded for path strings. */
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror a list of points to the right side. */
   const mirrorPts = pts => pts.map(([x, y]) => [400 - x, y]);
@@ -113,6 +115,7 @@
     /** Puffin seen from the front: black body, white face and belly, big striped beak, orange feet. */
     puffin(cx, cy) {
       const blk = '#2f2b36', wh = '#fbf8f2', org = '#f2793a', face = '#ece8e4';
+      // one little puffin wing (s is -1 for left, +1 for right)
       const wing = s => `<path d="M${cx + s * 21},${cy + 2} Q${cx + s * 31},${cy + 20} ${cx + s * 19},${cy + 36} Q${cx + s * 15},${cy + 18} ${cx + s * 21},${cy + 2}Z" fill="#45404f" stroke="${ink(blk)}" stroke-width="1.4"/>`;
       return `<path d="M${cx - 16},${cy + 38} l7,-6 l7,6 Z M${cx + 2},${cy + 38} l7,-6 l7,6 Z" fill="${org}" stroke="${ink(org)}" stroke-width="1.6" stroke-linejoin="round"/>` +
         // body: black back, white belly
@@ -136,6 +139,7 @@
       const wh = '#fffafc', line = '#b48aa6';
       const mane = [['#f59ac0', -20, -12, 10], ['#b99af0', -24, 2, 9], ['#8fd0f2', -22, 15, 8], ['#f59ac0', 20, -12, 10], ['#b99af0', 24, 2, 9], ['#8fd0f2', 22, 15, 8]]
         .map(([c, dx, dy, r]) => `<circle cx="${cx + dx}" cy="${cy + dy}" r="${r}" fill="${c}" stroke="${ink(c)}" stroke-width="1.4"/>`).join('');
+      // one unicorn ear with pink inside (s is -1 for left, +1 for right)
       const ear = s => `<path d="M${cx + s * 10},${cy - 16} L${cx + s * 19},${cy - 32} L${cx + s * 21},${cy - 12}Z" fill="${wh}" stroke="${line}" stroke-width="1.6" stroke-linejoin="round"/>` +
         `<path d="M${cx + s * 13},${cy - 17} L${cx + s * 18.5},${cy - 27} L${cx + s * 19.5},${cy - 15}Z" fill="#f7bfd2"/>`;
       return mane + ear(-1) + ear(1) +
@@ -166,6 +170,7 @@
       let s = '';
       cols.forEach((c, i) => { const r = 34 - i * 5; s += `<path d="M${cx - r},${cy + 14} A${r},${r} 0 0 1 ${cx + r},${cy + 14}" fill="none" stroke="${c}" stroke-width="5.4"/>`; });
       s += `<path d="M${cx - 36.7},${cy + 14} A36.7,36.7 0 0 1 ${cx + 36.7},${cy + 14} M${cx - 6.3},${cy + 14} A6.3,6.3 0 0 1 ${cx + 6.3},${cy + 14}" fill="none" stroke="#9a7aa8" stroke-width="1.2" opacity=".6"/>`;
+      // small white cloud at the foot of the rainbow, centred on x
       const cloud = x => `<path d="M${x - 14},${cy + 22} a7,7 0 0 1 3,-12 a9,9 0 0 1 16,-3 a7,7 0 0 1 10,8 a6,6 0 0 1 -1,7 Z" fill="#fff" stroke="#a9bfd6" stroke-width="1.6" stroke-linejoin="round"/>`;
       return s + cloud(cx - 30) + cloud(cx + 28);
     },
@@ -209,6 +214,7 @@
         // sleeve colour: everything outside the seam line from the neck to the armpit
         const rc = it.colors[3];
         const clip = H.clip('c-' + it.id, d);
+        // raglan sleeve area on one side (side L or R)
         const reg = side => H.polyPath([[X(side, 186), 230], [X(side, 186), 252], [X(side, 150), 314], [X(side, 140), 332], [X(side, 120), 480], [X(side, 0), 480], [X(side, 0), 230]]);
         raglan = `<g clip-path="${clip}"><path d="${reg('L')}${reg('R')}" fill="${H.grad(rc)}"/></g>` +
           H.line('M185,253 L150,314 M215,253 L250,314', rc, 1.8, .6);
@@ -295,6 +301,7 @@
         if (side === 'R') dd = dd.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => n1(400 - parseFloat(x)) + ',' + y);
         return dd;
       };
+      // the two stacked frills on one sleeve (side L or R)
       const frills = side => {
         const a = tier(side, .3, -.5), b = tier(side, .2, -2);   // widths kept inside a sweater sleeve
         return `<path d="${a}" fill="${H.grad(shade(fr, -.08))}"/>` + outline(a, shade(fr, -.1), 'h') +
@@ -346,6 +353,7 @@
       const ny = neckY('v', 5);
       // left collar flap: from the neck out over the shoulder and down to the V point; mirrored
       const flap = side => H.polyPath([[X(side, 183), ny], [X(side, 160), 257], [X(side, 147), 266], [X(side, 158), 290], [X(side, 200), ny + 46], [X(side, 200), ny + 44]]);
+      // two sailor stripes on one collar flap (side L or R)
       const stripes = side => `M${X(side, 151)},270 L${X(side, 163)},288 L${X(side, 196)},${ny + 40}M${X(side, 155)},266 L${X(side, 165)},282 L${X(side, 196)},${ny + 34}`;
       const knot = `<path d="M200,${ny + 46} l-14,26 l8,2 l6,-14 l6,14 l8,-2 Z" fill="${H.grad(scarf)}" stroke="${ink(scarf)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<ellipse cx="200" cy="${ny + 46}" rx="7" ry="6" fill="${H.grad(scarf, 'r')}" stroke="${ink(scarf)}" stroke-width="1.8"/>`;
@@ -455,6 +463,7 @@
       let yoke = `<path d="${annulus(cx, cy, 93, 97)}" fill="${dark}" fill-rule="evenodd"/>`;
       // stepped "tree" teeth pointing outward, then a light band with dark crosses
       for (let a = 0; a < 360; a += 15) {
+        // point of a tooth shape: radius k[0], angle offset k[1] from the current angle a
         const p = k => P(pol(cx, cy, k[0], a + k[1]));
         yoke += `<path d="M${p([78, -6])}L${p([84, -6])}L${p([84, -3])}L${p([92, 0])}L${p([84, 3])}L${p([84, 6])}L${p([78, 6])}Z" fill="${dark}"/>`;
       }
@@ -539,6 +548,7 @@
       const ny = neckY('v', 8);
       // front edge bands: from the neck down the V and on to the hem
       const band = `M${200 - 17},${n1(ny)} L200,${n1(ny + 52)} L200,456 M${200 + 17},${n1(ny)} L200,${n1(ny + 52)}`;
+      // small patch pocket whose left edge is at x
       const pocket = x => `<path d="M${x},398 h28 v22 q0,6 -6,6 h-16 q-6,0 -6,-6 Z" fill="${H.fill(it)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<rect x="${x}" y="398" width="28" height="6" fill="${edge}" stroke="${ink(c)}" stroke-width="1.4"/>`;
       const buttons = [320, 352, 384, 416].map(y => button(200, y, 4.2, btn)).join('');
@@ -582,6 +592,7 @@
         for (let x = 64; x < 340; x += 10) inside += `<circle cx="${x}" cy="${y0 - 12}" r="1.8" fill="${bc}"/><circle cx="${x + 5}" cy="${y1 + 12}" r="1.8" fill="${bc}"/>`;
       }
       if (it.cable) {
+        // one twisted cable-knit rope running down the front at x
         const rope = x => { let s = `M${x},266`; for (let y = 266; y < 440; y += 16) s += `q8,8 0,16`; let t = `M${x},266`; for (let y = 266; y < 440; y += 16) t += `q-8,8 0,16`; return s + t; };
         inside += `<path d="${rope(178)}${rope(222)}${rope(200)}" stroke="${shade(c, -.25)}" stroke-width="2.4" fill="none" opacity=".7"/>` +
           `<path d="M166,266V440M190,266V440M210,266V440M234,266V440" stroke="${shade(c, -.2)}" stroke-width="1.5" opacity=".6"/>`;
@@ -673,6 +684,7 @@
           `<path d="M${x - 2},304 h34 v10 l-17,7 l-17,-7 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
           stitch(`M${x + 1},308h28`, st) + button(x + 15, 313, 3.2, btn);
       };
+      // sleeve cuff on one side (with stitching and a button)
       const cuff = side => `<path d="${G.armPath(side, .88, 1, 8.6)}" fill="${H.grad(shade(c, .06))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         stitch(seamAcross(side, .9, hwAt(.9) + 8, 1), st) + button(...G.armPoint(side, .95), 2.8, btn);
       const inner = `<g clip-path="${clip}">` +
@@ -718,6 +730,7 @@
       // sleeve quilting (left computed, right mirrored inside seamAcross)
       let sq = '';
       for (const t of [.18, .38, .58, .78]) for (const side of ['L', 'R']) sq += seamAcross(side, t, hwAt(t) + 9, 4);
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .92, 1, 7.5)}" fill="${H.grad(shade(c, -.12))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       const collar = 'M174,262 Q170,246 178,236 Q200,230 222,236 Q230,246 226,262 Q200,252 174,262Z';
       const hood = it.hood ? `<path d="M140,270 C132,232 164,214 200,214 C236,214 268,232 260,270 Z" fill="${H.grad(shade(c, -.12))}" stroke="${ink(c)}" stroke-width="${SW}"/>` +
@@ -750,7 +763,9 @@
       const bottom = 462;
       const d = G.shirtPath({ sleeve: 1, pad: 11, sleevePad: 8, bottom, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, d);
+      // shoulder yoke panel on one side (side L or R)
       const yoke = side => H.polyPath([[X(side, 200), 230], [X(side, 200), 300], [X(side, 160), 304], [X(side, 136), 330], [X(side, 60), 340], [X(side, 60), 230]]);
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, 7)}" fill="${H.grad(tr)}" stroke="${ink(tr)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       return `<path d="${d}" fill="${H.pat('dots', c, shade(c, .14), 7)}"/>` +
         `<g clip-path="${clip}"><path d="${yoke('L')}${yoke('R')}" fill="${H.grad(tr)}"/>` +
@@ -788,6 +803,7 @@
         `<rect x="210" y="${y - 6}" width="14" height="12" rx="3" fill="${H.grad(cord)}" stroke="${ink(cord)}" stroke-width="1.3"/>` +
         `<path d="M214,${y - 2.5} H194 M214,${y + 2.5} H194" stroke="${shade(cord, .15)}" stroke-width="2.2" stroke-linecap="round"/>` +
         `<rect x="${190}" y="${y - 12}" width="8" height="24" rx="4" fill="${H.grad(tog, 'h')}" stroke="${ink(tog)}" stroke-width="1.5" transform="rotate(14 194 ${y})"/>`;
+      // patch pocket whose left edge is at x
       const pocket = x => `<path d="M${x},424 h34 v30 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(shade(c, -.03))}" stroke="${ink(c)}" stroke-width="2"/>` +
         stitch(`M${x + 3},428 h28`, shade(c, .3), 1.2);
       return {
@@ -830,6 +846,7 @@
       const belt = `<g clip-path="${clip}"><rect x="0" y="394" width="400" height="14" fill="${H.grad(beltc)}"/><path d="M0,394H400M0,408H400" stroke="${ink(beltc)}" stroke-width="1.6"/></g>` +
         `<rect x="190" y="391" width="20" height="20" rx="3" fill="none" stroke="#c9a14a" stroke-width="3.2"/>` +
         `<path d="M212,402 q8,10 4,30 l7,2 q2,-20 -5,-32 Z" fill="${H.grad(beltc)}" stroke="${ink(beltc)}" stroke-width="1.6" stroke-linejoin="round"/>`;
+      // shoulder strap on one side (side L or R)
       const strap = side => {
         const [o, i] = across(side, .84, hwAt(.84) + 8.6), [o2, i2] = across(side, .89, hwAt(.89) + 8.6);
         return `<path d="M${P(o)}L${P(i)}L${P(i2)}L${P(o2)}Z" fill="${H.grad(beltc)}" stroke="${ink(c)}" stroke-width="1.6" stroke-linejoin="round"/>`;
@@ -859,6 +876,7 @@
       const edge = [[192, 236], [190, 270], [184, 320], [170, 362], [150, 392]];
       const o = openFront(it.id, edge);
       const shine = `<path d="M142,300 Q132,330 134,380 Q138,338 150,306 Z" fill="#fff" opacity=".45"/>`;
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, 10.4)}" fill="${H.grad(tr)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       // beads along each front edge (left computed, right mirrored)
       let beads = '';
@@ -893,6 +911,7 @@
       const d = G.shirtPath({ sleeve: 1, pad: 11, sleevePad: 8, bottom, flare: 5, neck: 'v', neckDepth: 30 });
       const clip = H.clip('c-' + it.id, d);
       const edge = openEdge(236, bottom, 186, 174);
+      // knit patch pocket on one side (side L or R)
       const pocket = side => { const x = side === 'L' ? 132 : 400 - 132 - 34; return `<path d="M${x},440 h34 v32 q0,6 -6,6 h-22 q-6,0 -6,-6 Z" fill="${H.pat('knit', c, shade(c, -.2), 10)}" stroke="${ink(c)}" stroke-width="1.8"/><rect x="${x}" y="440" width="34" height="7" fill="${band}" stroke="${ink(c)}" stroke-width="1.4"/>`; };
       const inner = `<g clip-path="${clip}">${ribHem(bottom - 14, bottom, band)}</g>` +
         `<path d="${G.armPath('L', .86, 1, 8.6)}${G.armPath('R', .86, 1, 8.6)}" fill="${H.grad(band)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +

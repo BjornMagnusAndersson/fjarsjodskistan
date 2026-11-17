@@ -25,9 +25,11 @@
 
   /** Number formatting and point helpers. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror x to the right side (x → 400 - x). */
   const X = (side, x) => (side === 'L' ? x : 400 - x);
+  // the same list of points mirrored to the right side
   const mirrorPts = pts => pts.map(([x, y]) => [400 - x, y]);
   /** Mirror any markup across the centre line (for right-side copies of left-side details). */
   const mirror = s => `<g transform="matrix(-1 0 0 1 400 0)">${s}</g>`;
@@ -278,11 +280,13 @@
       // scattered paw prints (vet tops)
       const paws = it.paws ? [[160, 300, 8, -20], [236, 296, 7, 15], [204, 344, 8, 5], [150, 378, 7, -10], [252, 382, 8, 20], [184, 428, 7, -5], [234, 448, 7, 10], [116, 300, 6, -25], [284, 302, 6, 25]]
         .map(([x, y, r, rot]) => `<g transform="rotate(${rot} ${x} ${y})">${paw(x, y, r, motif, .5)}</g>`).join('') : '';
+      // small patch pocket with a trim-coloured top band, drawn with its top-left corner at x,y (w wide, h tall)
       const pocket = (x, y, w, h) => `<path d="M${x},${y} h${w} v${h - 6} q0,6 -6,6 h${-(w - 12)} q-6,0 -6,-6 Z" fill="${H.fill(it)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="M${x},${y + 5} h${w}" stroke="${trim}" stroke-width="3"/>`;
       const pen = `<rect x="168" y="306" width="5" height="18" rx="2" fill="${H.grad(motif === '#ffffff' ? trim : motif)}" stroke="${ink(trim)}" stroke-width="1.2"/>` +
         `<path d="M172,308 v10" stroke="#fff" stroke-width="1.2" opacity=".7"/>`;
       const badge = it.motif === 'paw' ? paw(162, 334, 6.5, trim) : heartO(162, 333, 6, trim, 1.2);
+      // trim-coloured band round the sleeve of the given side ("L" or "R")
       const sleeveHem = side => `<path d="${G.armPath(side, .26, .32, 5.5)}" fill="${H.grad(trim)}"/>`;
       return `<path d="${d}" fill="${H.fill(it)}"/>` +
         `<g clip-path="${clip}">${paws}${sleeveHem('L')}${sleeveHem('R')}<rect x="0" y="456" width="400" height="12" fill="${shade(c, -.05)}"/></g>` +
@@ -311,8 +315,10 @@
       const clip = H.clip('c-' + it.id, d);
       // edge of the front flap that buttons over to the right
       const flap = 'M214,246 Q236,262 238,290 L238,472';
+      // a button, used for both the left and right column of buttons
       const knot = (x, y) => button(x, y, 4.4, btn);
       const buttons = [292, 330, 368].map(y => knot(178, y) + knot(222, y)).join('');
+      // coloured cuff band at the wrist of the given side, with a thin fold line
       const cuff = side => `<path d="${G.armPath(side, .84, .98, 7.5)}" fill="${H.grad(shade(c, -.04))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         H.line(G.armPath(side, .9, .91, 7.5), c, 1.2, .35);
       const collar = 'M183,232 Q200,240 217,232 L218,248 Q200,256 182,248 Z';
@@ -354,6 +360,7 @@
       const [c, apron = '#ffffff', heart = '#ef5b7a'] = it.colors;
       const skirt = G.skirtPath({ top: 400, bottom: 588, flare: 40, pad: 4 });
       const bodice = G.shirtPath({ sleeve: .27, pad: 4, sleevePad: 8, sleeveFlare: 3, bottom: 412, neck: 'round' });
+      // apron-coloured cuff at the sleeve end of the given side
       const cuff = side => `<path d="${G.armPath(side, .22, .27, 11)}" fill="${H.grad(apron)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       const bib = 'M174,298 Q200,292 226,298 L224,404 L176,404 Z';
       const straps = 'M176,302 L160,262 M224,302 L240,262';
@@ -408,6 +415,7 @@
         `<path d="M148,322 h30" stroke="${trim}" stroke-width="3"/>`;
       const badge = `<rect x="222" y="318" width="32" height="18" rx="4" fill="${H.grad('#ffffff')}" stroke="${ink(trim)}" stroke-width="1.6"/>` +
         `<rect x="222" y="318" width="32" height="6" rx="3" fill="${trim}"/>` + heartO(238, 329, 4.5, heart, 1);
+      // coloured cuff with a thin trim stripe at the wrist of the given side
       const cuff = side => `<path d="${G.armPath(side, .86, .97, 10)}" fill="${H.grad(shade(c, -.03))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="${G.armPath(side, .86, .875, 10)}" fill="${trim}" opacity=".8"/>`;
       // collar lying on the shoulder and the lapel folded back below it (left; mirrored)
@@ -585,8 +593,10 @@
     draw(it) {
       const [c, sole = shade(c, -.35), st = shade(c, .4)] = it.colors;
       const top = 604, low = 716, pad = 5, flare = 2;
+      // builds one boot (s is "L" or "R")
       const side = s => {
         const L = s === 'L', Xs = x => (L ? x : 400 - x);
+        // 0 at the top of the boot shaft, 1 at the bottom (how far down y is)
         const k = y => (y - top) / (low - top);
         const outer = [], inner = [];
         for (let y = top; y <= low; y += 14) {
@@ -676,6 +686,7 @@
     draw(it) {
       const [fur, light, dark, collar = '#ef5b7a'] = it.colors;
       const line = shade(dark, -.35);
+      // plaster (sticking plaster) at x,y turned by deg degrees, with a tiny heart on it
       const plaster = (x, y, deg) => `<g transform="rotate(${deg} ${x} ${y})"><rect x="${x - 9}" y="${y - 3.5}" width="18" height="7" rx="3.5" fill="#f6c9b0" stroke="#c98a6a" stroke-width="1"/>` +
         `<rect x="${x - 3.5}" y="${y - 3}" width="7" height="6" rx="1.5" fill="#fbe6da"/></g>` + heartO(x, y, 2.4, '#ef5b7a', .6);
       if (it.kind === 'lion') {

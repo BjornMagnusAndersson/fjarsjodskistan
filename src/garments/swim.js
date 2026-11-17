@@ -20,6 +20,7 @@
 
   /** Number formatting and point helpers. */
   const F = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => F(p[0]) + ',' + F(p[1]);
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
@@ -31,6 +32,7 @@
     `<path d="${d}" fill="url(#soft-${soft})" stroke="${ink(base)}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/>`;
   /** Mirror any markup across the centre line (x → 400 - x), and "draw left, copy to the right". */
   const mirror = s => `<g transform="matrix(-1 0 0 1 400 0)">${s}</g>`;
+  // draw the markup as given and again mirrored, so one drawing makes both sides
   const both = s => s + mirror(s);
   /** Register a linear gradient with [offset, colour, opacity?] stops. Returns url(#id). */
   const grad = (id, stops, x2 = 0, y2 = 1) => H.def(id, `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}">` +
@@ -107,6 +109,7 @@
 
   /** Cute front-facing unicorn face (for the unicorn swimsuit). s = size. */
   const unicornFace = (cx, cy, s) => {
+    // x and y on the face, moved to centre cx,cy and scaled by s
     const X = v => F(cx + v * s), Y = v => F(cy + v * s);
     // rainbow mane puffs behind the head
     const puffs = [[-22, -6], [-19, -18], [-9, -26], [9, -26], [19, -18], [22, -6]].map(([x, y], i) =>
@@ -131,6 +134,7 @@
 
   /** Flamingo standing on one leg, facing left (for the flamingo swim dress). */
   const flamingo = (cx, cy, s, c) => {
+    // x and y on the flamingo, moved to centre cx,cy and scaled by s
     const X = v => F(cx + v * s), Y = v => F(cy + v * s);
     return `<path d="M${X(4)},${Y(12)} V${Y(34)} M${X(4)},${Y(22)} l${F(8 * s)},${F(-5 * s)} l${F(-3 * s)},${F(-4 * s)}" stroke="#d0607e" stroke-width="${F(2 * s)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` +
       // body, wing, S-shaped neck, head and bent black-tipped beak
@@ -218,6 +222,7 @@
       // ruffled swim-dress skirt: lower tier first, then upper tier, then a sash with a bow
       if (deco === 'flamingo') {
         const t2 = ruffleTier(436, 512, 132, 100, 17, 8), t1 = ruffleTier(404, 468, G.torsoX(404) - 3, 118, 16, 8);
+        // draws one ruffle tier in colour c: fill, fold lines, outline and a dotted white hem
         const tierDraw = (t, c) => `<path d="${t.d}" fill="${H.grad(c)}"/>` + H.line(t.folds, c, 1.6, .35) + outline(t.d, c) +
           `<path d="${t.hem}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round" transform="translate(0,-4)"/>`;
         out += tierDraw(t2, second) + tierDraw(t1, main) +
@@ -239,6 +244,7 @@
   DOLL.shape('swim-fishset', {
     slot: 'suit', occupies: SUIT,
     thumb: [70, 236, 260, 300],
+    // draws the top (fish print with raglan seams and cuffs) and the shorts (side stripes and wave hem)
     draw(it) {
       const [topC, fishA, shortsC, fishB] = it.colors;
       const pid = `swim-fishp-${idf(topC)}${idf(fishA)}${idf(fishB)}`;
@@ -345,6 +351,7 @@
       const terry = H.pat('dots', c, shade(c, .2), 7);
       const body = G.shirtPath({ sleeve: .55, pad: 12, sleevePad: 8, sleeveFlare: 12, bottom: 548, flare: 30, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, body);
+      // sleeve cuff in the mane colour, for the given side
       const cuff = s => `<path d="${G.armPath(s, .47, .56, 24)}" fill="${H.grad(mane)}"/>`;
       const poncho = `<path d="${body}" fill="${terry}"/><g clip-path="${clip}">` +
         `<rect x="0" y="522" width="400" height="30" fill="${H.grad(mane)}"/><path d="M0,530 H400" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>` +
@@ -536,6 +543,7 @@
      ================================================================= */
   /** Goggle lens outline round one eye: rounded, a little wider on the outer side. */
   const LENS = [[-22, -3], [-16, -14], [0, -17.5], [14, -13.5], [19.5, 0], [13, 13.5], [-2, 16.5], [-17, 11]];
+  // goggle lens outline round the eye on side s
   const lensD = s => { const [ex, ey] = G.eyes[s === 'L' ? 0 : 1], o = s === 'L' ? 1 : -1; return H.smooth(LENS.map(([x, y]) => [ex + x * o, ey + y])); };
   /* -------------------------------------------------------------
      Swim goggles: see-through tinted lenses with a rubber gasket, nose
@@ -558,6 +566,7 @@
         `<path d="${strapD}" stroke="${strap}" stroke-width="8" stroke-linecap="round" fill="none"/>` +
         `<path d="${strapD}" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 4" fill="none" opacity=".7"/>` +
         `<rect x="143" y="152" width="10" height="13" rx="3" fill="${H.grad(frame)}" stroke="${ink(frame)}" stroke-width="1.4"/>`;
+      // one goggle lens with its glass for side s
       const lens = s => {
         const d = lensD(s), [ex, ey] = G.eyes[s === 'L' ? 0 : 1], o = s === 'L' ? 1 : -1;
         return `<path d="${d}" fill="${tint}" opacity=".42"/>` +
@@ -586,6 +595,7 @@
   DOLL.shape('swim-mask', {
     slot: 'glasses',
     thumb: [96, 52, 214, 176],
+    // draws the mask, strap on both sides and the snorkel
     draw(it) {
       const [sk, strap, tube, topC] = it.colors;
       const outer = H.smooth(MASK), inner = H.smooth(MASK.map(([x, y]) => [200 + (x - 200) * .85, 160 + (y - 160) * .79]));
@@ -677,8 +687,10 @@
     thumb: [70, 672, 260, 100],
     draw(it) {
       const [c, pk = c, st = shade(c, -.25)] = it.colors;
+      // builds one side (s is "L" or "R")
       const side = s => {
         const L = s === 'L', X = x => L ? x : 400 - x;
+        // flips a left-side path string to the right side (x becomes 400 - x)
         const M = d => L ? d : d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => F(400 - x) + ',' + y);
         let blade, extra = '';
         if (it.frog) {
@@ -719,6 +731,7 @@
     thumb: [124, 680, 152, 74],
     draw(it) {
       const [c, edge, st, fl] = it.colors;
+      // builds one flip-flop (s is "L" or "R"), placed at that foot
       const side = s => {
         const L = s === 'L', [fx, fy] = G.feet[L ? 0 : 1], o = L ? -1 : 1;
         const sole = G.footPath(s, 8, 4);
@@ -747,6 +760,7 @@
     thumb: [86, 146, 228, 300],
     draw(it) {
       const [c, st, acc] = it.colors;
+      // draws one air tank centred at x = cx, with bands, a shine and a valve on top
       const tank = cx => {
         const d = `M${cx - 30},440 L${cx - 30},212 C${cx - 30},176 ${cx + 30},176 ${cx + 30},212 L${cx + 30},440 Z`;
         return `<path d="${d}" fill="${H.grad(c, 'h')}"/><path d="M${cx - 30},236 H${cx + 30} M${cx - 30},420 H${cx + 30}" stroke="${shade(c, -.25)}" stroke-width="5"/>` +

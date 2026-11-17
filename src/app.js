@@ -5,7 +5,11 @@
    ===================================================================== */
 (function () {
   'use strict';
+  /** Shorthand for document.querySelector. */
   const $ = s => document.querySelector(s);
+  // error codes (errors.js): report(code, detail, error) writes to the log in the parent menu;
+  // guard(code, detail, fn, fallback) runs fn and logs + returns fallback if it throws
+  const FJ = window.FJ, { report, guard } = FJ;
   const stage = $('#stage'), dollEl = $('#doll'), chestEl = $('#chest'), trayEl = $('#tray'),
     tabsEl = $('#tabs'), gridEl = $('#grid'), looseLayer = $('#loose'), sceneEl = $('#scene'),
     critterLayer = $('#critters'), galleryEl = $('#gallery'), menuEl = $('#menu'), defsEl = $('#defs defs');
@@ -23,26 +27,26 @@
   const VERSION = 1;
   const MAX_OUTFITS = 200;            // ~300 bytes each, far below the browser limit
   const JAR_SIZE = 10;                // hearts in a full jar (a full jar brings a new friend)
-  /** Parse stored JSON; null when missing or unreadable. */
+  /** Parse stored JSON: { raw text, data } where data is null when missing or unreadable. */
   function readJSON(key) {
     let raw = null;
-    try { raw = localStorage.getItem(key); } catch (e) { return { raw: null, data: null }; }
+    try { raw = localStorage.getItem(key); } catch (e) { report('FJ-S03', key, e); return { raw: null, data: null }; }
     try { const d = JSON.parse(raw || 'null'); return { raw, data: d && typeof d === 'object' ? d : null }; }
     catch (e) { return { raw, data: null }; }
   }
   const LocalStore = {
     ok: true,                 // false when the browser refuses to store anything
-    /** Read the saved state. Falls back to the backup copy if the main copy is damaged. */
+    /** Read the saved state. Falls back to the backup copy if the main copy is damaged (code FJ-S02). */
     load() {
       const main = readJSON(KEY);
-      if (main.data) { try { localStorage.setItem(BACKUP, main.raw); } catch (e) { /* full or blocked */ } return main.data; }
-      if (main.raw) { try { localStorage.setItem(BROKEN, main.raw); } catch (e) { /* ignore */ } }
+      if (main.data) { try { localStorage.setItem(BACKUP, main.raw); } catch (e) { report('FJ-S01', 'backup copy', e); } return main.data; }
+      if (main.raw) { report('FJ-S02', main.raw.length + ' characters'); try { localStorage.setItem(BROKEN, main.raw); } catch (e) { report('FJ-S01', 'parking the damaged save', e); } }
       return readJSON(BACKUP).data;
     },
-    /** Write the whole state. Remembers if it failed so the parent menu can say so. */
+    /** Write the whole state. Remembers if it failed so the parent menu can say so (code FJ-S01). */
     save(data) {
       try { localStorage.setItem(KEY, JSON.stringify(data)); this.ok = true; }
-      catch (e) { this.ok = false; }
+      catch (e) { this.ok = false; report('FJ-S01', 'save', e); }
     },
   };
   const Store = LocalStore;
@@ -62,6 +66,7 @@
       rewards: { hearts: 0, friends: [], hairSeen: [] },
     };
   }
+  /** True for a plain object (not null, not a list). */
   const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
   /** Keep only well-formed outfits (from storage or from an imported backup file). */
   function cleanOutfits(list) {
@@ -95,9 +100,13 @@
     return s;
   }
   const state = upgrade(Store.load());
-  // drop ids of pieces that no longer exist (saved outfits keep theirs: the gallery skips them when drawing)
-  for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) delete state.worn[s];
+  // drop ids that no longer exist (saved outfits keep theirs: the gallery skips them when drawing).
+  // Each one is logged (FJ-S06): it usually means an id was renamed, which must never happen.
+  for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) { report('FJ-S06', 'worn ' + state.worn[s]); delete state.worn[s]; }
+  for (const p of state.loose) if (!DOLL.byId[p.id]) report('FJ-S06', 'loose ' + p.id);
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
+  if (!DOLL.hairstyles.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (!SCENES[state.scene]) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
 
   /* Zoom guard: the game should never be zoomed. If the page is zoomed in anyway
      (a pinch in some corner, or a browser setting that forces zoom), rewriting the
@@ -130,7 +139,13 @@
   const Sound = {
     ctx: null,
     /** Create the audio context on first use. */
-    init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } } if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+    init() {
+      if (!this.ctx && !this.failed) {
+        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { this.ctx = null; this.failed = true; report('FJ-A03', '', e); }   // tried once; the game stays silent
+      }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    },
     /** One soft tone. */
     tone(freq, dur = .18, type = 'sine', vol = .06, delay = 0, slideTo = 0) {
       if (!state.settings.sound) return; this.init(); const c = this.ctx; if (!c) return;
@@ -139,14 +154,23 @@
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .015); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
       o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + .02);
     },
+    /** A piece clicks onto the doll: two bright notes. */
     snap() { this.tone(1046, .16); this.tone(1318, .22, 'sine', .05, .08); },
+    /** A piece comes off: one note sliding down. */
     off() { this.tone(660, .14, 'sine', .045, 0, 440); },
+    /** An outfit is saved: four rising notes. */
     save() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, .25, 'sine', .05, i * .08)); },
+    /** Puffin (and fox) chirp. */
     chirp() { this.tone(1800, .08, 'sine', .04, 0, 2600); this.tone(2000, .08, 'sine', .04, .1, 2900); },
+    /** Sheep: a soft wobbly "baa". */
     baa() { this.tone(330, .35, 'triangle', .035, 0, 300); this.tone(338, .35, 'triangle', .02, .02, 305); },
+    /** Horse hooves: four soft clops. */
     clop() { [0, .14, .28, .42].forEach(d => this.tone(180, .05, 'square', .02, d, 120)); },
+    /** Unicorn magic: a quick run of high twinkles. */
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
+    /** The elf's little bell. */
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
+    /** Things fly back to the chest, or the scene changes. */
     whoosh() { this.tone(500, .25, 'triangle', .02, 0, 900); },
     /** The bus driver's friendly horn: a soft "bíb bíb". */
     horn() { this.tone(523, .16, 'triangle', .05, 0); this.tone(659, .2, 'triangle', .05, .2); },
@@ -212,15 +236,20 @@
   /* ---------------------------------------------------------------
      Geometry helpers
      --------------------------------------------------------------- */
+  /** Where the doll is on screen (a rectangle in pixels). */
   const dollRect = () => dollEl.getBoundingClientRect();
+  /** Where the treasure chest is on screen. */
   const chestRect = () => chestEl.getBoundingClientRect();
+  /** Is point x,y inside rectangle r (grown by pad pixels on every side)? */
   const inside = (r, x, y, pad = 0) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+  /** The centre point [x, y] of a rectangle. */
   const centre = r => [r.left + r.width / 2, r.top + r.height / 2];
   /** Is a point over the doll's body area (generous, so small hands succeed)? */
   function overDoll(x, y, leaving = false) {
     const r = dollRect(), k = leaving ? .3 : .08;   // pulled off the doll: must leave her body area, not just the picture box
     return inside({ left: r.left + r.width * k, right: r.right - r.width * k, top: r.top + (leaving ? r.height * .05 : 0), bottom: r.bottom - (leaving ? r.height * .04 : 0) }, x, y, leaving ? 0 : 20);
   }
+  /** Is a point over the chest, or over the open tray of pieces? */
   function overChest(x, y) { return inside(chestRect(), x, y, 10) || (!trayEl.hidden && inside(trayEl.getBoundingClientRect(), x, y)); }
 
   /* ---------------------------------------------------------------
@@ -245,6 +274,7 @@
     // finish on the animation end, with a timer as a backup so a flying piece can never get stuck on screen
     return new Promise(res => {
       let done = false;
+      // remove the flying picture and finish (only once, whichever comes first)
       const end = () => { if (done) return; done = true; el.remove(); res(); };
       anim.onfinish = end; anim.oncancel = end; setTimeout(end, ms + 400);
     });
@@ -266,10 +296,12 @@
      Helpers who carry pieces: a puffin flies them over, or an elf does.
      --------------------------------------------------------------- */
   let helperTurn = 0;
+  /** A helper carries a piece from the chest to the doll and puts it on (puffin twice, then the elf). */
   function carry(id, fromRect) {
     const useElf = helperTurn++ % 3 === 2;
     Sound[useElf ? 'bell' : 'chirp']();
-    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, useElf ? CREATURES.elf() : CREATURES.puffin()).then(() => equip(id));
+    const helper = guard('FJ-D04', useElf ? 'elf' : 'puffin', () => (useElf ? CREATURES.elf() : CREATURES.puffin()), '');
+    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, helper).then(() => equip(id));
   }
 
   /* ---------------------------------------------------------------
@@ -298,6 +330,7 @@
   const itemsIn = cat => DOLL.items.filter(i => i.cat === cat);
   /** Costume looks whose pieces all exist. */
   const looks = () => DOLL.looks.filter(l => l.items.length && l.items.every(id => DOLL.byId[id]));
+  /** Chest tabs that have something in them (hair always does). */
   const catsWithItems = () => CATS.filter(c => c.id === 'hair' || (c.id === 'costume' ? looks().length : itemsIn(c.id).length));
   /** Small picture of a whole look: the doll from head to knees wearing it. */
   const lookThumb = l => {
@@ -319,12 +352,14 @@
     // so it stays where she has scrolled to
     Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
   }
+  /** Is h a hairstyle that exists? */
   const HAIR_OK = h => DOLL.hairstyles.includes(h);
   /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
   const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
     if (!e.isIntersecting || !e.target._draw) return;
     e.target.innerHTML = e.target._draw(); e.target._draw = null; lazyIO.unobserve(e.target); syncDefs();
   }), { root: gridEl, rootMargin: '200px' }) : null;
+  /** Give a tile its picture later, when it scrolls into view (or right away in browsers without IntersectionObserver). */
   function lazyThumb(el, draw) { if (lazyIO) { el._draw = draw; lazyIO.observe(el); } else el.innerHTML = draw(); }
 
   /** Build the category tabs; each tab icon is the first piece in that category. */
@@ -396,6 +431,7 @@
      origin: 'tray' | 'loose' | 'doll'
      --------------------------------------------------------------- */
   let drag = null;
+  /** A finger (or mouse) goes down on a piece: get ready to drag it (the drag starts once it moves 10 px). */
   function startDrag(e, id, origin, el) {
     if (e.button > 0) return;
     // Only one drag at a time. A second finger (or a drag whose finger-up was lost) would
@@ -410,6 +446,7 @@
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
   }
+  /** The finger moves: start the drag (show the floating piece) or move the piece along. */
   function onMove(e) {
     if (!drag || e.pointerId !== drag.pointer) return;
     const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
@@ -427,6 +464,7 @@
     drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
     drag.lastX = e.clientX; drag.lastY = e.clientY;
   }
+  /** The finger lifts: a tap, or drop the piece on the doll, into the chest, or in the scene. */
   function onUp(e) {
     if (!drag || e.pointerId !== drag.pointer) return;
     const d = drag; cleanupDrag();
@@ -438,6 +476,7 @@
     else if (overChest(x, y)) { flyThumb(d.id, ghostRect, chestRect(), 350); Sound.off(); chestEl.classList.remove('wiggle'); void chestEl.offsetWidth; chestEl.classList.add('wiggle'); persist(); }
     else dropLoose(d.id, x, y);
   }
+  /** The browser cancelled the touch (e.g. a system gesture): put the piece down where it is. */
   function onCancel(e) {
     if (drag && e && e.pointerId !== undefined && e.pointerId !== drag.pointer) return;   // another finger was cancelled
     settleDrag();
@@ -450,6 +489,7 @@
   // the app is switched away from or loses focus mid-drag: put the piece down
   window.addEventListener('blur', () => { if (drag) settleDrag(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && drag) settleDrag(); });
+  /** Stop listening to the finger and forget the drag. */
   function cleanupDrag() {
     window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
     drag = null;
@@ -466,11 +506,13 @@
      --------------------------------------------------------------- */
   /** Keep a % position inside the screen edges. */
   const clampPct = v => Math.max(7, Math.min(93, v));
+  /** Leave a piece lying in the scene at screen point x,y (saved as % of the stage). */
   function dropLoose(id, x, y) {
     const sr = stage.getBoundingClientRect();
     const p = { id, x: +clampPct((x - sr.left) / sr.width * 100).toFixed(2), y: +clampPct((y - sr.top) / sr.height * 100).toFixed(2) };
     state.loose.push(p); addLooseEl(p); Sound.tone(587, .1, 'sine', .035); persist();
   }
+  /** Show one lying piece and let her pick it up again. */
   function addLooseEl(p) {
     const el = document.createElement('div'); el.className = 'loose';
     el.style.left = p.x + '%'; el.style.top = p.y + '%';
@@ -478,6 +520,7 @@
     el.addEventListener('pointerdown', e => { startDrag(e, p.id, 'loose', el); if (drag) drag.loosePiece = p; });
     looseLayer.appendChild(el);
   }
+  /** Draw every lying piece again (kept inside the screen edges). */
   function renderLoose() { looseLayer.innerHTML = ''; state.loose.forEach(p => { p.x = clampPct(p.x); p.y = clampPct(p.y); addLooseEl(p); }); syncDefs(); }
   // turning the tablet or phone: redraw loose pieces so none end up off screen
   window.addEventListener('resize', () => { clearTimeout(renderLoose.t); renderLoose.t = setTimeout(renderLoose, 200); });
@@ -515,14 +558,19 @@
   /** On wide screens (phone in landscape) the scene is cropped top and bottom, so animals get bigger to match. */
   const wideScale = () => Math.max(1.15, Math.min(1.7, (innerWidth / innerHeight) / 1.25));
   window.addEventListener('resize', () => { clearTimeout(renderScene.t); renderScene.t = setTimeout(renderScene, 250); });
+  /** Draw the chosen scene with its animals, her friends (or bus passengers) and snow. */
   function renderScene() {
-    const sc = SCENES[state.scene] || SCENES.meadow;
+    let sc = SCENES[state.scene] || SCENES.meadow;
     const opts = sc.layout ? busOptions() : undefined;     // the bus is drawn to fit where the doll stands
-    sceneEl.innerHTML = sc.svg(opts);
+    const svg = guard('FJ-D03', state.scene, () => sc.svg(opts), null);
+    if (svg === null) sc = SCENES.meadow;                   // a broken scene: show the meadow instead
+    sceneEl.innerHTML = svg ?? sc.svg();
     stage.style.setProperty('--wind', sc.wind + 's');
     critterLayer.innerHTML = '';
     if (sc.layout) seatPassengers(sc, opts);
     (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
+      const pic = guard('FJ-D04', c.k, () => CREATURES[c.k](c.lantern), null);
+      if (pic === null) return;                               // an animal that can't be drawn is left out
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
       if (c.friend) el.dataset.friend = c.k;
@@ -531,7 +579,7 @@
       // sc.ground: lowest line where the land starts (the sea is above it in Reykjavík), in % of the stage
       el.style.left = (spot ? spot[0] : c.x) + '%'; el.style.top = Math.max(spot ? spot[1] : c.y, sc.ground || 0) + '%'; el.style.height = (portrait ? c.h * .62 : c.h * wideScale()) + '%';
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', c.k);
-      el.innerHTML = `<div class="inner">${CREATURES[c.k](c.lantern)}</div>`;
+      el.innerHTML = `<div class="inner">${pic}</div>`;
       el.querySelectorAll('.tail,.head').forEach(n => n.style.animationDelay = (-i * .7) + 's');
       el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
       critterLayer.appendChild(el);
@@ -556,6 +604,7 @@
   /** Where the doll stands, in scene units: the door goes behind her and is a bit taller than she is. */
   function busOptions() {
     const m = sceneMap(), d = dollRect();
+    // screen pixels → scene units
     const toX = px => (px - m.r.left - m.ox) / m.s, toY = py => (py - m.r.top - m.oy) / m.s;
     const head = toY(d.top + d.height * 50 / 780), feet = toY(d.top + d.height * 752 / 780);   // the doll drawing spans y 50–752 of 780
     return { doorX: toX(d.left + d.width / 2), groundY: feet, k: (feet - head) / 860, left: toX(m.r.left), right: toX(m.r.right) };
@@ -567,13 +616,16 @@
     const L = sc.layout(opts), m = sceneMap();
     const friends = state.settings.rewards ? state.rewards.friends.filter(k => CREATURES[k] && friendOf(k)).slice().reverse() : [];
     const queue = friends.concat(sc.passengers);
+    // put one passenger (key) in window w; slot/of: seat 0 or 1 of 1 or 2 in that window
     const seat = (w, key, slot, of) => {
       const box = document.createElement('div'); box.className = 'seat-window';
       Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
+      const pic = guard('FJ-D04', key, () => CREATURES[key](), null);
+      if (pic === null) return;
       const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
       const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', f ? f.is : key);
-      el.innerHTML = `<div class="inner">${CREATURES[key]()}</div>`;
+      el.innerHTML = `<div class="inner">${pic}</div>`;
       const H = w.h * m.s * (key === 'driver' ? 1.05 : WIDE.includes(key) ? .95 : .85);   // creature height in px
       const vb = (el.querySelector('svg').getAttribute('viewBox') || '0 0 1 1').split(/\s+/).map(Number);
       const Wd = H * vb[2] / vb[3], bw = w.w * m.s;
@@ -599,7 +651,9 @@
    */
   function spreadCreatures() {
     const sr = stage.getBoundingClientRect(), pad = 10;
+    // a rectangle grown by m pixels on every side
     const grow = (r, m) => ({ left: r.left - m, right: r.right + m, top: r.top - m, bottom: r.bottom + m });
+    // do two rectangles overlap?
     const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     const d = dollRect();
     const blockers = [
@@ -615,6 +669,7 @@
       for (let tries = 0; tries < 4 && !placed; tries++) {
         const r0 = el.getBoundingClientRect(), w = r0.width, h = r0.height;
         const ground = sr.top + sr.height * ((SCENES[state.scene] || {}).ground || 0) / 100;   // feet must stand on land
+        // would the animal fit at this spot: on screen, on land, and not overlapping anything?
         const fits = (left, top) => { const r = { left, right: left + w, top, bottom: top + h }; return left >= sr.left + 4 && left + w <= sr.right - 4 && top >= sr.top + sr.height * .45 && top + h >= ground && !blockers.some(b => hit(grow(r, pad), b)); };
         // try the planned height first, then a bit further back up the hill or nearer; at each, step outwards left and right
         for (const dy of [0, -.05, -.1, .04, -.15]) {
@@ -668,7 +723,7 @@
     const pool = DOLL.items.filter(i => !Object.values(state.worn).includes(i.id));
     if (!pool.length) return;
     const it = pool[Math.floor(Math.random() * pool.length)];
-    setTimeout(() => flyThumb(it.id, chestRect(), dollRect(), 1000, CREATURES.elf()).then(() => { equip(it.id); renderDoll(); }), 400);
+    setTimeout(() => flyThumb(it.id, chestRect(), dollRect(), 1000, guard('FJ-D04', 'elf', () => CREATURES.elf(), '')).then(() => { equip(it.id); renderDoll(); }), 400);
   }
 
   /* ---------------------------------------------------------------
@@ -676,6 +731,7 @@
      --------------------------------------------------------------- */
   /** Text fingerprint of an outfit: hair plus the sorted item ids. */
   function outfitKey(hair, worn) { return hair + '|' + Object.values(worn).sort().join(','); }
+  /** The heart button: save what she wears (a new outfit earns a heart). */
   function saveOutfit() {
     if (!Object.keys(state.worn).length) { Sound.tone(330, .15); return; }
     // Same clothes and hair already saved? Move that one to the front instead of making a copy.
@@ -688,6 +744,7 @@
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
     persist(); if (!galleryEl.hidden) renderGallery();
   }
+  /** The saved-outfits picture frame: tap one to wear it, long-press to delete. */
   function renderGallery() {
     galleryEl.innerHTML = '';
     if (!state.outfits.length) {
@@ -749,6 +806,7 @@
     jarBtn.hidden = !state.settings.rewards;
     jarBtn.innerHTML = jarSVG(Math.max(0, Math.min(JAR_SIZE, jarShown)));
   }
+  /** Where the heart jar button is on screen. */
   const jarRect = () => jarBtn.getBoundingClientRect();
   /** Friend info by key. */
   const friendOf = k => FRIENDS.find(f => f.k === k);
@@ -802,7 +860,7 @@
         const el = critterLayer.querySelector(`[data-friend="${friend}"]`);
         if (!el) return;
         el.classList.add('arriving');
-        flyMarkup(CREATURES[friend](), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
+        flyMarkup(guard('FJ-D04', friend, () => CREATURES[friend](), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
           el.classList.remove('arriving'); Sound.arrive(); sparkleAt(el.getBoundingClientRect(), 14);
           el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100);
           happy(1600);
@@ -821,8 +879,9 @@
     friendsEl.innerHTML = '';
     for (const k of state.rewards.friends) {
       const f = friendOf(k); if (!f || !CREATURES[k]) continue;
+      const pic = guard('FJ-D04', k, () => CREATURES[k](), null); if (pic === null) continue;
       const card = document.createElement('button'); card.className = 'card friend-card'; card.setAttribute('aria-label', f.is);
-      card.innerHTML = CREATURES[k]();
+      card.innerHTML = pic;
       card.addEventListener('click', () => { Sound.voice(f.voice); card.classList.remove('hop'); void card.offsetWidth; card.classList.add('hop'); });
       friendsEl.appendChild(card);
     }
@@ -849,6 +908,7 @@
   /* ---------------------------------------------------------------
      Parent menu (opens on a long press so little fingers don't find it)
      --------------------------------------------------------------- */
+  /** Fill in the parent menu: switches, the storage note and the error log. */
   function renderMenu() {
     $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm; $('#optRewards').checked = state.settings.rewards;
     $('#backupMsg').hidden = true;
@@ -856,7 +916,32 @@
     $('#storeMsg').textContent = Store.ok
       ? `Allt er vistað á þessu tæki (${state.outfits.length} vistuð föt). Taktu afrit af og til.`
       : 'Vafrinn leyfir ekki að vista. Fötin gleymast þegar leiknum er lokað.';
+    renderErrors();
   }
+
+  /** The error log in the parent menu: one line per problem, newest first (code, how often, when, what). */
+  function renderErrors() {
+    const log = FJ.list();
+    $('#errSum').textContent = log.length ? `Villukóðar (${log.length})` : 'Villukóðar';
+    $('#errLog').textContent = log.length
+      ? log.map(e => `${e.code}${e.n > 1 ? ' ×' + e.n : ''}  ${(FJ.codes[e.code] || ['?'])[0]}\n  ${e.last.slice(0, 16).replace('T', ' ')}  ${e.detail}${e.msg ? ' – ' + e.msg : ''}`).join('\n')
+      : `Engar villur skráðar. (útgáfa ${FJ.build || '?'})`;
+    $('#errMsg').hidden = true;
+  }
+  /*  "Afrita" copies the whole log as text (with where in the code each happened), ready to paste
+      into a message so the problem can be traced. */
+  $('#errCopy').addEventListener('click', async () => {
+    const msg = $('#errMsg'); msg.hidden = false;
+    try { await navigator.clipboard.writeText(FJ.asText()); msg.textContent = 'Afritað. Límdu það í skilaboð.'; }
+    catch (e) {
+      // no clipboard access: show the text selected so it can be copied by hand
+      $('#errLog').textContent = FJ.asText();
+      getSelection().selectAllChildren($('#errLog'));
+      msg.textContent = 'Haltu inni á textanum til að afrita hann.';
+    }
+  });
+  $('#errClear').addEventListener('click', () => { FJ.clear(); renderErrors(); });
+  $('#errBox').addEventListener('toggle', () => { if ($('#errBox').open) renderErrors(); });   // always fresh when opened
   /** Short note under the backup buttons. */
   function backupNote(text) { const m = $('#backupMsg'); m.textContent = text; m.hidden = false; }
 
@@ -870,10 +955,12 @@
     const file = new File([data], name, { type: 'application/json' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupNote('Afrit sent.'); return; }
-    } catch (e) { if (e && e.name === 'AbortError') return; /* sharing failed: download instead */ }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    backupNote('Afrit vistað í niðurhal (Downloads).');
+    } catch (e) { if (e && e.name === 'AbortError') return; report('FJ-S05', 'share (now trying a download)', e); }
+    try {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      backupNote('Afrit vistað í niðurhal (Downloads).');
+    } catch (e) { report('FJ-S05', 'download', e); backupNote('Ekki tókst að búa til afrit. Sjá villukóða.'); }
   });
   /*  Opening a backup ADDS its outfits to the ones already here (nothing is deleted).
       The doll, scene and settings stay as they are. */
@@ -881,8 +968,8 @@
   $('#importFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
-    let d = null; try { d = JSON.parse(await f.text()); } catch (err) { d = null; }
-    if (!isObj(d) || !Array.isArray(d.outfits)) { backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
+    let d = null, why = null; try { d = JSON.parse(await f.text()); } catch (err) { why = err; }
+    if (!isObj(d) || !Array.isArray(d.outfits)) { report('FJ-S04', f.name, why); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
     const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn)));
     const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn)));
     state.outfits = state.outfits.concat(added)
@@ -933,7 +1020,7 @@
   const sceneBar = $('#scenes');
   for (const k of Object.keys(SCENES)) {
     const b = document.createElement('button'); b.className = 'btn scene-btn'; b.dataset.scene = k; b.setAttribute('aria-label', SCENES[k].name);
-    b.innerHTML = SCENES[k].svg().replace('xMidYMax slice', 'xMidYMid slice');
+    b.innerHTML = guard('FJ-D03', k + ' (button)', () => SCENES[k].svg().replace('xMidYMax slice', 'xMidYMid slice'), '');
     b.addEventListener('click', () => { if (state.scene === k) return; state.scene = k; Sound.whoosh(); sceneEl.classList.add('fading'); setTimeout(() => { renderScene(); sceneEl.classList.remove('fading'); }, 300); persist(); });
     sceneBar.appendChild(b);
   }

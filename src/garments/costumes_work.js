@@ -340,6 +340,7 @@
       const hb = y => `<rect x="0" y="${y}" width="400" height="15" fill="${tape}"/><rect x="0" y="${y + 5}" width="400" height="5" fill="${mid}"/>`;
       /** Reflective band round a sleeve near the cuff. */
       const sb = side => `<path d="${G.armPath(side, .78, .86, 9)}" fill="${tape}"/><path d="${G.armPath(side, .806, .834, 9)}" fill="${mid}"/>`;
+      // plain darker cuff at the wrist of the given side
       const cuff = side => `<path d="${G.armPath(side, .93, 1.01, 8)}" fill="${shade(c, -.28)}"/>`;
       /** Big hip pocket with a flap that carries a strip of tape. */
       const pocket = x => `<path d="M${x},392 h34 v36 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2"/>` +
@@ -376,9 +377,11 @@
       const [c, ch1 = '#ffffff', ch2 = '#3f86d9', badge = '#f2c34d'] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 8, sleevePad: 6, bottom: 470, flare: 4, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, d);
+      // collar flap for one side (the left one is mirrored for the right)
       const collar = side => { const m = side === 'L' ? (s => s) : (s => mirror(s)); return m(`<path d="M185,246 Q170,252 162,268 L182,280 Q190,266 199,259 Z" fill="${H.grad(shade(c, .06))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`); };
       /** Shoulder strap with a button near the neck. */
       const strap = () => `<path d="M174,253 L136,268 L139,278 L176,262 Z" fill="${H.grad(shade(c, -.1))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` + button(170, 258, 2.8, badge);
+      // shoulder strap on the left shoulder with a button near the neck
       const pocket = x => `<path d="M${x},404 h32 v26 q0,6 -6,6 h-20 q-6,0 -6,-6 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<path d="M${x - 2},398 h36 v11 q-18,5 -36,0 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` + button(x + 16, 406, 2.6, shade(c, -.2));
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
@@ -417,10 +420,13 @@
         `<path d="M184,248 L196,266 L200,256 Z M216,248 L204,266 L200,256 Z" fill="${H.grad(shirt)}" stroke="${ink(shirt)}" stroke-width="1.3" stroke-linejoin="round"/>`;
       /** Lapel along the left side of the V (mirrored for the right). */
       const lapel = () => `<path d="M182,250 L199,326 L188,330 L168,290 L176,282 L164,268 Z" fill="${H.grad(shade(c, .08))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`;
+      // shoulder strap with gold marks on it (left side)
       const strap = () => `<path d="M170,256 L136,268 L139,278 L172,265 Z" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="M148,265 L150,272 M154,263 L156,270 M160,261 L162,268" stroke="${gold}" stroke-width="2.2" stroke-linecap="round"/>`;
+      // three gold stripes on the sleeve of the given side
       const stripes = side => [.84, .89, .94].map(t => `<path d="${G.armPath(side, t, t + .022, 7)}" fill="${gold}"/>`).join('');
       const btns = [352, 392, 432].map(y => button(184, y, 4, gold) + button(216, y, 4, gold)).join('');
+      // pocket flap with its top-left corner at x
       const pocket = x => `<path d="M${x - 2},410 h36 v9 q-18,4 -36,0 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       return shirtV + `<path d="${d}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${clip}">${stripes('L')}${stripes('R')}</g>` +
@@ -514,6 +520,7 @@
       const clip = H.clip('c-' + it.id, d);
       /** Silver band with a fine line in the middle (looks shiny). */
       const band = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${refl}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#shine)" opacity=".6"/>`;
+      // breast pocket with its top-left corner at x and a dark binding on the top edge
       const pocket = x => `<path d="M${x},440 h32 v22 q0,6 -6,6 h-20 q-6,0 -6,-6 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<path d="M${x - 1},440 h34" stroke="${bind}" stroke-width="3.4" stroke-linecap="round"/>`;
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
@@ -545,7 +552,9 @@
       const [c, acc, panel = '#c9d2de'] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 12, sleevePad: 9, bottom: 470, flare: 8, neck: 'round', neckDepth: 2 });
       const clip = H.clip('c-' + it.id, d);
+      // thin ring line round the sleeve at position t (0 = shoulder, 1 = wrist)
       const ring = (side, t) => H.line(G.armPath(side, t, t, 9.5).replace(/Z$/, ''), c, 1.6, .5);
+      // patterned sleeve section on the given side, plus a coloured cuff
       const arm = side => `<path d="${G.armPath(side, .43, .57, 12)}" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="1.6"/>` +
         `<path d="${G.armPath(side, .88, 1.01, 10)}" fill="${H.grad(acc)}"/>` + `<path d="${G.armPath(side, .86, .885, 10)}" fill="${shade(acc, .35)}"/>` +
         ring(side, .3) + ring(side, .7);
@@ -604,6 +613,7 @@
       let inside = `<rect x="0" y="398" width="400" height="13" fill="${shade(c, -.1)}"/>` +
         `<rect x="0" y="690" width="400" height="18" fill="${shade(c, -.07)}"/>` + `<path d="M0,690 H400" stroke="${ink(c)}" stroke-width="1.4" opacity=".45"/>`;
       let over = '';
+      // belt in colour col with a buckle in colour buckle
       const belt = (col, buckle) => `<path d="M${n1(edge(400) + 4)},399 Q200,404 ${n1(396 - edge(400))},399 L${n1(396 - edge(410))},411 Q200,416 ${n1(edge(410) + 4)},411 Z" fill="${H.grad(col)}" stroke="${ink(col)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<rect x="191" y="400" width="18" height="14" rx="2.5" fill="none" stroke="${buckle}" stroke-width="2.8"/>`;
       const creases = H.line('M170,488 V700 M230,488 V700', c, 1.4, .35) + `<path d="M172,488 V700 M232,488 V700" stroke="#fff" stroke-width="1.2" opacity=".25"/>`;
@@ -654,12 +664,14 @@
   const [FX, FY] = G.feet[0];
   /** Boot shaft for the left leg from top to low (built from the leg profile so it fits). */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // 0 at the top of the shaft, 1 at the bottom (how far down y is)
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
       outer.push([G.legOutX(y) - pad - flare * k(y), y]);
       inner.push([G.legInX(y) + pad + flare * k(y) * .6, y]);
     }
+    // "x,y" text of a point, rounded, for building SVG paths
     const pt = p => n1(p[0]) + ',' + n1(p[1]);
     return {
       outer, inner,
@@ -825,6 +837,7 @@
     draw(it) {
       const [rim = '#3a3640', sp = '#c9d2de', hub = '#f6c636'] = it.colors;
       const cx = 331, cy = 491, r = 40;
+      // path line from the wheel centre out to the rim at angle a (degrees)
       const spoke = a => { const x = cx + Math.cos(a * Math.PI / 180) * (r - 3), y = cy + Math.sin(a * Math.PI / 180) * (r - 3); return `M${cx},${cy} L${n1(x)},${n1(y)}`; };
       // little grip bumps all round the rim
       const bumps = Array.from({ length: 16 }, (_, i) => { const a = i * 22.5 * Math.PI / 180; return `<circle cx="${n1(cx + Math.cos(a) * (r + 3.8))}" cy="${n1(cy + Math.sin(a) * (r + 3.8))}" r="1.4" fill="${shade(rim, .35)}"/>`; }).join('');
@@ -918,6 +931,7 @@
       const [c, grip = '#f6c636'] = it.colors;
       let g;
       if (it.kind === 'spanner') {
+        // hexagon of radius r around the spanner head (the nut shape)
         const hex = r => H.polyPath(Array.from({ length: 6 }, (_, i) => [-38 + Math.cos(i * Math.PI / 3) * r, Math.sin(i * Math.PI / 3) * r]));
         const tool = 'M-30,-6 L40,-6 L46,-11 Q60,-20 70,-10 L61,-4 Q57,-7 53,-5 L53,5 Q57,7 61,4 L70,10 Q60,20 46,11 L40,6 L-30,6 Z';
         g = `<g transform="translate(302,463) rotate(-36) translate(8,0)">` +
@@ -953,6 +967,7 @@
       const [w = '#c98a4b', cloth = '#e2505b'] = it.colors;
       const body = 'M268,496 L340,496 L333,540 Q304,552 275,540 Z';
       const clip = H.clip('c-' + it.id, body);
+      // one decorated egg at x,y in colour c, tilted by rot degrees, with a shine spot
       const egg = (x, y, c, rot) => `<ellipse cx="${x}" cy="${y}" rx="9" ry="11.5" transform="rotate(${rot} ${x} ${y})" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1.5"/>` +
         `<ellipse cx="${x - 3}" cy="${y - 4}" rx="2.2" ry="3.4" fill="#fff" opacity=".7"/>`;
       const g = cord('M277,498 C274,444 334,444 331,498', w, 6) +
@@ -984,6 +999,7 @@
       const cx = 316, cy = 500, rx = 30, ry = 20;
       // fluffy outline: a ring of puffs round the body
       const puffs = Array.from({ length: 16 }, (_, i) => { const a = i * Math.PI / 8; return `<circle cx="${n1(cx + Math.cos(a) * rx)}" cy="${n1(cy + Math.sin(a) * ry)}" r="8.5" fill="${H.grad(wool, 'r')}" stroke="${ink(wool)}" stroke-width="1.6"/>`; }).join('');
+      // one leg of the sheep, a rounded rectangle starting at x
       const leg = x => `<rect x="${x}" y="510" width="9" height="24" rx="4.5" fill="${H.grad(face)}" stroke="${ink(face)}" stroke-width="1.6"/>`;
       const hx = 352, hy = 486;
       const g = leg(294) + leg(306) + leg(320) + leg(332) +

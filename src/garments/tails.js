@@ -9,7 +9,9 @@
   'use strict';
   const { shade, ink, mix } = H;
   const SW = G.stroke;
+  /** Round a number to 1 decimal, as text. */
   const F = v => (Math.round(v * 10) / 10).toString();
+  /** "x,y" text of a point, rounded for path strings. */
   const P = p => F(p[0]) + ',' + F(p[1]);
 
   /** Final pass for a shape: soft shading overlay plus the tinted outline. */
@@ -38,7 +40,9 @@
    */
   const shell = (cx, cy, r, c, rot = 0) => {
     const ox = 0, oy = r * .55, R = r * 1.15, n = 5;           // fan centre (local) and radius
+    // angle (radians) of the i-th fan ridge on the shell
     const ang = i => (205 + 130 * i / n) * Math.PI / 180;
+    // point at angle a and distance rr from the fan centre
     const pt = (a, rr) => [ox + Math.cos(a) * rr, oy + Math.sin(a) * rr];
     let d = `M${P(pt(ang(0), r * .25))}L${P(pt(ang(0), R))}`;
     for (let i = 0; i < n; i++) {                              // one bump per rib gap
@@ -86,6 +90,7 @@
    */
   function spine(pts, n) {
     const seg = pts.length - 1, p = i => pts[Math.max(0, Math.min(seg, i))];
+    // point on the smooth curve through pts at position s (0 = first point, seg = last)
     const at = s => {
       const i = Math.min(seg - 1, Math.floor(s)), t = s - i, t2 = t * t, t3 = t2 * t;
       const p0 = p(i - 1), p1 = p(i), p2 = p(i + 1), p3 = p(i + 2);
@@ -200,6 +205,7 @@
 
   // Left side of the tail, waist to just above the fin. Always outside the leg outline so no skin peeks out.
   const MT_L = [[G.torsoX(398) - 3, 398], [138, 418], [133.5, 440], [132, 470], [134, 510], [139, 555], [144, 600], [148, 640], [152, 670], [155, 692]];
+  /** Closed outline of the mermaid tail body: left edge down, across the bottom, mirrored right edge up. */
   const MT_BODY = (() => {
     const l = H.smooth(MT_L, false), r = H.smooth(mirror(MT_L).reverse(), false);
     return l + `Q200,700 ${r.slice(1)}Z`;
@@ -209,6 +215,7 @@
   const FIN_D = H.smooth(FIN_L.concat(mirror(FIN_L.slice(1, -1)).reverse()), true, .4);
   // little frilly fins on the sides at knee height (left drawn, right mirrored)
   const SIDE_FIN = 'M145,586 C128,590 112,606 108,630 C116,624 124,624 130,630 C132,622 140,618 148,620 Z';
+  /** Mirror a path string to the right side (x becomes 400 - x). */
   const mirrorD = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => F(400 - x) + ',' + y);
 
   /**
@@ -234,6 +241,7 @@
         `<g clip-path="${clipF}"><path d="${ribs}${mirrorD(ribs)}" fill="none" stroke="${ink(fin)}" stroke-width="1.6" stroke-linecap="round" opacity=".42"/>` +
         `<path d="M98,744 Q140,722 170,742 M302,744 Q260,722 230,742" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".45"/></g>` +
         outline(FIN_D, fin, 'v');
+      // one side fin: fill, a few vein lines and outline (d is the left or the mirrored path)
       const sideFin = d => `<path d="${d}" fill="${finFill}"/>` +
         H.line(d === SIDE_FIN ? 'M140,594 Q124,606 116,624 M144,604 Q132,612 126,626' : mirrorD('M140,594 Q124,606 116,624 M144,604 Q132,612 126,626'), fin, 1.4, .45) + outline(d, fin, 'v', 2.2);
       // scales: a repeating tile of little scallops (every other row shifted half a scale)

@@ -20,6 +20,7 @@
   /* ---------------- small helpers ---------------- */
 
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Safe id fragment from a colour. */
   const idc = c => String(c).replace(/[^a-z0-9]/gi, '');
@@ -94,6 +95,7 @@
    * Returns the closed path, the two side edges and the edge points.
    */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // 0 at the top of the shaft, 1 at the bottom (how far down y is)
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
@@ -188,6 +190,7 @@
       // bodice with bell sleeves
       const bod = G.shirtPath({ sleeve: 1, pad: 4, sleevePad: 5, sleeveFlare: 12, bottom: 414, neck: 'round' });
       const bclip = H.clip('c-' + it.id + '-bod', bod);
+      // wide sleeve cuff in the trim colour with a darker edge line, for the given side
       const cuff = side => `<path d="${G.armPath(side, .84, 1.04, 40)}" fill="${H.grad(trim)}"/>` +
         `<path d="${G.armPath(side, .84, .845, 40)}" fill="${ink(trim)}" opacity=".5"/>`;
       const cuffDots = pair([.9, .97].map(t => { const [x, y] = G.armPoint('L', t); return `<circle cx="${n1(x - 20)}" cy="${n1(y + 2)}" r="2.2" fill="${acc}"/>`; }).join(''));
@@ -289,6 +292,7 @@
       const body = ellD(337, 556, 21, 26);
       const head = ellD(338, 500, 24, 22);
       const earL = 'M317,494 L318,468 L336,480 Z', earR = 'M340,479 L358,467 L360,494 Z';
+      // one cartoon eye (white, coloured iris, pupil and sparkle) centred at x
       const eyeAt = x => `<ellipse cx="${x}" cy="501" rx="5.6" ry="6.6" fill="#fff" stroke="${ink(fur)}" stroke-width="1"/>` +
         `<circle cx="${x + .5}" cy="502" r="4.2" fill="${eye}"/><circle cx="${x + .5}" cy="502.5" r="2.4" fill="#1d1a24"/><circle cx="${x + 2}" cy="500" r="1.3" fill="#fff"/>`;
       return {
@@ -468,6 +472,7 @@
       const [brass, leather] = it.colors;
       /** One tube section along the x axis from x0 to x1, radius r0 → r1. */
       const tube = (x0, x1, r0, r1, c) => { const d = `M${x0},${-r0} L${x1},${-r1} L${x1},${r1} L${x0},${r0} Z`; return `<path d="${d}" fill="${cyl(c)}"/>` + edge(d, c, 1.8); };
+      // thin brass ring round the tube at x, radius r, width w
       const ring = (x, r, w) => tube(x - w / 2, x + w / 2, r, r, shade(brass, -.08));
       const body = tube(-44, -14, 4.5, 4.5, brass) + ring(-15, 6.5, 6) +
         tube(-12, 42, 7.5, 7.5, leather) + `<path d="M-10,-4.5 H40" stroke="${shade(leather, .4)}" stroke-width="1.2" stroke-dasharray="3 2.5"/>` +
@@ -493,6 +498,7 @@
       const [paper, red = '#d8364a'] = it.colors;
       const sheet = 'M290,458 L360,458 Q356,480 360,502 Q364,526 358,556 L292,556 Q296,530 290,506 Q286,482 290,458 Z';
       const clip = H.clip('c-' + it.id, sheet);
+      // one rolled-up end of the paper at height y, spanning x0 to x1
       const roll = (y, x0, x1) => { const d = `M${x0 + 6},${y - 6} H${x1 - 6} a6,6 0 0 1 0,12 H${x0 + 6} a6,6 0 0 1 0,-12 Z`; return `<path d="${d}" fill="${cyl(shade(paper, -.1))}"/>` + edge(d, paper, 1.8) + `<ellipse cx="${x1 - 6}" cy="${y}" rx="2.4" ry="5" fill="${shade(paper, -.3)}"/>`; };
       const waves = [[300, 482], [340, 470], [306, 528], [340, 546]].map(([x, y]) => `M${x},${y} q3,-3 6,0 q3,3 6,0`).join('');
       const island = 'M318,508 Q322,494 336,494 Q350,494 352,508 Q336,514 318,508 Z';
@@ -593,6 +599,7 @@
         let s = '';
         for (let i = 0; i <= n; i++) {
           const [x, y] = D.at(i / n), a = Math.atan2(y - 404, x - 200), ca = Math.cos(a), sa = Math.sin(a);
+          // point at u along the feather and v across it, turned to point away from the waist
           const p = (u, v) => n1(x + u * ca - v * sa) + ',' + n1(y + u * sa + v * ca);
           s += `<path d="M${p(-len * .5, 0)}C${p(-len * .2, -8)} ${p(len * .4, -8)} ${p(len * .6, 0)}C${p(len * .4, 8)} ${p(-len * .2, 8)} ${p(-len * .5, 0)}Z"/>`;
         }
@@ -672,6 +679,7 @@
     draw(it) {
       const [m, fc, gem] = it.colors;
       const { cx, cy, rx, ry } = G.head;
+      // point on an ellipse around the head at angle deg (off pixels outside the head edge)
       const at = (deg, off) => [cx + Math.cos(deg * Math.PI / 180) * (rx + off), cy + Math.sin(deg * Math.PI / 180) * (ry + off)];
       const band = H.polyPath(G.headArc(214, 326, 8, 24).concat(G.headArc(326, 214, 1, 24)));
       let feathers = '';
@@ -726,6 +734,7 @@
     draw(it) {
       const [c, acc, disc = '#ffffff', collar = acc] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 3, sleevePad: 3, bottom: 446, neck: 'round' });
+      // glove-coloured lower sleeve on the given side, with a light cuff line
       const glove = side => { const g = G.armPath(side, .74, 1, 5, 3); return `<path d="${g}" fill="${H.grad(acc)}"/>` + outline(g, acc, 'h', 2) + `<path d="${G.armPath(side, .74, .78, 5.2, 0)}" fill="${shade(acc, -.15)}" opacity=".6"/>`; };
       const wx = G.torsoX(400) - 3;
       const belt = `M${n1(wx)},397 H${n1(400 - wx)} V411 H${n1(wx)} Z`;
@@ -757,6 +766,7 @@
       const pad = it.loose ? 6 : 2;
       const d = G.pantsPath({ top: 400, bottom: it.loose ? 702 : 698, pad, flare: it.loose ? 3 : 0 });
       const clip = H.clip('c-' + it.id, d);
+      // x of the outer edge of the left leg at height y (the torso edge near the hip)
       const outX = y => (y <= 476 ? Math.min(G.torsoX(y), G.legOutX(y)) : G.legOutX(y)) - pad;
       // stripe down the outer seam of the left leg (mirrored for the right)
       const L = [], R = [];
@@ -851,6 +861,7 @@
       const pb = 'M110,298 Q104,314 110,326 Q126,332 142,322 Q138,312 140,300 Q124,308 110,298 Z';
       const shoulder = `<path d="${pb}" fill="${metal(m)}"/>` + outline(pb, m, 'v', 2) + `<path d="${pa}" fill="${metal(m)}"/>` + outline(pa, m, 'v', 2) +
         `<circle cx="128" cy="292" r="2.4" fill="${trim}" stroke="${ink(trim)}" stroke-width=".9"/><path d="M118,286 Q132,272 156,268" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".55"/>`;
+      // armoured forearm guard on the given side, with a trim stripe
       const guard = side => { const g = G.armPath(side, .62, .95, 4.5); return `<path d="${g}" fill="${metal(m)}"/>` + outline(g, m, 'h', 2) + `<path d="${G.armPath(side, .76, .78, 4.6)}" fill="${trim}"/>`; };
       return `<path d="${shirt}" fill="${mail(chain)}"/>` + outline(shirt, chain) +
         guard('L') + guard('R') +
@@ -903,6 +914,7 @@
       const [m, trim] = it.colors;
       const top = 604, low = 716, sh = shaft(top, low, 5, 2);
       const foot = G.footPath('L', 5, 4);
+      // x halfway between the left and right edge of the boot shaft at height y
       const midX = y => (shaftX(top, low, 5, 2, y, false) + shaftX(top, low, 5, 2, y, true)) / 2;
       const fclip = H.clip('c-' + it.id + '-f', foot);
       const lames = 'M154,704 Q150,718 154,734 M144,708 Q140,720 143,734 M164,702 Q160,716 163,734';
@@ -1016,6 +1028,7 @@
       // long tails behind the legs (drawn behind the body)
       const tail = 'M146,404 C130,472 116,552 120,628 Q140,636 158,620 C166,546 178,474 194,408 Z';
       const lapel = 'M184,250 Q166,262 160,292 Q170,330 196,394 L199,397 L192,358 Q182,320 184,284 Q186,266 195,256 Z';
+      // satin cuff at the wrist of the given side
       const cuff = side => { const g = G.armPath(side, .88, 1, 7.5); return `<path d="${g}" fill="${H.grad(satin)}"/>` + outline(g, satin, 'h', 2); };
       const bowtie = `<path d="M200,262 l-14,-8 v16 Z M200,262 l14,-8 v16 Z" fill="${H.grad(tie)}" stroke="${ink(tie)}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="200" cy="262" r="4" fill="${shade(tie, .15)}" stroke="${ink(tie)}" stroke-width="1.4"/>`;
       return {

@@ -18,6 +18,7 @@
 
   /** Number formatting for path strings. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded for path strings
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror x for side 'R'. */
   const XS = (side, x) => side === 'R' ? 400 - x : x;
@@ -43,10 +44,13 @@
    */
   const trousers = ({ top = 398, bottom = 700, pad = 3, flare = 0, crotchDrop = 0 }) => {
     const crotch = G.crotchY + 2 + pad * .4 + crotchDrop;
+    // how far down the leg y is: 0 at the hip, 1 at the hem
     const k = y => Math.max(0, (y - 476) / Math.max(1, bottom - 476));
     // waist → hip: eased curve from the waist width out to the hip (no step at the waistband)
     const hipY = Math.max(top + 30, 446), x0 = G.torsoX(top), x1 = G.legOutX(hipY);
+    // smooth curve from 0 to 1 (starts quickly, then flattens)
     const ease = t => 1 - Math.pow(1 - t, 2);
+    // outer edge x of the trousers at height y
     const outer = y => (y <= hipY ? x0 + (x1 - x0) * ease(Math.max(0, (y - top) / (hipY - top))) : G.legOutX(Math.min(y, 702))) - pad - flare * k(y);
     // the inner edge may come no closer to the centre than this (0 at the crotch, growing below)
     const inner = y => Math.min(G.legInX(Math.min(y, 702)) + pad + flare * k(y) * .6, 200 - Math.min(1, (y - crotch) / 30) * 4 - .5);
@@ -103,6 +107,7 @@
     'C-7.2,30 -6,34.5 -3.4,34.8 C-0.8,35.1 0,32 0,28.5 C0,34 1.4,37.6 3.8,37.6 C6.3,37.6 7,34.5 7,31 ' +
     'C7.3,34 8.6,35.2 10.6,34.7 C12.8,34.1 13.8,30.5 13.7,26.5 C13.6,24.5 14,23 15.2,22.2 ' +
     'C17.2,20.8 17.8,17.5 17,14.5 C16,10.5 14,7 12.4,4.5 C11.8,3 11.5,1.5 11.5,0 L12,-30 Z';
+  /** Outline of a hand placed at the wrist of the given side. */
   const handPath = side => {
     const [wx, wy] = G.armPoint(side, 1), L = side === 'L';
     const a = (L ? 8.7 : -8.7) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
@@ -472,6 +477,7 @@
    */
   const skirtShape = ({ top = 400, bottom = 540, flare = 30, pad = 4, hem = 'curve', step = 24, amp = 10, shift = 0 }) => {
     const wx = G.torsoX(top) - pad, hx = G.torsoX(Math.min(bottom, 476)) - pad - flare;
+    // left edge x of the skirt at height y (widens from waist to hem)
     const xl = y => wx + (hx - wx) * Math.pow((y - top) / (bottom - top), .72);
     const L = [];
     for (let y = top; y < bottom; y += 8) L.push([xl(y), y]);
@@ -656,6 +662,7 @@
           // white lace scallop just inside the hem
           // follows the hem, which bows down 8px in the middle (see skirtShape)
           const [x0, x1] = [S.hx + 3, 397 - S.hx];
+          // y of the hem at x (bows down in the middle)
           const yb = x => bottom + 8 * Math.sin(Math.PI * (x - S.hx) / (400 - 2 * S.hx)) - 1;
           const m = Math.round((x1 - x0) / 10), w = (x1 - x0) / m;
           let l = `M${n1(x0)},${n1(yb(x0))}`;
@@ -680,6 +687,7 @@
       const top = 400;
       const U = skirtShape({ top, bottom: 552, flare: 40, pad: 4, hem: 'scallop', step: 30, amp: 8, shift: .5 });
       const S = skirtShape({ top, bottom: 540, flare: 36, pad: 4, hem: 'scallop', step: 30, amp: 9 });
+      // small five-petal flower with a yellow centre at x,y, radius r
       const bloom = (x, y, r) => {
         let p = '';
         for (let k = 0; k < 5; k++) { const a = (k * 72 - 90) * Math.PI / 180; p += `<ellipse cx="${n1(x + Math.cos(a) * r * .62)}" cy="${n1(y + Math.sin(a) * r * .62)}" rx="${n1(r * .5)}" ry="${n1(r * .38)}" transform="rotate(${k * 72} ${n1(x + Math.cos(a) * r * .62)} ${n1(y + Math.sin(a) * r * .62)})" fill="${H.grad('#ffffff', 'r')}" stroke="${ink(c)}" stroke-width="1.2"/>`; }
@@ -735,9 +743,11 @@
       }).join('');
       // ribbed sleeve cuffs and reflective strips on each arm (mirrored via armPath)
       const cuff = side => { const cd = G.armPath(side, .86, .95, 8.5); return `<path d="${cd}" fill="${H.grad(acc)}"/>` + `<path d="${cd}" fill="url(#soft-h)"/>` + `<path d="${cd}" fill="none" stroke="${ink(acc)}" stroke-width="1.8" stroke-linejoin="round"/>`; };
+      // reflective strip across the arm
       const armStrip = side => `<path d="${G.armPath(side, .62, .67, 10)}" fill="${refl}"/>`;
       /** Leg pieces for one side: reflective strip, knee patch, ankle cuff. */
       const legBits = side => {
+        // band across the leg between heights y0 and y1, made `grow` px wider on each side
         const band = (y0, y1, grow) => {
           const [o0, i0] = T.edges(y0), [o1, i1] = T.edges(y1);
           return H.polyPath([[o0 - grow, y0], [i0 + grow, y0], [i1 + grow, y1], [o1 - grow, y1]].map(([x, y]) => [XS(side, x), y]));

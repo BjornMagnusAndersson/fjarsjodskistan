@@ -140,6 +140,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .menu button.danger { border-color: #c4404a; color: #c4404a; }
 .menu p { margin: 8px 0 0; font-size: 14px; color: #7a5a4a; }
 .menu[hidden] { display: none; }
+.menu { max-height: calc(100vh - 32px); overflow-y: auto; }
+/* error log (Villukóðar) in the parent menu: folded away unless opened */
+.menu details { margin-top: 14px; font-size: 15px; border-top: 1px solid #ecdcbf; padding-top: 10px; }
+.menu summary { cursor: pointer; font-weight: 600; }
+.menu pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.4 ui-monospace, monospace; max-height: 200px; overflow: auto;
+  background: #fff; border-radius: 10px; padding: 8px; margin: 8px 0 0; }
 
 /* sparkle burst */
 .spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }
@@ -307,9 +313,129 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <p id="backupMsg" hidden></p>
     <p id="storeMsg">Allt er vistað á þessu tæki. Taktu afrit af og til.</p>
+    <details id="errBox"><summary id="errSum">Villukóðar</summary>
+      <pre id="errLog"></pre>
+      <div class="row"><button id="errCopy">Afrita</button><button id="errClear">Hreinsa</button></div>
+      <p id="errMsg" hidden></p>
+    </details>
   </div>
 </div>
 <script>
+/* =====================================================================
+   Fjársjóðskistan – error codes
+   When something goes wrong the game carries on quietly (never a pop-up
+   for her), but it writes a short note with an error code into a small
+   log. Parents see the log in the parent menu (long-press the gear
+   button for 1 second) and can copy it, so a problem can be traced and
+   fixed: the code says WHAT went wrong and WHERE to look in the code.
+
+   This file is loaded first, before every other file, so it also catches
+   a file that breaks while the game is starting (code FJ-A05 + file name).
+   The log lives under its own key, separate from her save, so it can
+   never damage her outfits. It keeps the newest MAX entries; the same
+   problem repeating only raises its counter (×n).
+
+   Add a new code: add a line to CODES below (and to ERRORS.md), then call
+   FJ.report('FJ-X00', 'what it was about', error) where it can happen.
+   ===================================================================== */
+(function (root) {
+  'use strict';
+  const LOG_KEY = 'fjarsjodskistan.errors';
+  const MAX = 40;
+
+  /** Every code: a short Icelandic label for the parent menu, and an English note on where to look. */
+  const CODES = {
+    // S: saving and backups (app.js, "Storage adapter" and the parent menu)
+    'FJ-S01': ['Gat ekki vistað', 'Saving failed: the browser storage is full or blocked. LocalStore.save in app.js.'],
+    'FJ-S02': ['Vistunin var skemmd, afritið var notað', 'The saved game could not be read; it was parked in .broken and the backup copy loaded. LocalStore.load in app.js.'],
+    'FJ-S03': ['Vafrinn leyfir ekki að lesa vistun', 'Reading browser storage was refused (private mode or blocked site data). readJSON in app.js.'],
+    'FJ-S04': ['Afritsskráin var ekki rétt', 'An imported backup file was not JSON from this game. The importFile handler in app.js.'],
+    'FJ-S05': ['Gat ekki búið til afrit', 'Exporting the backup file failed. The menuExport handler in app.js.'],
+    'FJ-S06': ['Flík eða greiðsla er ekki lengur til', 'A saved id (clothing piece, hairstyle or scene) no longer exists and was skipped. An id was renamed or removed: ids must never be renamed.'],
+    // D: drawing (core.js, scenes.js, garment files)
+    'FJ-D01': ['Flík teiknaðist ekki', 'A clothing piece threw while drawing; it is left out. Detail = item id; see its shape in src/garments/.'],
+    'FJ-D02': ['Hárgreiðsla teiknaðist ekki', 'A hairstyle threw while drawing; the default hair was used. Detail = style key; HAIRSTYLES in core.js.'],
+    'FJ-D03': ['Bakgrunnur teiknaðist ekki', 'A scene threw while drawing (or is unknown); the meadow was used. Detail = scene key; SCENES in scenes.js.'],
+    'FJ-D04': ['Dýr teiknaðist ekki', 'A creature or friend threw while drawing; it is left out. Detail = creature key; CREATURES in scenes.js.'],
+    // A: the app itself
+    'FJ-A01': ['Óvænt villa', 'An unexpected error nobody caught. Detail = where (file:line) and the message.'],
+    'FJ-A02': ['Óvænt villa (bið)', 'An unexpected error in something that runs later (a promise). Detail = the message.'],
+    'FJ-A03': ['Hljóð fór ekki í gang', 'The sound system (Web Audio) could not start. Sound.init in app.js.'],
+    'FJ-A04': ['Ónettengd útgáfa virkar ekki', 'The service worker (offline copy) could not be registered. The register script added by tools/build.py.'],
+    'FJ-A05': ['Skrá hlóðst ekki', 'A source file threw while the game was starting; things after the error in that file are missing. Detail = file name.'],
+  };
+
+  let loadingFile = '';        // the source file currently starting (set by the build before each file)
+
+  /** Read the log (newest first). Never throws: a broken log is just empty. */
+  function list() {
+    try { const l = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); return Array.isArray(l) ? l : []; }
+    catch (e) { return []; }
+  }
+
+  /** Write the log back (silently gives up if storage is unavailable). */
+  function save(log) {
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0, MAX))); } catch (e) { /* nothing more we can do */ }
+  }
+
+  /** First useful line of an error's stack ("at drawItem (index.html:1234:5)"), to see where it happened. */
+  function whereOf(err) {
+    const s = err && err.stack ? String(err.stack).split('\n').map(x => x.trim()).filter(x => x.startsWith('at ') || x.includes('@')) : [];
+    return s.length ? s[0].replace(/^at /, '').replace(/\(?https?:\/\/[^)\s]*\//g, '(').slice(0, 120) : '';
+  }
+
+  /**
+   * Note one problem in the log.
+   * code: one of CODES; detail: what it was about (an item id, a file name ...); err: the caught error (optional).
+   * Repeats of the same code + detail + message only raise the counter, so the log can't fill up with one problem.
+   */
+  function report(code, detail = '', err = null) {
+    const msg = err ? String(err.message || err).slice(0, 200) : '';
+    const now = new Date().toISOString();
+    const log = list();
+    const same = log.find(e => e.code === code && e.detail === String(detail) && e.msg === msg);
+    if (same) { same.n++; same.last = now; log.splice(log.indexOf(same), 1); log.unshift(same); }
+    else log.unshift({ code, detail: String(detail), msg, where: whereOf(err), n: 1, first: now, last: now, build: FJ.build });
+    save(log);
+    console.warn(code, (CODES[code] || [''])[1], detail, err || '');
+  }
+
+  /** Run fn(); if it throws, log the code and return the fallback instead, so the game carries on. */
+  function guard(code, detail, fn, fallback) {
+    try { return fn(); } catch (e) { report(code, detail, e); return fallback; }
+  }
+
+  /** The log as plain text, one line per entry (for copying and sending). */
+  function asText() {
+    const log = list();
+    if (!log.length) return 'Fjársjóðskistan: no errors logged (build ' + FJ.build + ').';
+    return log.map(e => `${e.code}${e.n > 1 ? ' ×' + e.n : ''}  ${e.last.slice(0, 16).replace('T', ' ')}  [${e.build}]  ${e.detail}` +
+      `${e.msg ? '  – ' + e.msg : ''}${e.where ? '  @ ' + e.where : ''}`).join('\n');
+  }
+
+  // Errors nobody caught: while a file is starting they are FJ-A05 (with the file name), later FJ-A01.
+  root.addEventListener('error', e => {
+    if (!e || !e.message) return;    // a picture or script that failed to download, not a code error
+    if (loadingFile) report('FJ-A05', loadingFile, e.error || e.message);
+    else report('FJ-A01', `${(e.filename || '').split('/').pop()}:${e.lineno}:${e.colno}`, e.error || e.message);
+  });
+  root.addEventListener('unhandledrejection', e => report('FJ-A02', '', e.reason));
+
+  const FJ = {
+    build: '',                 // set by the build to the build id (the same id as in sw.js)
+    codes: CODES, report, guard, list, asText,
+    /** Remove every entry (the "Hreinsa" button in the parent menu). */
+    clear() { save([]); },
+    /** The build calls this before each source file starts, and with '' when all have started. */
+    loading(name) { loadingFile = name; },
+  };
+  root.FJ = FJ;
+})(window);
+
+FJ.build = '16fd45036e';
+</script>
+<script>
+FJ.loading('core.js');
 /* =====================================================================
    Fjársjóðskistan – core
    Geometry standard, drawing helpers, garment registry and doll renderer.
@@ -370,6 +496,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Safe id fragment from a colour/name. */
   const idOf = s => String(s).replace(/[^a-z0-9]/gi, '');
 
+  /** Log a drawing problem with an error code (see errors.js). In the preview tools, where errors.js isn't loaded, just warn. */
+  const fail = (code, detail, e) => (root.FJ ? root.FJ.report(code, detail, e) : console.warn(code, detail, e));
+
   // Global soft-shading overlays. Draw a shape a second time with one of
   // these fills to get the storybook "rounded" look without SVG filters
   // (filters are slow on older Android tablets).
@@ -406,6 +535,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     rainbow: (c1, c2, s) => ['#ef6f6c', '#f6a65a', '#f7d660', '#7fcf8a', '#6fb3e6', '#a58be0'].map((c, i) => `<rect y="${i * s / 6}" width="${s}" height="${s / 6 + .3}" fill="${c}"/>`).join(''),
   };
 
+  /** Five-pointed star centred at cx,cy (radius r, colour c), for the "stars" pattern. */
   function star(cx, cy, r, c) {
     let d = '';
     for (let i = 0; i < 10; i++) {
@@ -414,9 +544,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     }
     return `<path d="${d}Z" fill="${c}"/>`;
   }
+  /** Little heart centred at cx,cy (size r, colour c), for the "hearts" pattern. */
   function heart(cx, cy, r, c) {
     return `<path d="M${cx},${cy + r * .9} C${cx - r * 1.4},${cy} ${cx - r * .7},${cy - r} ${cx},${cy - r * .35} C${cx + r * .7},${cy - r} ${cx + r * 1.4},${cy} ${cx},${cy + r * .9}Z" fill="${c}"/>`;
   }
+  /** Snowflake: three crossing strokes centred at cx,cy (radius r, colour c). */
   function flake(cx, cy, r, c) {
     let d = '';
     for (let i = 0; i < 3; i++) {
@@ -425,6 +557,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     }
     return `<path d="${d}" stroke="${c}" stroke-width="${(r * .28).toFixed(2)}" stroke-linecap="round" fill="none"/>`;
   }
+  /** Five-petal flower with a yellow middle, centred at cx,cy (size r, petal colour c). */
   function flower(cx, cy, r, c) {
     let s = '';
     for (let i = 0; i < 5; i++) {
@@ -433,10 +566,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     }
     return s + `<circle cx="${cx}" cy="${cy}" r="${(r * .3).toFixed(2)}" fill="#ffd84d"/>`;
   }
+  /** Strawberry (red berry with green leaves) centred at cx,cy, size r. */
   function berry(cx, cy, r) {
     return `<path d="M${cx},${cy + r} C${cx - r * 1.1},${cy + r * .2} ${cx - r},${cy - r * .7} ${cx},${cy - r * .55} C${cx + r},${cy - r * .7} ${cx + r * 1.1},${cy + r * .2} ${cx},${cy + r}Z" fill="#e8475a"/>` +
       `<path d="M${cx - r * .6},${cy - r * .55} L${cx},${cy - r * .25} L${cx + r * .6},${cy - r * .55} L${cx},${cy - r}Z" fill="#4fae5b"/>`;
   }
+  /** Diamond / sparkle shape centred at cx,cy (height 2r, colour c). */
   function diamond(cx, cy, r, c) {
     return `<path d="M${cx},${cy - r} L${cx + r * .6},${cy} L${cx},${cy + r} L${cx - r * .6},${cy}Z" fill="${c}"/>`;
   }
@@ -449,6 +584,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   function smooth(pts, closed = true, tension = 0.5) {
     const n = pts.length;
     if (n < 3) return 'M' + pts.map(p => p.join(',')).join('L') + (closed ? 'Z' : '');
+    // the i-th point; a closed path wraps around, an open one repeats its end points
     const p = i => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
     let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
     const segs = closed ? n : n - 1;
@@ -460,6 +596,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     }
     return d + (closed ? 'Z' : '');
   }
+  /** Round a number to one decimal and turn it into text (keeps the SVG short). */
   const f = v => (Math.round(v * 10) / 10).toString();
 
   /** Linear interpolation of x along a list of [y,x] stops. */
@@ -511,6 +648,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     { t: .5, x: 113, y: 364, hw: 14 },
     { t: 1, x: 101, y: 442, hw: 11.5 },
   ];
+  /** Where the arm is at t (0 shoulder … 1 wrist): centre point, direction and half-width. */
   function armAt(t) {
     const i = t <= .5 ? 0 : 1, a = ARM[i], b = ARM[i + 1];
     const k = (t - a.t) / (b.t - a.t);
@@ -565,6 +703,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const s = (-dx * v[1] + dy * v[0]) / det;
     return [p[0] + u[0] * s, p[1] + u[1] * s];
   }
+  /** Turn the arrow x,y into length 1 (the same direction). */
   const unit = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
   /** Edge of the left arm at t. dir -1 = outer edge (away from body), +1 = inner edge. w = half-width. */
   function armEdge(t, dir, w) {
@@ -589,12 +728,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const depth = neckDepth ?? { round: 10, v: 46, high: 2, square: 26, scoop: 30, boat: 4 }[neck] ?? 10;
     const nw = { round: 17, v: 17, high: 15, square: 22, scoop: 25, boat: 34 }[neck] ?? 17;
     const ny = 252 - (neck === 'high' ? 8 : 0) - pad * .3;
+    // left edge of the garment at height y: the torso edge, pushed out by pad and flaring towards the bottom
     const side = y => G.torsoX(y) - pad - flare * Math.max(0, (y - 320) / Math.max(1, bottom - 320));
     const N = [200 - nw, ny];
     const T = [160, 258 - pad * .7];                     // top of the shoulder
     const L = [N, ...qpts(N, [174, ny + 1], T, 6)];      // neck → shoulder (gentle slope)
     if (sleeve > 0) {
       const t0 = Math.min(0.12, sleeve * 0.6);           // where the shoulder curve joins the sleeve
+      // half-width of the sleeve at arm position t (wider towards the end when the sleeve flares)
       const w = t => armAt(t).hw + sp + sleeveFlare * Math.max(0, (t - t0) / Math.max(.01, sleeve - t0));
       const P1 = armEdge(t0, -1, w(t0));
       const a0 = armAt(t0), up = unit(-a0.dx, -a0.dy);
@@ -620,6 +761,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     for (let y = Math.ceil((startY + 4) / 8) * 8; y < bottom; y += 8) L.push([side(y), y]);
     L.push([side(bottom), bottom]);
     const R = L.slice().reverse().map(([x, y]) => [mx(x), y]);
+    /** A point [x, y] as 'x,y' text for an SVG path. */
     const pt = p => f(p[0]) + ',' + f(p[1]);
     let d = 'M' + L.map(pt).join('L');
     d += `Q200,${f(bottom + 6)} ${pt(R[0])}`;            // slightly curved hem
@@ -659,6 +801,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   G.pantsPath = function ({ top = 398, bottom = 700, pad = 3, flare = 0 } = {}) {
     const crotch = G.crotchY + 2 + pad * .4;
     const ys = [top, 434, 476, 520, 574, 640, 702].filter(y => y > top && y < bottom).concat([bottom]);
+    // how far down the leg y is, from the crotch (0) to the trouser bottom (1): used to widen flares
     const k = y => Math.max(0, (y - 476) / Math.max(1, bottom - 476));
     const outL = [[G.torsoX(top) - pad, top]].concat(ys.map(y => [(y <= 476 ? Math.min(G.torsoX(y), G.legOutX(y)) : G.legOutX(y)) - pad - flare * k(y), y]));
     const inL = ys.filter(y => y > crotch).map(y => [G.legInX(y) + pad + flare * k(y) * .6, y]).reverse();
@@ -852,6 +995,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      * Tapping a look dresses the doll in all of it; she can then swap single parts in the other tabs.
      */
     looks: [],
+    /** Register costume looks (one look or a list); a duplicate id is skipped with a warning. */
     look(list) {
       for (const l of [].concat(list)) {
         if (DOLL.looks.some(x => x.id === l.id)) { console.warn('duplicate look id', l.id); continue; }
@@ -861,13 +1005,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
     /** Slot an item is worn in, and the slots it blocks. */
     slotOf(item) { return DOLL.shapes[item.shape].slot; },
+    /** Slots this item blocks (a dress blocks top and bottom too). */
     occupiesOf(item) { return item.occupies || DOLL.shapes[item.shape].occupies; },
 
-    /** Draw one item, returning {back, front} strings (either may be ''). */
+    /** Draw one item, returning {back, front} strings (either may be ''). A piece that fails is left out (code FJ-D01). */
     drawItem(item) {
       let out;
       try { out = DOLL.shapes[item.shape].draw(item); }
-      catch (e) { console.warn('draw failed', item.id, e); out = ''; }
+      catch (e) { fail('FJ-D01', item.id, e); out = ''; }
       return typeof out === 'string' ? { back: '', front: out } : { back: out.back || '', front: out.front || '' };
     },
 
@@ -941,7 +1086,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Bare body with a cream vest and shorts underneath everything. */
   function drawBody() {
+    // one arm or leg shape, filled with skin and outlined
     const limb = d => `<path d="${d}" fill="${SK.limb}" stroke="${SKIN.line}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    // one bare foot (L or R) with toes
     const foot = side => {
       const s = side === 'L' ? -1 : 1, [fx, fy] = G.feet[side === 'L' ? 0 : 1];
       return `<path d="${G.footPath(side, -2)}" fill="${SK.face}" stroke="${SKIN.line}" stroke-width="2.2"/>` +
@@ -1082,9 +1229,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e' });
   const MINT_BOW = ['#5fc9a0', '#2f8a68', '#bdf0dc', '#86dcbb'], SKY_BOW = ['#6cb8ec', '#2f6fa8', '#cfe9fb', '#93cdf2'];
 
+  /** One hair shape: fill (front or darker back colours of palette pal) plus outline and soft shading. */
   const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="url(#soft-h)" opacity=".55"/>`;
+  /** A darker strand line drawn inside the hair (gives it texture). */
   const strand = (d, w = 2, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.deep}" stroke-width="${w}" stroke-linecap="round" opacity=".45"/>`;
+  /** A light shine strand drawn inside the hair. */
   const lstrand = (d, w = 1.8, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.glow}" stroke-width="${w}" stroke-linecap="round" opacity=".7"/>`;
   /** Glossy shine: a few light lens shapes following the curve of the head. */
   const shine = (pal = BROWN) => [
@@ -1097,6 +1247,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   // Hair cap with a side-swept fringe, shared by all styles.
   const CAP = 'M122,170 C114,108 150,62 202,62 C254,62 288,106 278,170 C273,146 266,128 254,116 C246,128 230,132 214,124 C204,134 184,138 168,130 C158,140 140,150 122,170 Z';
+  /** The hair cap with the side-swept fringe, in any palette (shared by all styles). */
   const capFront = (pal = BROWN) => hp(CAP, false, pal) +
     strand('M170,74 Q150,96 146,128', 2, pal) + strand('M214,70 Q236,86 250,112', 2, pal) + strand('M168,128 Q186,108 206,90', 1.8, pal) +
     strand('M214,122 Q232,104 244,92', 1.8, pal) + lstrand('M156,124 Q164,104 182,90', 1.8, pal) + lstrand('M236,104 Q246,112 252,122', 1.8, pal) +
@@ -1111,6 +1262,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   const LOOSE_BACK = 'M200,58 C138,58 106,98 106,162 C106,222 98,286 96,338 Q116,356 138,342 Q160,360 182,346 Q200,362 218,346 Q240,360 262,342 Q284,356 304,338 C302,286 294,222 294,162 C294,98 262,58 200,58 Z';
   const LOOSE_LOCK_L = 'M138,128 C120,168 112,236 118,300 Q120,336 136,352 Q146,330 144,298 C140,246 146,186 154,146 Z';
+  /** Her long loose hair in any palette; extra adds markup inside the back hair and each front lock. */
   function looseHair(pal, extra = {}) {
     const backD = LOOSE_BACK;
     const back = `<g class="sway-b">` + hp(backD, true, pal) +
@@ -1155,6 +1307,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** One loc (dreadlock): a soft rope from (x0,y0) curving through (cx,cy) to (x1,y1), with a bead near the end. */
   const loc = (x0, y0, cx, cy, x1, y1, w, pal, bead) => {
     const d = `M${x0},${y0} Q${cx},${cy} ${x1},${y1}`;
+    // point on the curve at t (0 start … 1 end), to place the bead
     const at = t => [(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1];
     const [bx, by] = at(.82);
     return `<path d="${d}" fill="none" stroke="${pal.line}" stroke-width="${w + 4}" stroke-linecap="round"/>` +
@@ -1173,6 +1326,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Two braids with bows at the ends. */
   function braidsHair(pal = BROWN, bow = PINK_BOW) {
     const back = hp(NAPE, true, pal);
+    // one braid hanging from x; s = -1 left, 1 right (the bumps zig-zag); cls = the sway class
     const braid = (x, s, cls) => {
       let g = `<g class="${cls}">`;
       for (let i = 0; i < 7; i++) {
@@ -1197,6 +1351,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   function bobHair(pal = BROWN) {
     const backD = 'M200,58 C136,58 104,100 106,160 C108,196 108,224 116,246 Q134,258 152,250 L248,250 Q266,258 284,246 C292,224 292,196 294,160 C296,100 264,58 200,58 Z';
     const sideL = 'M132,126 C114,160 110,206 116,238 Q122,254 138,256 Q154,256 162,246 Q146,236 142,212 C138,188 140,160 150,140 Z';
+    // one side of the bob (s -1 left, 1 right) with its strands
     const side = (d, cls, s) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(s < 0 ? 'M130,150 Q120,200 132,246' : mirrorD('M130,150 Q120,200 132,246'), 2, pal) +
       lstrand(s < 0 ? 'M140,148 Q132,190 140,232' : mirrorD('M140,148 Q132,190 140,232'), 1.8, pal) + `</g>`;
@@ -1209,8 +1364,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   function longestHair(pal = BROWN) {
     const backD = 'M200,58 C138,58 106,98 106,162 C106,240 100,330 102,420 C104,500 112,560 120,600 Q140,588 158,604 Q178,590 200,606 Q222,590 242,604 Q260,588 280,600 C288,560 296,500 298,420 C300,330 294,240 294,162 C294,98 262,58 200,58 Z';
     const lockLD = 'M138,128 C120,170 110,250 114,340 C116,400 120,440 130,480 Q144,466 148,440 C144,380 142,300 146,230 C148,190 150,160 154,146 Z';
+    // one long front lock; m mirrors the left-side path to the right
     const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(m('M134,170 Q122,300 134,460'), 2, pal) + lstrand(m('M142,156 Q132,260 140,420'), 1.8, pal) + `</g>`;
+    // "do not mirror" (the left lock is used as it is)
     const id = d => d;
     return {
       back: `<g class="sway-b">` + hp(backD, true, pal) +
@@ -1222,6 +1379,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
   function pigtailsHair(pal = BROWN, bow = PINK_BOW) {
     const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
+    // one pigtail with its bow; m mirrors the left-side path to the right
     const tail = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(m('M108,130 C88,150 92,200 86,250'), 2, pal) + strand(m('M116,150 C104,180 104,220 98,270'), 1.6, pal) +
       lstrand(m('M98,122 C84,140 82,170 84,196'), 2, pal) + hairBow(m === mirrorD ? 276 : 124, 122, ...bow) + `</g>`;
@@ -1243,8 +1401,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   }
 
   const HAIRSTYLES = {
+    /** Her own long loose brown hair (the default; approved, never change). */
     loose() { return looseHair(BROWN); },
+    /** Two brown braids with pink bows (approved, never change). */
     braids() { return braidsHair(); },
+    /** Brown ponytail with a blue hair tie (approved, never change). */
     ponytail() { return ponytailHair(); },
 
     /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
@@ -1263,6 +1424,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const backD = 'M200,58 C138,58 104,98 104,162 C104,220 94,262 104,300 C114,340 96,380 102,420 C108,460 96,490 108,524 Q126,512 142,528 Q160,512 178,526 Q200,512 222,526 Q240,512 258,528 Q274,512 292,524 C304,490 292,460 298,420 C304,380 286,340 296,300 C306,262 296,220 296,162 C296,98 262,58 200,58 Z';
       const lockLD = 'M138,128 C118,170 128,210 116,250 C104,290 128,330 118,370 C112,400 118,430 132,456 Q148,438 144,410 C142,380 136,350 144,320 C152,290 140,260 148,220 C152,190 150,160 154,146 Z';
       const wave = 'M132,170 C124,210 128,240 122,270 C116,300 132,330 126,370 C122,400 126,420 134,440';
+      // one long wavy front lock; m mirrors the left-side path to the right
       const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, MERMAID) + strand(m(wave), 2, MERMAID) +
         lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, MERMAID) + `</g>`;
       // shell clip above the left ear: a fan with ridges
@@ -1303,6 +1465,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
     /** Space buns: two round buns on top of the head with scrunchies. The buns hide under hats. */
     spacebuns(o = {}) {
+      // one bun at x with its scrunchie (colour c); s nudges the scrunchie inwards
       const bun = (x, s, c) => {
         const cy = 74;
         return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`) +
@@ -1347,7 +1510,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // locs in front, lying over the shoulders
       // roots tucked under the hair cap at the temples; they curve outwards so the face stays free
       const sideL = [[126, 150, 100, 220, 96, 312], [136, 140, 112, 230, 112, 332], [146, 136, 120, 200, 130, 300]];
+      // the three locs on one side lying over the shoulder; m = true for the right side
       const front = (s, m) => sideL.map(([x0, y0, cx, cy, x1, y1], i) => {
+        // x on this side (mirrored for the right)
         const X = v => m ? 400 - v : v;
         return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, BROWN, BEADS[(i + (m ? 2 : 0)) % 5]);
       }).join('');
@@ -1375,14 +1540,20 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     cherry() { return longestHair(CHERRY); },
   };
 
+  /** Draw a hairstyle by key. An unknown key or a style that fails falls back to her own loose hair (code FJ-D02). */
+  function drawHair(style, o = {}) {
+    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(o);
+    try { return HAIRSTYLES[style](o); }
+    catch (e) { fail('FJ-D02', style, e); return HAIRSTYLES.loose(o); }
+  }
+
   /* ---------------------------------------------------------------
      Doll renderer
      state: { hair: a key of HAIRSTYLES, worn:{slot:itemId}, mood:'smile'|'happy' }
      Returns the inner markup of an <svg viewBox="0 0 400 800">.
      --------------------------------------------------------------- */
   DOLL.renderDoll = function (state = {}) {
-    const hairDef = HAIRSTYLES[state.hair] || HAIRSTYLES.loose;
-    const hair = hairDef({ hat: !!(state.worn && state.worn.hat) });
+    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) });
     const layers = [];                      // [z, markup]
     layers.push([10, `<g class="hair-back">${hair.back}</g>`]);
     layers.push([20, `<g class="body">${drawBody()}</g>`]);
@@ -1417,7 +1588,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Hairstyle "items" so hair can be picked from the chest like clothes. */
   DOLL.hairstyles = Object.keys(HAIRSTYLES);
   DOLL.renderHairThumb = function (style) {
-    const h = HAIRSTYLES[style]();
+    const h = drawHair(style);
     return `<svg viewBox="70 40 260 340" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${h.back}<g>${drawFace('smile')}</g>${h.front}${drawEars()}</svg>`;
   };
 
@@ -1425,6 +1596,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   root.PALETTE = { SKIN, HAIR, EYE };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+</script>
+<script>
+FJ.loading('examples.js');
 /* =====================================================================
    Example garments – the reference style for every piece of clothing.
    Each shape draws in doll space (viewBox 0 0 400 800) using the G
@@ -1450,6 +1624,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
+  // turn a point [x, y] into the text 'x,y' (one decimal) for use in SVG paths
   const P = p => p[0].toFixed(1) + ',' + p[1].toFixed(1);
 
   /* -------------------------------------------------------------
@@ -1499,6 +1674,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const band = (y) => `<rect x="0" y="${y}" width="400" height="5" fill="${dark}"/><rect x="0" y="${y + 6}" width="400" height="9" fill="${mid}"/>` +
         Array.from({ length: 34 }, (_, i) => `<circle cx="${i * 12 + 4}" cy="${y + 10.5}" r="2.2" fill="${light}"/>`).join('');
       const rib = Array.from({ length: 50 }, (_, i) => `M${i * 5 + 76},442v12`).join('');
+      // two coloured bands near the wrist, for one side
       const cuff = side => `<path d="${G.armPath(side, .84, .88, 7)}" fill="${dark}"/><path d="${G.armPath(side, .89, .95, 7)}" fill="${mid}"/>`;
       return `<path d="${d}" fill="${H.pat('knit', base, shade(base, -.25), 10)}"/>` +
         `<g clip-path="${clip}">${yoke}${band(424)}<path d="${rib}" stroke="${ink(base)}" stroke-width="1.2" opacity=".35"/>${cuff('L')}${cuff('R')}</g>` +
@@ -1519,9 +1695,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const clip = H.clip('c-' + it.id, d);
       const hood = 'M148,264 C144,240 168,226 200,226 C232,226 256,240 252,264 Z';  // hood lying down behind the neck
       const collar = 'M186,244 Q172,250 168,266 Q184,272 199,262 Z M214,244 Q228,250 232,266 Q216,272 201,262 Z';
+      // patch pocket with a flap and a button; x is the left edge of the pocket
       const pocket = x => `<path d="M${x},402 h34 v24 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2"/>` +
         `<path d="M${x - 2},398 h38 v10 q-19,5 -38,0 Z" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>` +
         `<circle cx="${x + 17}" cy="${405}" r="2.4" fill="${ink(c)}"/>`;
+      // reflective stripe across the sleeve, for one side
       const strip = side => `<path d="${G.armPath(side, .7, .76, 9)}" fill="${refl}"/>`;
       const shine = `<path d="M142,300 Q132,330 134,380 Q138,338 150,306 Z" fill="#fff" opacity=".45"/>` +
         `<path d="M170,280 Q160,310 162,350 Q166,316 176,288 Z" fill="#fff" opacity=".35"/>`;
@@ -1549,6 +1727,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const c = it.colors[0], stitch = it.colors[1] || '#e7a54b';
       const d = G.pantsPath({ top: 398, bottom: 704, pad: 4, flare: 3 });
       const clip = H.clip('c-' + it.id, d);
+      // dashed stitching line along the given path
       const dash = (path) => `<path d="${path}" fill="none" stroke="${stitch}" stroke-width="1.5" stroke-dasharray="3 2.5" stroke-linecap="round"/>`;
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${clip}">` +
@@ -1594,6 +1773,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         for (let y = Math.floor((yEnd - 1) / 20) * 20; y > top; y -= 20) d += `L${(400 - xl(y)).toFixed(1)},${y}`;
         return d + `L${400 - wx},${top}Z`;
       };
+      // make a gradient for this item (id suffix + colour stops) and return it for use as a fill
       const g = (id, stops) => addGrad('ig-' + it.id + id, stops);
       const t3 = tier(700, 19, 12, true), t2 = tier(612, 26, 14), t1 = tier(526, 30, 14);
       /** Scalloped white frost band at hem height y (drawn just above a tier edge). */
@@ -1612,15 +1792,18 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const swirls = [[110, 660, 1], [170, 676, 1], [230, 668, -1], [290, 656, -1], [128, 586, 1], [272, 590, -1], [200, 640, 1], [150, 500, 1], [250, 496, -1]].map(a => swirl(...a)).join('');
       const flakes = [[118, 646, 10], [282, 640, 11], [200, 676, 9], [160, 570, 9], [244, 566, 10], [200, 488, 8], [134, 470, 6], [266, 468, 6]]
         .map(([x, y, r]) => H.flake(x, y, r, '#ffffff') + `<circle cx="${x}" cy="${y}" r="${r * .22}" fill="${lilac}"/>`).join('');
+      // little four-pointed sparkle at x,y with radius r
       const twinkle = (x, y, r) => `<path d="M${x},${y - r}Q${x},${y} ${x + r},${y}Q${x},${y} ${x},${y + r}Q${x},${y} ${x - r},${y}Q${x},${y} ${x},${y - r}Z" fill="#fff"/>`;
       const twinkles = [[140, 540, 5], [262, 530, 6], [104, 690, 4], [300, 684, 5], [186, 600, 4], [226, 616, 5], [176, 452, 4], [232, 444, 4]].map(a => twinkle(...a)).join('');
       // bodice, sleeves with fluffy trim, crystal belt, snowflake brooch
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 18 });
+      // row of five fluffy white balls along the sleeve edge, for one side
       const fluff = side => Array.from({ length: 5 }, (_, i) => { const [x, y] = G.armPoint(side, .25); const k = (i - 2) * 6.5; const sx = side === 'L' ? 1 : -1; return `<circle cx="${(x + sx * k * .96).toFixed(1)}" cy="${(y + k * .28).toFixed(1)}" r="5.2" fill="#fff" stroke="#c9dceb" stroke-width="1.2"/>`; }).join('');
       const belt = Array.from({ length: 9 }, (_, i) => H.diamond(160 + i * 10, 408, 5, i % 2 ? '#ffffff' : lilac)).join('');
       const brooch = H.flake(200, 300, 13, '#ffffff') + H.flake(200, 300, 7, lilac) + `<circle cx="200" cy="300" r="3.5" fill="#fff" stroke="${ink(deep)}" stroke-width="1"/>`;
       const tierCols = [[shade(deep, -.08), deep], [shade(deep, .18), shade(ice, -.05)], [ice, '#e8f7ff']];
+      // gradient fill for skirt tier number i (0 = top tier, 2 = bottom tier)
       const tierFill = (i) => g(String(i), [[0, tierCols[i][0]], [1, tierCols[i][1]]]);
       /** White frosted ruffle along a tier's scalloped hem. */
       const frost = d => `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="5" stroke-dasharray="0 1000"/>`;
@@ -1666,7 +1849,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [metal, gem, gem2] = it.colors;
       const { cx, cy, rx, ry } = G.head;
+      // point on the head outline at angle deg, pushed outward by off
       const at = (deg, off) => [cx + Math.cos(deg * Math.PI / 180) * (rx + off), cy + Math.sin(deg * Math.PI / 180) * (ry + off)];
+      // one pointed crown spike on the head outline at angle a, with height h and half-width w
       const peak = (a, h, w) => `M${P(at(a - w, 7))}Q${P(at(a - w * .35, 7 + h * .55))} ${P(at(a, 7 + h))}Q${P(at(a + w * .35, 7 + h * .55))} ${P(at(a + w, 7))}Z`;
       const peaks = [[234, 13, 8], [252, 19, 9], [270, 30, 10], [288, 19, 9], [306, 13, 8]].map(([a, h, w]) => peak(a, h, w)).join('');
       const outer = G.headArc(214, 326, 7, 24), inner = G.headArc(326, 214, 0, 24);
@@ -1687,6 +1872,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const heartD = (cx, cy, r) => `M${cx},${cy + r * .95} C${cx - r * 1.5},${cy + r * .05} ${cx - r * .95},${cy - r * 1.05} ${cx},${cy - r * .38} C${cx + r * .95},${cy - r * 1.05} ${cx + r * 1.5},${cy + r * .05} ${cx},${cy + r * .95} Z`;
   DOLL.shape('glasses-heart', {
     slot: 'glasses',
+    // heart-shaped see-through lenses over the eyes, with a frame and a bridge over the nose
     draw(it) {
       const frame = it.colors[0], lens = it.colors[1] || '#f7a6c2';
       const [[lx, ly], [rx, ry]] = G.eyes;
@@ -1707,8 +1893,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const c = it.colors[0], rim = it.colors[1] || shade(c, .25), sole = it.colors[2] || '#4a3b3f';
       const top = 612, low = 716, pad = 6, flare = 3;
+      // one boot (s = 'L' or 'R'): glossy shaft, rim and sole
       const side = (s) => {
         const L = s === 'L', X = x => L ? x : 400 - x;
+        // how far down the boot y is: 0 at the top edge, 1 at the bottom
         const k = y => (y - top) / (low - top);
         const outer = [], inner = [];
         for (let y = top; y <= low; y += 13) {
@@ -1738,6 +1926,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     slot: 'shoes',
     draw(it) {
       const c = it.colors[0], sole = it.colors[1] || '#5a3a3f';
+      // one Mary Jane shoe (s = 'L' or 'R'): shoe, sole, strap across the foot and a button
       const side = s => {
         const L = s === 'L', [fx, fy] = G.feet[L ? 0 : 1], o = L ? -1 : 1;
         const foot = G.footPath(s, 3, 2);
@@ -1771,6 +1960,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('heads.js');
 /* =====================================================================
    Headwear and accessories: hats, crowns, hairbands, glasses,
    earrings and necklaces.
@@ -1789,6 +1981,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Number formatting and point helpers. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // turn a point [x, y] into the text 'x,y' (one decimal) for use in SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
@@ -2060,6 +2253,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       if (it.kind === 'puffin') {
         // white face mask with two cheek lobes, dark eyes with the red eye ring and grey mark, striped beak
         const face = 'M150,96 C140,74 160,56 182,62 Q200,68 218,62 C240,56 260,74 250,96 Q200,90 150,96 Z';
+        // one bird eye at x: grey mark, red ring, dark pupil and a white glint
         const eye = x => `<path d="M${x - 10},${66} l6,4 l-6,4 Z" fill="#9aa3b4"/>` +
           `<circle cx="${x}" cy="72" r="6" fill="#e2573d"/><circle cx="${x}" cy="72" r="4.2" fill="#2a2430"/><circle cx="${x + 1.6}" cy="70.4" r="1.6" fill="#fff"/>`;
         const beak = 'M184,74 Q200,64 216,74 Q220,94 200,118 Q180,94 184,74 Z';
@@ -2232,6 +2426,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   DOLL.shape('head-wreath', {
     slot: 'hat',
     thumb: [104, 30, 192, 126],
+    // flower wreath: a leafy vine along the top of the head with flowers on it
     draw(it) {
       const leafC = it.colors[0];
       const arc = G.headArc(200, 340, 4, 28);
@@ -2264,6 +2459,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const loopL = 'M-2,0 C-10,-16 -28,-18 -28,-3 C-28,11 -12,12 -2,0 Z';
     const tailL = 'M-3,3 Q-9,16 -15,27 L-8,26 L-5,32 Q-1,18 2,4 Z';
     const fold = 'M-6,-2 Q-15,-8 -22,-5 M-6,2 Q-14,6 -21,4';
+    // one half of the bow (m = 1 left side, m = -1 mirrored right side): a loop, a tail and a fold line
     const half = (m) => `<g transform="scale(${m},1)"><path d="${tailL}" fill="${f}" stroke="${k}" stroke-width="${sw}" stroke-linejoin="round"/>` +
       `<path d="${loopL}" fill="${f}" stroke="${k}" stroke-width="${sw}" stroke-linejoin="round"/><path d="${loopL}" fill="url(#soft-r)"/>` +
       `<path d="${fold}" stroke="${k}" stroke-width="${n1(1.3 / s)}" fill="none" opacity=".5" stroke-linecap="round"/></g>`;
@@ -2275,6 +2471,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const butterfly = (cx, cy, s, col, spot, rot = 0) => {
     const k = ink(col), sw = n1(1.6 / s);
     const up = 'M0,-1 C-5,-15 -21,-18 -20,-6 C-19,1 -9,2 0,-1 Z', lo = 'M0,1 C-5,3 -16,6 -13,14 C-10,19 -3,10 0,1 Z';
+    // one side of the butterfly (m = 1 left, m = -1 mirrored right): upper wing, lower wing and two spots
     const half = m => `<g transform="scale(${m},1)"><path d="${up}" fill="${H.grad(col, 'r')}" stroke="${k}" stroke-width="${sw}"/><path d="${lo}" fill="${H.grad(shade(col, .15), 'r')}" stroke="${k}" stroke-width="${sw}"/>` +
       `<circle cx="-12" cy="-7" r="3.2" fill="${spot}"/><circle cx="-8" cy="8" r="2.2" fill="${spot}"/></g>`;
     return `<g transform="translate(${n1(cx)},${n1(cy)}) rotate(${rot}) scale(${s})">` + half(1) + half(-1) +
@@ -2299,6 +2496,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const top = it.top;
       // things standing behind the band (ears, horn) are drawn first
       if (top === 'cat') {
+        // cat ear pointing out at angle a, with a lighter inner ear
         const ear = a => { const b1 = at(a - 11, 4), b2 = at(a + 11, 4), tip = at(a, 34), i1 = at(a - 6, 8), i2 = at(a + 6, 8), it2 = at(a, 26);
           return `<path d="M${P(b1)}Q${P(at(a - 6, 24))} ${P(tip)}Q${P(at(a + 6, 24))} ${P(b2)}Z" fill="${H.grad(tc)}" stroke="${ink(tc)}" stroke-width="2.2" stroke-linejoin="round"/>` +
             `<path d="M${P(i1)}Q${P(at(a - 3, 20))} ${P(it2)}Q${P(at(a + 3, 20))} ${P(i2)}Z" fill="${td}" opacity=".9"/>`; };
@@ -2314,6 +2512,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         const horn = `M${n1(hx - 10)},${n1(hy + 2)} L${n1(hx - 1.5)},${n1(hy - 44)} Q${n1(hx)},${n1(hy - 47)} ${n1(hx + 1.5)},${n1(hy - 44)} L${n1(hx + 10)},${n1(hy + 2)} Z`;
         const hclip = H.clip('c-' + it.id + '-horn', horn);
         const spiral = [-6, -16, -26, -36].map(dy => `M${n1(hx - 12)},${n1(hy + dy + 4)} L${n1(hx + 12)},${n1(hy + dy - 4)}`).join('');
+        // unicorn ear at angle a
         const ear = a => { const b1 = at(a - 7, 4), b2 = at(a + 7, 4), tip = at(a - (a < 270 ? 4 : -4), 24);
           return `<path d="M${P(b1)}Q${P(at(a - 4, 18))} ${P(tip)}Q${P(at(a + 4, 18))} ${P(b2)}Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`; };
         out += ear(240) + ear(300) +
@@ -2413,6 +2612,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   DOLL.shape('head-specs', {
     slot: 'glasses',
+    // glasses: a frame in the chosen shape over both eyes, with tinted lenses
     draw(it) {
       const [frame, lens = '#ffffff', deco] = it.colors;
       const kind = it.kind || 'round', [lx, ly] = G.eyes[0];
@@ -2456,6 +2656,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const gid = 'gg-' + it.id;
       const lensFill = addGrad(gid, [[0, t1], [1, t2]]);
       if (it.kind === 'swim') {
+        // oval goggle cup around the eye at [x, y]
         const cup = ([x, y]) => `M${x - 19},${y + 1}a19,16 0 1 0 38,0a19,16 0 1 0 -38,0Z`;
         const strapL = 'M154,160 L112,158';
         const sl = `<path d="${strapL}" stroke="${ink(strap)}" stroke-width="7.6" stroke-linecap="round"/><path d="${strapL}" stroke="${strap}" stroke-width="5" stroke-linecap="round"/>`;
@@ -2492,8 +2693,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const kind = it.kind;
       // short gold/silver hook through the lobe, for dangling kinds
       const metal = it.metal || '#f2c34d';
+      // little metal hook through the earlobe, len long, with a small ring at the top
       const hook = (len) => `<path d="M${x},${y - 1} V${y + len}" stroke="${ink(metal)}" stroke-width="2.8" stroke-linecap="round"/><path d="M${x},${y - 1} V${y + len}" stroke="${metal}" stroke-width="1.4" stroke-linecap="round"/>` +
         `<circle cx="${x}" cy="${y}" r="2.4" fill="${H.grad(metal, 'r')}" stroke="${ink(metal)}" stroke-width="1"/>`;
+      // tiny white sparkle dot at gx, gy
       const glint = (gx, gy) => `<circle cx="${n1(gx)}" cy="${n1(gy)}" r="1.3" fill="#fff" opacity=".9"/>`;
       let m = '';
       if (kind === 'stud') {
@@ -2558,6 +2761,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   DOLL.shape('head-necklace', {
     slot: 'necklace',
+    // necklace: a chain along the curve of the neck with the chosen pendant or beads (it.kind)
     draw(it) {
       const [c, c2 = '#ffffff', c3 = c2] = it.colors;
       const kind = it.kind;
@@ -2690,6 +2894,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('face.js');
 /* =====================================================================
    Face paint (slot face, cat face): drawn on the face, under the front
    hair, so it can be worn together with glasses, hats and earrings.
@@ -2711,12 +2918,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   DOLL.shape('face-cat', {
     slot: 'face',
+    // cat face paint: a nose, a short line to the mouth and three whiskers on each cheek
     draw(it) {
       const [noseC, whiskC] = it.colors;
       const noseFill = it.rainbow
         ? H.def('g-' + it.id, '<linearGradient id="g-' + it.id + '" x1="0" y1="0" x2="1" y2="0">' +
             ['#ef5b6c', '#f6a447', '#f2cf3b', '#5fc46d', '#4aa8e0', '#9b72e0'].map((c, i) => `<stop offset="${i / 5}" stop-color="${c}"/>`).join('') + '</linearGradient>')
         : noseC;
+      // flip a path to the other cheek (every x becomes 400 - x)
       const mirror = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => (400 - x) + ',' + y);
       // one whisker: soft light halo underneath, then the paint line
       const whisker = (d, c) =>
@@ -2742,6 +2951,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('wrists.js');
 /* =====================================================================
    Bracelets and bangles (slot bracelet, cat bracelet).
    Drawn in local "wrist space", exactly like the mittens: the wrist is
@@ -2759,6 +2971,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const BR = 14;          // half width of a bracelet round the forearm
   const Y = -6;           // bracelet centre, just above the wrist
   const SAG = 3;          // how much the front of the ring curves down (makes it look round)
+  // round a number to one decimal and turn it into text
   const n1 = v => (Math.round(v * 10) / 10).toString();
 
   /** Put local wrist-space markup on one wrist (same transform as the hand). */
@@ -2869,6 +3082,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   };
   DOLL.shape('wrist-charm', {
     slot: 'bracelet',
+    // charm bracelet: a thin chain ring with two or three little charms hanging from it
     draw(it) {
       const metal = it.colors[0];
       let m = `<path d="M${-BR},${Y} Q0,${Y + SAG * 2} ${BR},${Y}" stroke="${ink(metal)}" stroke-width="3" fill="none" stroke-linecap="round"/>` +
@@ -2981,6 +3195,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('tops.js');
 /* =====================================================================
    Tops, sweaters and jackets.
    Same rules as examples.js: every piece is drawn in doll space
@@ -3008,7 +3225,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Mirror x for side 'R'. */
   const X = (side, x) => (side === 'L' ? x : 400 - x);
+  /** Round a number to 1 decimal, as text. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  /** "x,y" text of a point, rounded for path strings. */
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror a list of points to the right side. */
   const mirrorPts = pts => pts.map(([x, y]) => [400 - x, y]);
@@ -3096,6 +3315,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     /** Puffin seen from the front: black body, white face and belly, big striped beak, orange feet. */
     puffin(cx, cy) {
       const blk = '#2f2b36', wh = '#fbf8f2', org = '#f2793a', face = '#ece8e4';
+      // one little puffin wing (s is -1 for left, +1 for right)
       const wing = s => `<path d="M${cx + s * 21},${cy + 2} Q${cx + s * 31},${cy + 20} ${cx + s * 19},${cy + 36} Q${cx + s * 15},${cy + 18} ${cx + s * 21},${cy + 2}Z" fill="#45404f" stroke="${ink(blk)}" stroke-width="1.4"/>`;
       return `<path d="M${cx - 16},${cy + 38} l7,-6 l7,6 Z M${cx + 2},${cy + 38} l7,-6 l7,6 Z" fill="${org}" stroke="${ink(org)}" stroke-width="1.6" stroke-linejoin="round"/>` +
         // body: black back, white belly
@@ -3119,6 +3339,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const wh = '#fffafc', line = '#b48aa6';
       const mane = [['#f59ac0', -20, -12, 10], ['#b99af0', -24, 2, 9], ['#8fd0f2', -22, 15, 8], ['#f59ac0', 20, -12, 10], ['#b99af0', 24, 2, 9], ['#8fd0f2', 22, 15, 8]]
         .map(([c, dx, dy, r]) => `<circle cx="${cx + dx}" cy="${cy + dy}" r="${r}" fill="${c}" stroke="${ink(c)}" stroke-width="1.4"/>`).join('');
+      // one unicorn ear with pink inside (s is -1 for left, +1 for right)
       const ear = s => `<path d="M${cx + s * 10},${cy - 16} L${cx + s * 19},${cy - 32} L${cx + s * 21},${cy - 12}Z" fill="${wh}" stroke="${line}" stroke-width="1.6" stroke-linejoin="round"/>` +
         `<path d="M${cx + s * 13},${cy - 17} L${cx + s * 18.5},${cy - 27} L${cx + s * 19.5},${cy - 15}Z" fill="#f7bfd2"/>`;
       return mane + ear(-1) + ear(1) +
@@ -3149,6 +3370,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       let s = '';
       cols.forEach((c, i) => { const r = 34 - i * 5; s += `<path d="M${cx - r},${cy + 14} A${r},${r} 0 0 1 ${cx + r},${cy + 14}" fill="none" stroke="${c}" stroke-width="5.4"/>`; });
       s += `<path d="M${cx - 36.7},${cy + 14} A36.7,36.7 0 0 1 ${cx + 36.7},${cy + 14} M${cx - 6.3},${cy + 14} A6.3,6.3 0 0 1 ${cx + 6.3},${cy + 14}" fill="none" stroke="#9a7aa8" stroke-width="1.2" opacity=".6"/>`;
+      // small white cloud at the foot of the rainbow, centred on x
       const cloud = x => `<path d="M${x - 14},${cy + 22} a7,7 0 0 1 3,-12 a9,9 0 0 1 16,-3 a7,7 0 0 1 10,8 a6,6 0 0 1 -1,7 Z" fill="#fff" stroke="#a9bfd6" stroke-width="1.6" stroke-linejoin="round"/>`;
       return s + cloud(cx - 30) + cloud(cx + 28);
     },
@@ -3192,6 +3414,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         // sleeve colour: everything outside the seam line from the neck to the armpit
         const rc = it.colors[3];
         const clip = H.clip('c-' + it.id, d);
+        // raglan sleeve area on one side (side L or R)
         const reg = side => H.polyPath([[X(side, 186), 230], [X(side, 186), 252], [X(side, 150), 314], [X(side, 140), 332], [X(side, 120), 480], [X(side, 0), 480], [X(side, 0), 230]]);
         raglan = `<g clip-path="${clip}"><path d="${reg('L')}${reg('R')}" fill="${H.grad(rc)}"/></g>` +
           H.line('M185,253 L150,314 M215,253 L250,314', rc, 1.8, .6);
@@ -3278,6 +3501,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         if (side === 'R') dd = dd.replace(/(-?\d+\.?\d*),(-?\d+\.?\d*)/g, (m, x, y) => n1(400 - parseFloat(x)) + ',' + y);
         return dd;
       };
+      // the two stacked frills on one sleeve (side L or R)
       const frills = side => {
         const a = tier(side, .3, -.5), b = tier(side, .2, -2);   // widths kept inside a sweater sleeve
         return `<path d="${a}" fill="${H.grad(shade(fr, -.08))}"/>` + outline(a, shade(fr, -.1), 'h') +
@@ -3329,6 +3553,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const ny = neckY('v', 5);
       // left collar flap: from the neck out over the shoulder and down to the V point; mirrored
       const flap = side => H.polyPath([[X(side, 183), ny], [X(side, 160), 257], [X(side, 147), 266], [X(side, 158), 290], [X(side, 200), ny + 46], [X(side, 200), ny + 44]]);
+      // two sailor stripes on one collar flap (side L or R)
       const stripes = side => `M${X(side, 151)},270 L${X(side, 163)},288 L${X(side, 196)},${ny + 40}M${X(side, 155)},266 L${X(side, 165)},282 L${X(side, 196)},${ny + 34}`;
       const knot = `<path d="M200,${ny + 46} l-14,26 l8,2 l6,-14 l6,14 l8,-2 Z" fill="${H.grad(scarf)}" stroke="${ink(scarf)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<ellipse cx="200" cy="${ny + 46}" rx="7" ry="6" fill="${H.grad(scarf, 'r')}" stroke="${ink(scarf)}" stroke-width="1.8"/>`;
@@ -3438,6 +3663,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       let yoke = `<path d="${annulus(cx, cy, 93, 97)}" fill="${dark}" fill-rule="evenodd"/>`;
       // stepped "tree" teeth pointing outward, then a light band with dark crosses
       for (let a = 0; a < 360; a += 15) {
+        // point of a tooth shape: radius k[0], angle offset k[1] from the current angle a
         const p = k => P(pol(cx, cy, k[0], a + k[1]));
         yoke += `<path d="M${p([78, -6])}L${p([84, -6])}L${p([84, -3])}L${p([92, 0])}L${p([84, 3])}L${p([84, 6])}L${p([78, 6])}Z" fill="${dark}"/>`;
       }
@@ -3522,6 +3748,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const ny = neckY('v', 8);
       // front edge bands: from the neck down the V and on to the hem
       const band = `M${200 - 17},${n1(ny)} L200,${n1(ny + 52)} L200,456 M${200 + 17},${n1(ny)} L200,${n1(ny + 52)}`;
+      // small patch pocket whose left edge is at x
       const pocket = x => `<path d="M${x},398 h28 v22 q0,6 -6,6 h-16 q-6,0 -6,-6 Z" fill="${H.fill(it)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<rect x="${x}" y="398" width="28" height="6" fill="${edge}" stroke="${ink(c)}" stroke-width="1.4"/>`;
       const buttons = [320, 352, 384, 416].map(y => button(200, y, 4.2, btn)).join('');
@@ -3565,6 +3792,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         for (let x = 64; x < 340; x += 10) inside += `<circle cx="${x}" cy="${y0 - 12}" r="1.8" fill="${bc}"/><circle cx="${x + 5}" cy="${y1 + 12}" r="1.8" fill="${bc}"/>`;
       }
       if (it.cable) {
+        // one twisted cable-knit rope running down the front at x
         const rope = x => { let s = `M${x},266`; for (let y = 266; y < 440; y += 16) s += `q8,8 0,16`; let t = `M${x},266`; for (let y = 266; y < 440; y += 16) t += `q-8,8 0,16`; return s + t; };
         inside += `<path d="${rope(178)}${rope(222)}${rope(200)}" stroke="${shade(c, -.25)}" stroke-width="2.4" fill="none" opacity=".7"/>` +
           `<path d="M166,266V440M190,266V440M210,266V440M234,266V440" stroke="${shade(c, -.2)}" stroke-width="1.5" opacity=".6"/>`;
@@ -3656,6 +3884,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
           `<path d="M${x - 2},304 h34 v10 l-17,7 l-17,-7 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
           stitch(`M${x + 1},308h28`, st) + button(x + 15, 313, 3.2, btn);
       };
+      // sleeve cuff on one side (with stitching and a button)
       const cuff = side => `<path d="${G.armPath(side, .88, 1, 8.6)}" fill="${H.grad(shade(c, .06))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         stitch(seamAcross(side, .9, hwAt(.9) + 8, 1), st) + button(...G.armPoint(side, .95), 2.8, btn);
       const inner = `<g clip-path="${clip}">` +
@@ -3701,6 +3930,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // sleeve quilting (left computed, right mirrored inside seamAcross)
       let sq = '';
       for (const t of [.18, .38, .58, .78]) for (const side of ['L', 'R']) sq += seamAcross(side, t, hwAt(t) + 9, 4);
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .92, 1, 7.5)}" fill="${H.grad(shade(c, -.12))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       const collar = 'M174,262 Q170,246 178,236 Q200,230 222,236 Q230,246 226,262 Q200,252 174,262Z';
       const hood = it.hood ? `<path d="M140,270 C132,232 164,214 200,214 C236,214 268,232 260,270 Z" fill="${H.grad(shade(c, -.12))}" stroke="${ink(c)}" stroke-width="${SW}"/>` +
@@ -3733,7 +3963,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const bottom = 462;
       const d = G.shirtPath({ sleeve: 1, pad: 11, sleevePad: 8, bottom, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, d);
+      // shoulder yoke panel on one side (side L or R)
       const yoke = side => H.polyPath([[X(side, 200), 230], [X(side, 200), 300], [X(side, 160), 304], [X(side, 136), 330], [X(side, 60), 340], [X(side, 60), 230]]);
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, 7)}" fill="${H.grad(tr)}" stroke="${ink(tr)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       return `<path d="${d}" fill="${H.pat('dots', c, shade(c, .14), 7)}"/>` +
         `<g clip-path="${clip}"><path d="${yoke('L')}${yoke('R')}" fill="${H.grad(tr)}"/>` +
@@ -3771,6 +4003,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<rect x="210" y="${y - 6}" width="14" height="12" rx="3" fill="${H.grad(cord)}" stroke="${ink(cord)}" stroke-width="1.3"/>` +
         `<path d="M214,${y - 2.5} H194 M214,${y + 2.5} H194" stroke="${shade(cord, .15)}" stroke-width="2.2" stroke-linecap="round"/>` +
         `<rect x="${190}" y="${y - 12}" width="8" height="24" rx="4" fill="${H.grad(tog, 'h')}" stroke="${ink(tog)}" stroke-width="1.5" transform="rotate(14 194 ${y})"/>`;
+      // patch pocket whose left edge is at x
       const pocket = x => `<path d="M${x},424 h34 v30 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(shade(c, -.03))}" stroke="${ink(c)}" stroke-width="2"/>` +
         stitch(`M${x + 3},428 h28`, shade(c, .3), 1.2);
       return {
@@ -3813,6 +4046,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const belt = `<g clip-path="${clip}"><rect x="0" y="394" width="400" height="14" fill="${H.grad(beltc)}"/><path d="M0,394H400M0,408H400" stroke="${ink(beltc)}" stroke-width="1.6"/></g>` +
         `<rect x="190" y="391" width="20" height="20" rx="3" fill="none" stroke="#c9a14a" stroke-width="3.2"/>` +
         `<path d="M212,402 q8,10 4,30 l7,2 q2,-20 -5,-32 Z" fill="${H.grad(beltc)}" stroke="${ink(beltc)}" stroke-width="1.6" stroke-linejoin="round"/>`;
+      // shoulder strap on one side (side L or R)
       const strap = side => {
         const [o, i] = across(side, .84, hwAt(.84) + 8.6), [o2, i2] = across(side, .89, hwAt(.89) + 8.6);
         return `<path d="M${P(o)}L${P(i)}L${P(i2)}L${P(o2)}Z" fill="${H.grad(beltc)}" stroke="${ink(c)}" stroke-width="1.6" stroke-linejoin="round"/>`;
@@ -3842,6 +4076,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const edge = [[192, 236], [190, 270], [184, 320], [170, 362], [150, 392]];
       const o = openFront(it.id, edge);
       const shine = `<path d="M142,300 Q132,330 134,380 Q138,338 150,306 Z" fill="#fff" opacity=".45"/>`;
+      // sleeve cuff on one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, 10.4)}" fill="${H.grad(tr)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       // beads along each front edge (left computed, right mirrored)
       let beads = '';
@@ -3876,6 +4111,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const d = G.shirtPath({ sleeve: 1, pad: 11, sleevePad: 8, bottom, flare: 5, neck: 'v', neckDepth: 30 });
       const clip = H.clip('c-' + it.id, d);
       const edge = openEdge(236, bottom, 186, 174);
+      // knit patch pocket on one side (side L or R)
       const pocket = side => { const x = side === 'L' ? 132 : 400 - 132 - 34; return `<path d="M${x},440 h34 v32 q0,6 -6,6 h-22 q-6,0 -6,-6 Z" fill="${H.pat('knit', c, shade(c, -.2), 10)}" stroke="${ink(c)}" stroke-width="1.8"/><rect x="${x}" y="440" width="34" height="7" fill="${band}" stroke="${ink(c)}" stroke-width="1.4"/>`; };
       const inner = `<g clip-path="${clip}">${ribHem(bottom - 14, bottom, band)}</g>` +
         `<path d="${G.armPath('L', .86, 1, 8.6)}${G.armPath('R', .86, 1, 8.6)}" fill="${H.grad(band)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
@@ -3914,6 +4150,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('dresses.js');
 /* =====================================================================
    Dresses, capes/wings, swimwear and pyjamas.
    Princess dresses (cat 'dress'), everyday dresses (cat 'frock'),
@@ -3958,6 +4197,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   function edge(pts) {
     const dense = [];
+    // Catmull-Rom spline: smooth value between b and c at t (0 to 1), using the neighbours a and d to shape the curve
     const cr = (a, b, c, d, t) => .5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
     for (let i = 0; i < pts.length - 1; i++) {
       const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
@@ -4003,6 +4243,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    * Returns { d (closed path), hemD (open hem line), x0, n, w, y, amp }.
    */
   function tier(xl, top, yEnd, type, step, amp, pad = 0) {
+    // x of the skirt edge at height y, pushed outward by pad the nearer y gets to the hem
     const X = y => xl(y) - pad * Math.max(0, Math.min(1, (y - top) / Math.max(1, yEnd - top)));
     const ys = [];
     for (let y = top + 18; y < yEnd - 6; y += 18) ys.push(y);
@@ -4130,10 +4371,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   };
   /** Pearl: small white bead with a pearly radial gradient. */
   const pearlFill = () => H.def('dr-pearl', '<radialGradient id="dr-pearl" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f3eef6"/><stop offset="1" stop-color="#cfc3d8"/></radialGradient>');
+  // one pearl: a small circle at x,y with radius r
   const pearl = (x, y, r) => `<circle cx="${F(x)}" cy="${F(y)}" r="${F(r)}" fill="${pearlFill()}" stroke="#a99bb4" stroke-width=".9"/>`;
   /** Pearls along a quadratic curve a → (control c) → b, drawn as ONE dotted stroke (round dashes of length 0),
       a grey rim underneath and a small white highlight dot on each pearl. n = number of pearls. */
   const pearlString = (a, c, b, n, r) => {
+    // total length of the curve, measured by adding up 20 short straight steps
     const len = (() => { let L = 0, p = a; for (let i = 1; i <= 20; i++) { const t = i / 20, u = 1 - t, q = [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; L += Math.hypot(q[0] - p[0], q[1] - p[1]); p = q; } return L; })();
     const gap = F(len / Math.max(1, n - 1)), d = `M${P(a)}Q${P(c)} ${P(b)}`;
     return `<path d="${d}" fill="none" stroke="#a99bb4" stroke-width="${F(2 * r + 1.6)}" stroke-dasharray="0 ${gap}" stroke-linecap="round"/>` +
@@ -4245,6 +4488,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // puff sleeves finished with a row of rose petals pointing down the arm
       const sleeves = G.shirtPath({ sleeve: .22, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const sw = armHW(.22) + 11;
+      // row of five petals across the sleeve edge, for one side
       const petalTrim = side => [-.8, -.4, 0, .4, .8].map((k, i) => {
         const [x, y] = armN(side, .225, k * sw), a = armAng(side, .225) - 90;
         return `<ellipse cx="${F(x)}" cy="${F(y)}" rx="6.5" ry="9" transform="rotate(${F(a)} ${F(x)} ${F(y)})" fill="${H.grad(i % 2 ? cream : pink)}" stroke="${ink(deep)}" stroke-width="1.4"/>`;
@@ -4292,6 +4536,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // flutter sleeves: wide short sleeves; band width follows the sleeve flare
       const fl = t => armHW(t) + 6 + 14 * Math.max(0, (t - .12) / .18);
       const sleeves = G.shirtPath({ sleeve: .3, pad: 3, sleevePad: 6, sleeveFlare: 14, bottom: 380, neck: 'round' });
+      // orange band around the sleeve (positions run 0 = shoulder to 1 = wrist), for one side
       const band = side => `<path d="${G.armPath(side, .262, .3, fl(.262) - armHW(.262) + .5, fl(.3) - fl(.262))}" fill="${H.grad(orange)}"/>`;
       const folds = ['L', 'R'].map(s => [-.5, 0, .5].map(k => `M${P(armN(s, .1, k * 12))}L${P(armN(s, .28, k * 26))}`).join('')).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
@@ -4336,7 +4581,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const fluff = [[130, 560], [270, 548], [176, 520], [226, 500], [150, 470], [250, 452], [200, 580]].map(([x, y]) => twinkle(x, y, 3.5)).join('');
       // long bell sleeves with a purple cuff band and white lace dots
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 3, sleeveFlare: 12, bottom: 360, neck: 'scoop' });
+      // half-width of the bell sleeve at position t along the arm (gets wider toward the wrist)
       const cw = t => armHW(t) + 3 + 12 * Math.max(0, (t - .12) / .88);
+      // purple cuff band near the wrist plus a row of six white lace dots, for one side
       const cuff = side => `<path d="${G.armPath(side, .9, 1, cw(.9) - armHW(.9) + .5, cw(1) - cw(.9))}" fill="${H.grad(purple)}"/>` +
         Array.from({ length: 6 }, (_, i) => { const p = armN(side, .87, -cw(.87) + 2 * cw(.87) * (i + .5) / 6); return `<circle cx="${F(p[0])}" cy="${F(p[1])}" r="1.8" fill="#fff"/>`; }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 344, neck: 'scoop', neckDepth: 14 });
@@ -4385,6 +4632,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // wavy sleeves with foam trim + a pearl drop
       const sleeves = G.shirtPath({ sleeve: .22, pad: 3, sleevePad: 7, sleeveFlare: 6, bottom: 380, neck: 'scoop' });
       const sw = armHW(.22) + 7 + 6;
+      // row of white foam balls along the sleeve edge, for one side
       const foamTrim = side => cuffBalls(side, .225, sw - 2, 4.6, '#ffffff', '#b7e3e6', 5);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 16 });
       const ribs = Array.from({ length: 9 }, (_, i) => { const a = (210 + i * 15) * Math.PI / 180; return `M200,420L${F(200 + Math.cos(a) * 170)},${F(420 + Math.sin(a) * 170)}`; }).join('');
@@ -4422,7 +4670,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         .map(([x, y, r], i) => i % 3 === 0 ? H.star(x, y, r + 1, '#fff') : twinkle(x, y, r + .5)).join('');
       // see-through tulle puff sleeves with a rainbow band
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 9, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
+      // half-width of the puff sleeve at position t along the arm
       const sw = t => armHW(t) + 9 + 3 * Math.max(0, (t - .12) / .12);
+      // rainbow band around the sleeve edge, for one side
       const band = side => `<path d="${G.armPath(side, .205, .24, sw(.205) - armHW(.205) + .5, sw(.24) - sw(.205))}" fill="${H.pat('rainbow', '#fff', '#fff', 12)}"/>`;
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 14 });
       const arcs = RB.map((c, i) => `<path d="M${172 + i * 3.4},${346} a${28 - i * 3.4},${28 - i * 3.4} 0 0 1 ${56 - i * 6.8},0" fill="none" stroke="${c}" stroke-width="3.6"/>`).join('');
@@ -4455,6 +4705,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const pinkG = lg(`dr-${it.id}-pk`, [[0, pinkA, 0], [.3, pinkA, .8], [.7, mix(pinkA, '#b48cf0', .5), .8], [1, '#b48cf0', 0]], 'h');
       const veil = tier(xl, top, 590, 'scallop', 26, 12, 4);
       const curtainG = lg(`dr-${it.id}-cur`, [[0, green, .55], [1, green, 0]]);
+      // one wavy aurora ribbon starting at height y0; amp = how much it waves, th = how thick it is
       const ribbon = (y0, amp, th) => {
         const top1 = `M40,${y0} C120,${y0 - amp} 200,${y0 + amp} 280,${y0 - amp * .2} S360,${y0 - amp} 380,${y0 - amp * .6}`;
         const bot = `L380,${y0 - amp * .6 + th} C360,${y0 - amp + th} 320,${y0 - amp * .2 + th * 1.2} 280,${y0 - amp * .2 + th} C200,${y0 + amp + th} 120,${y0 - amp + th} 40,${y0 + th}Z`;
@@ -4467,7 +4718,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         .map(([x, y], i) => i % 2 ? H.star(x, y, 3.6, star) : twinkle(x, y, 4, '#fff')).join('');
       // long sheer starry sleeves, aurora cuff, row of little stars
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 2, sleeveFlare: 4, bottom: 360, neck: 'scoop' });
+      // half-width of the sheer sleeve at position t along the arm (flares a little toward the wrist)
       const cw = t => armHW(t) + 2 + 4 * Math.max(0, (t - .12) / .88);
+      // green aurora cuff near the wrist with three little stars, for one side
       const cuff = side => `<path d="${G.armPath(side, .92, 1, cw(.92) - armHW(.92) + .5, cw(1) - cw(.92))}" fill="${H.grad(green)}"/>` +
         [-.6, 0, .6].map(k => { const p = armN(side, .84, k * cw(.84)); return H.star(p[0], p[1], 3.2, star); }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
@@ -4500,17 +4753,19 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const top = 404, xl = edge([[top, 141.5], [450, 129], [488, 118], [570, 87], [640, 68], [704, 58]]);
       const petti = tier(xl, top, 696, 'scallop', 16, 8);
       const over = tier(xl, top, 606, 'scallop', 50, 24, 4);
-      const rick = j => { let d = `M${F(j.x0)},${j.y}`; return d; };
       // white rick-rack follows the overskirt scallops a little inside
       const rickrack = `<path d="${over.hemD}" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="4 3" stroke-linecap="round" transform="translate(0,-6)"/>`;
       const berries = joins(over).map(([x, y]) => `<path d="M${F(x)},${F(y - 2)} v8" stroke="${shade(green, -.2)}" stroke-width="2"/>` + H.berry(x, y + 18, 11) +
         `<circle cx="${F(x - 3)}" cy="${F(y + 16)}" r="1.2" fill="#ffe9a8"/><circle cx="${F(x + 3)}" cy="${F(y + 20)}" r="1.2" fill="#ffe9a8"/><circle cx="${F(x)}" cy="${F(y + 24)}" r="1.2" fill="#ffe9a8"/>`).join('');
       const blossoms = [[120, 668], [168, 656], [232, 660], [280, 664], [200, 680], [144, 640], [256, 644]].map(([x, y], i) => i % 2 ? H.berry(x, y, 8) : H.flower(x, y, 7, '#ffffff')).join('');
+      // green leafy collar: a zigzag of pointed tips across the top of the bodice
       const calyx = (() => { let d = `M${F(G.torsoX(404) - 4)},400`; const x0 = G.torsoX(404) - 4, n = 9, w = (400 - 2 * x0) / n; for (let i = 0; i < n; i++) d += `l${F(w / 2)},${i % 2 ? 16 : 22}l${F(w / 2)},${i % 2 ? -16 : -22}`; return d + `L${F(400 - x0)},396Q200,392 ${F(x0)},396Z`; })();
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'round' });
       const sw = armHW(.24) + 11;
+      // scalloped white lace edge across the sleeve, for one side
       const lace = side => { const a = armN(side, .245, -sw), b = armN(side, .245, sw); let d = `M${P(a)}`; const n = 6; for (let i = 1; i <= n; i++) { const p = [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]; const m = [a[0] + (b[0] - a[0]) * (i - .5) / n, a[1] + (b[1] - a[1]) * (i - .5) / n + 5]; d += `Q${P(m)} ${P(p)}`; } return `<path d="${d}" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>`; };
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round' });
+      // round collar for one side (s = 'L' or 'R'); the right side is the left one mirrored around x = 200
       const collar = s => { const X = x => s === 'L' ? x : 400 - x; return `<path d="M${X(200)},262 C${X(190)},262 ${X(186)},256 ${X(183)},251 C${X(170)},252 ${X(158)},262 ${X(162)},276 C${X(168)},290 ${X(192)},286 ${X(200)},264Z" fill="${H.grad(cream)}" stroke="${ink(pink)}" stroke-width="2" stroke-linejoin="round"/>`; };
       return `<path d="${petti.d}" fill="${H.pat('check', '#ffffff', pink, 14)}"/><path d="${petti.d}" fill="url(#soft-h)" opacity=".35"/>` + outline(petti.d, pink) +
         hemTrim(petti.hemD, '#ffffff', pink, 6) + blossoms +
@@ -4554,6 +4809,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const tw = twinkles([[118, 690, 4], [284, 688, 4], [180, 620, 3.5], [222, 616, 3.5], [126, 590, 3], [276, 586, 3], [172, 520, 3], [228, 516, 3], [150, 470, 3], [250, 468, 3]]);
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 4, bottom: 380, neck: 'scoop' });
       const sw = armHW(.24) + 12;
+      // four gold stars across the sleeve edge, for one side
       const starTrim = side => [-.7, -.23, .23, .7].map(k => { const p = armN(side, .235, k * sw); return H.star(p[0], p[1], 4, gold); }).join('');
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 14 });
       const np = neckPts('scoop', 14, 2, 10);
@@ -4637,8 +4893,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const streaks = '<path d="M120,520 Q108,600 100,680 L112,680 Q118,600 128,522Z M262,500 Q274,600 284,680 L292,680 Q282,600 268,500Z" fill="#fff" opacity=".14"/>';
       const hollies = [[200, 422, .9], [180, 520, .65], [220, 520, .65], [164, 610, .7], [236, 610, .7]].map(([x, y, s]) => holly(x, y, s, holly_)).join('');
       const sleeves = G.shirtPath({ sleeve: 1, pad: 2, sleevePad: 3, sleeveFlare: 3, bottom: 360, neck: 'round' });
+      // half-width of the sleeve at position t along the arm (flares a little toward the wrist)
       const cw = t => armHW(t) + 3 + 3 * Math.max(0, (t - .12) / .88);
+      // gold band around the sleeve, for one side
       const sband = side => `<path d="${G.armPath(side, .3, .34, cw(.3) - armHW(.3) + .4, cw(.34) - cw(.3))}" fill="${H.grad(gold)}"/>`;
+      // two rows of fluffy white balls at the wrist (a fur cuff), for one side
       const furCuff = side => cuffBalls(side, .93, cw(.93) + 1, 5.6, H.grad('#ffffff', 'r'), '#cfc6cf', 5) + cuffBalls(side, .965, cw(.965) - 1, 5, H.grad('#ffffff', 'r'), '#cfc6cf', 4);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round', neckDepth: 12 });
       let lacing = '';
@@ -4687,6 +4946,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // puffy sleeves in soft blue with a cloud-puff edge at the cuff
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 10, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const sw = armHW(.24) + 12;
+      // row of fluffy white balls along the sleeve edge, for one side
       const puffs = side => `<path d="${sleeves}" fill="none"/>` + cuffBalls(side, .235, sw - 3, 6.2, H.grad('#ffffff', 'r'), '#c9cde6', 5);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 15 });
       const np = neckPts('scoop', 15, 2, 13);
@@ -4720,10 +4980,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const puffins = puffin(136, 616, 1.05, 1) + puffin(200, 618, 1.15, 1) + puffin(264, 616, 1.05, -1);
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 450, neck: 'round', neckDepth: 10 });
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'round' });
+      // half-width of the sleeve at position t along the arm
       const sw = t => armHW(t) + 8 + 3 * Math.max(0, (t - .12) / .12);
+      // two navy stripes around the sleeve, for one side
       const cuff = side => `<path d="${G.armPath(side, .2, .215, sw(.2) - armHW(.2) + .5, sw(.215) - sw(.2))}" fill="${navy}"/><path d="${G.armPath(side, .225, .24, sw(.225) - armHW(.225) + .5, sw(.24) - sw(.225))}" fill="${navy}"/>`;
       // sailor collar: big square-ended collar over the shoulders with a V at the front
       const collarL = 'M183,251 L200,298 L200,322 L172,306 Q152,294 146,272 Q156,258 168,254 Z';
+      // sailor collar outline for one side: the left one as written, the right one mirrored (x becomes 400 - x)
       const collar = side => { const d = side === 'L' ? collarL : collarL.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => `${400 - +x},${y}`); return d; };
       const cl = collar('L'), cr = collar('R');
       const stripeL = 'M178,258 Q160,262 154,274 Q160,292 176,301 L196,312';
@@ -4781,6 +5044,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   };
   /** Round "Peter Pan" collar, left half drawn and mirrored for the right. */
   const peterCollar = (c, line, y = 262) => ['L', 'R'].map(sd => {
+    // x of the same point on the right side (mirror of the left, around x = 200)
     const X = x => sd === 'L' ? x : 400 - x;
     return `<path d="M${X(200)},${y} C${X(190)},${y} ${X(186)},${y - 6} ${X(183)},${y - 11} C${X(168)},${y - 10} ${X(156)},${y + 2} ${X(161)},${y + 15} C${X(168)},${y + 29} ${X(193)},${y + 25} ${X(200)},${y + 2}Z" fill="${H.grad(c)}" stroke="${ink(line)}" stroke-width="2" stroke-linejoin="round"/>` +
       `<path d="M${X(197)},${y + 6} C${X(190)},${y + 20} ${X(172)},${y + 22} ${X(165)},${y + 13}" fill="none" stroke="${ink(line)}" stroke-width="1.3" stroke-dasharray="2 3" opacity=".6"/>`;
@@ -4921,6 +5185,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const hemY = it.hem || 586;
       const blouseFill = it.pattern ? H.pat(it.pattern, blouse, it.patternColor || trim, it.patternSize || 14) : H.grad(blouse);
       const bl = G.shirtPath({ sleeve: it.sleeve ?? .3, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 420, neck: 'round' });
+      // band at the end of the sleeve, in a slightly darker blouse colour, for one side
       const cuff = sd => sleeveBand(sd, (it.sleeve ?? .3) - .04, it.sleeve ?? .3, it.sleeve ?? .3, 8, 3, H.grad(shade(blouse, -.05)));
       const xw = G.torsoX(404) - 2;
       const xl = edge([[398, xw], [450, 131], [486, 122], [hemY, 100]]);
@@ -5459,6 +5724,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('bottoms.js');
 /* =====================================================================
    Bottoms group: trousers, leggings, dungarees, shorts, skirts,
    snowsuits (kuldagallar) and rain bib trousers (pollabuxur).
@@ -5479,6 +5747,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Number formatting for path strings. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded for path strings
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror x for side 'R'. */
   const XS = (side, x) => side === 'R' ? 400 - x : x;
@@ -5504,10 +5773,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   const trousers = ({ top = 398, bottom = 700, pad = 3, flare = 0, crotchDrop = 0 }) => {
     const crotch = G.crotchY + 2 + pad * .4 + crotchDrop;
+    // how far down the leg y is: 0 at the hip, 1 at the hem
     const k = y => Math.max(0, (y - 476) / Math.max(1, bottom - 476));
     // waist → hip: eased curve from the waist width out to the hip (no step at the waistband)
     const hipY = Math.max(top + 30, 446), x0 = G.torsoX(top), x1 = G.legOutX(hipY);
+    // smooth curve from 0 to 1 (starts quickly, then flattens)
     const ease = t => 1 - Math.pow(1 - t, 2);
+    // outer edge x of the trousers at height y
     const outer = y => (y <= hipY ? x0 + (x1 - x0) * ease(Math.max(0, (y - top) / (hipY - top))) : G.legOutX(Math.min(y, 702))) - pad - flare * k(y);
     // the inner edge may come no closer to the centre than this (0 at the crotch, growing below)
     const inner = y => Math.min(G.legInX(Math.min(y, 702)) + pad + flare * k(y) * .6, 200 - Math.min(1, (y - crotch) / 30) * 4 - .5);
@@ -5564,6 +5836,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     'C-7.2,30 -6,34.5 -3.4,34.8 C-0.8,35.1 0,32 0,28.5 C0,34 1.4,37.6 3.8,37.6 C6.3,37.6 7,34.5 7,31 ' +
     'C7.3,34 8.6,35.2 10.6,34.7 C12.8,34.1 13.8,30.5 13.7,26.5 C13.6,24.5 14,23 15.2,22.2 ' +
     'C17.2,20.8 17.8,17.5 17,14.5 C16,10.5 14,7 12.4,4.5 C11.8,3 11.5,1.5 11.5,0 L12,-30 Z';
+  /** Outline of a hand placed at the wrist of the given side. */
   const handPath = side => {
     const [wx, wy] = G.armPoint(side, 1), L = side === 'L';
     const a = (L ? 8.7 : -8.7) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
@@ -5933,6 +6206,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   const skirtShape = ({ top = 400, bottom = 540, flare = 30, pad = 4, hem = 'curve', step = 24, amp = 10, shift = 0 }) => {
     const wx = G.torsoX(top) - pad, hx = G.torsoX(Math.min(bottom, 476)) - pad - flare;
+    // left edge x of the skirt at height y (widens from waist to hem)
     const xl = y => wx + (hx - wx) * Math.pow((y - top) / (bottom - top), .72);
     const L = [];
     for (let y = top; y < bottom; y += 8) L.push([xl(y), y]);
@@ -6117,6 +6391,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
           // white lace scallop just inside the hem
           // follows the hem, which bows down 8px in the middle (see skirtShape)
           const [x0, x1] = [S.hx + 3, 397 - S.hx];
+          // y of the hem at x (bows down in the middle)
           const yb = x => bottom + 8 * Math.sin(Math.PI * (x - S.hx) / (400 - 2 * S.hx)) - 1;
           const m = Math.round((x1 - x0) / 10), w = (x1 - x0) / m;
           let l = `M${n1(x0)},${n1(yb(x0))}`;
@@ -6141,6 +6416,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const top = 400;
       const U = skirtShape({ top, bottom: 552, flare: 40, pad: 4, hem: 'scallop', step: 30, amp: 8, shift: .5 });
       const S = skirtShape({ top, bottom: 540, flare: 36, pad: 4, hem: 'scallop', step: 30, amp: 9 });
+      // small five-petal flower with a yellow centre at x,y, radius r
       const bloom = (x, y, r) => {
         let p = '';
         for (let k = 0; k < 5; k++) { const a = (k * 72 - 90) * Math.PI / 180; p += `<ellipse cx="${n1(x + Math.cos(a) * r * .62)}" cy="${n1(y + Math.sin(a) * r * .62)}" rx="${n1(r * .5)}" ry="${n1(r * .38)}" transform="rotate(${k * 72} ${n1(x + Math.cos(a) * r * .62)} ${n1(y + Math.sin(a) * r * .62)})" fill="${H.grad('#ffffff', 'r')}" stroke="${ink(c)}" stroke-width="1.2"/>`; }
@@ -6196,9 +6472,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       }).join('');
       // ribbed sleeve cuffs and reflective strips on each arm (mirrored via armPath)
       const cuff = side => { const cd = G.armPath(side, .86, .95, 8.5); return `<path d="${cd}" fill="${H.grad(acc)}"/>` + `<path d="${cd}" fill="url(#soft-h)"/>` + `<path d="${cd}" fill="none" stroke="${ink(acc)}" stroke-width="1.8" stroke-linejoin="round"/>`; };
+      // reflective strip across the arm
       const armStrip = side => `<path d="${G.armPath(side, .62, .67, 10)}" fill="${refl}"/>`;
       /** Leg pieces for one side: reflective strip, knee patch, ankle cuff. */
       const legBits = side => {
+        // band across the leg between heights y0 and y1, made `grow` px wider on each side
         const band = (y0, y1, grow) => {
           const [o0, i0] = T.edges(y0), [o1, i1] = T.edges(y1);
           return H.polyPath([[o0 - grow, y0], [i0 + grow, y0], [i1 + grow, y1], [o1 - grow, y1]].map(([x, y]) => [XS(side, x), y]));
@@ -6367,6 +6645,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('feet.js');
 /* =====================================================================
    Footwear, mittens, scarves and bags.
    Same style as examples.js: fill → details → soft shading → tinted outline.
@@ -6389,6 +6670,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Left piece plus its mirrored right piece. */
   const pair = fn => fn() + mirror(fn());
 
+  // "x,y" text of a point, rounded to 1 decimal, for path strings
   const P = p => p[0].toFixed(1) + ',' + p[1].toFixed(1);
   /** Register a vertical gradient with [offset, colour] stops. Returns url(#id). */
   const addGrad = (id, stops, h) => H.def(id, `<linearGradient id="${id}" x1="0" y1="0" x2="${h ? 1 : 0}" y2="${h ? 0 : 1}">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`);
@@ -6416,6 +6698,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    * so there is no seam line where the shaft meets the foot) and the edge points.
    */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // how far down the shaft y is: 0 at the top, 1 at the bottom
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
@@ -6459,6 +6742,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         const x = 171 - i * 6.5, y = 706 + i * 4;
         return `M${x - 3.5},${y - 3.5} L${x + 2.5},${y + 3} M${x - 3.5},${y + 3} L${x + 2.5},${y - 3.5}`;
       }).join('');
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${H.clip('c-' + it.id + '-foot', foot)}">` +
@@ -6501,7 +6785,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const toe = 'M144,700 L156,700 L148,750 L136,750 Z';          // across the toes (toes peek out in front)
       const cross = 'M160,700 L170,700 L168,750 L158,750 Z';        // over the middle of the foot
       const ankle = 'M155,702 Q170,710 186,702';                    // round the ankle
+      // one strap/band shape: gradient fill plus a tinted outline
       const band = d => `<path d="${d}" fill="${H.grad(c)}"/><path d="${d}" fill="none" stroke="${ink(c)}" stroke-width="2"/>`;
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${soleD}" fill="${H.grad(soleC)}" stroke="${ink(soleC)}" stroke-width="2" stroke-linejoin="round"/>` +
         `<path d="M142,737.5 Q160,741 186,736" fill="none" stroke="${shade(soleC, .35)}" stroke-width="1.6" stroke-linecap="round"/>` +
@@ -6526,6 +6812,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const foot = G.footPath('L', 2, 1);
       const open = `M151,708 Q164,699 182,704 Q178,714 164,716 Q154,716 151,708 Z`;
       const bowD = 'M151,713 l-8,-6 l0,11 z M151,713 l7,-7 l1,11 z';
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` + sole('c-' + it.id, foot, FY + 11, shade(c, -.35), 20) +
         outline(foot, c, 'r') +
@@ -6548,6 +6835,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, glit = '#ffffff', g = '#f27aa0'] = it.colors;
       const foot = G.footPath('L', 3, 2);
       const open = `M152,708 Q165,699 182,704 Q178,713 165,715 Q155,715 152,708 Z`;
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('sparkle', c, glit, 9)}"/>` + sole('c-' + it.id, foot, FY + 11, shade(c, -.3), 20) +
         outline(foot, c, 'r') +
@@ -6575,6 +6863,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<circle cx="${x}" cy="${702 + (i === 0 || i === 5 ? 2 : 0) + (i % 2) * 1.5}" r="5.2" fill="${H.grad(fl, 'r')}" stroke="${ink(fl)}" stroke-width="1.3"/>`).join('');
       let deco = '';
       if (it.face === 'bunny') {
+        // one bunny ear at x,y, tilted by rot degrees
         const ear = (x, y, rot) => `<g transform="translate(${x},${y}) rotate(${rot})">` +
           `<ellipse cx="0" cy="-12" rx="5.5" ry="13" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
           `<ellipse cx="0" cy="-11" rx="2.6" ry="8.5" fill="${det}" opacity=".8"/></g>`;
@@ -6592,6 +6881,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         }
         deco = puffs + `<circle cx="148" cy="714" r="6" fill="${H.grad(det, 'r')}"/>`;
       }
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c, 'r')}"/>` + sole('c-' + it.id, foot, FY + 13, shade(c, -.25), 20) +
         outline(foot, c, 'r') +
@@ -6670,6 +6960,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         fluff += `<circle cx="${x.toFixed(1)}" cy="${top - 4 + (i % 2) * 6}" r="6.6" fill="${H.grad(fur, 'r')}" stroke="${ink(fur)}" stroke-width="1.2"/>`;
       }
       const tread = Array.from({ length: 9 }, (_, i) => `M${136 + i * 6},748 l3,-5 l3,5`).join('');
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` +
         `<g clip-path="${H.clip('c-' + it.id, foot)}"><rect x="${FX - 60}" y="${FY + 6}" width="120" height="30" fill="${soleC}"/>` +
@@ -6705,6 +6996,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [o0, i0] = [sh.outer[0], sh.inner[0]];
       const topCap = `M${P([o0[0] - .5, top - 6])} Q${(o0[0] + i0[0]) / 2},${top - 4} ${P([i0[0], top + 2])} L${P(i0)} L${P(o0)} Z`;
       const sy = 606, sx0 = shaftX(top, 716, 6, 2, sy, false), sx1 = shaftX(top, 716, 6, 2, sy, true);
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.grad(c)}"/>` + sole('c-' + it.id, foot, FY + 10, st, 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.grad(c, 'h')}"/><path d="${topCap}" fill="${H.grad(c, 'h')}"/>` +
@@ -6737,11 +7029,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       let scal = `M${x0.toFixed(1)},${top + 3}`;
       for (let i = 0; i < n; i++) scal += `q${(w / 2).toFixed(1)},-9 ${w.toFixed(1)},0`;
       scal += `L${x1.toFixed(1)},${top + 9}L${x0.toFixed(1)},${top + 9}Z`;
+      // curved strap across the boot at height y with a small gem buckle
       const band = y => {
         const a = shaftX(top, 716, 6, 2, y, false) - 1, b = shaftX(top, 716, 6, 2, y, true) + 1;
         return `<path d="M${a.toFixed(1)},${y - 3} Q${(a + b) / 2},${y + 1} ${b.toFixed(1)},${y - 3} L${b.toFixed(1)},${y + 3} Q${(a + b) / 2},${y + 7} ${a.toFixed(1)},${y + 3} Z" fill="${H.grad(st)}" stroke="${ink(st)}" stroke-width="1.5" stroke-linejoin="round"/>` +
           gem(((a + b) / 2).toFixed(1), y + 2, 3.6, g);
       };
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('sparkle', c, sp, 10)}"/>` + sole('c-' + it.id, foot, FY + 11, st, 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.pat('sparkle', c, sp, 10)}"/><path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -6783,6 +7077,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   DOLL.shape('feet-wellies', {
     slot: 'shoes',
     thumb: [116, 596, 168, 158],
+    // draws the wellies (rubber boots) using the chosen colours
     draw(it) {
       const [c, rim = shade(c, .25), soleC = '#3b3236'] = it.colors;
       const top = 612, sh = shaft(top, 716, 6, 3);
@@ -6805,6 +7100,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
           `<circle cx="140" cy="720" r="2.6" fill="#f48ca0" opacity=".6"/><circle cx="162" cy="718" r="2.6" fill="#f48ca0" opacity=".6"/>`;
         motif = [[166, 640, 4], [178, 668, 3], [160, 690, 3.5], [170, 650, 2]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${shade(c, -.18)}" opacity=".6"/>`).join('');
       }
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.fill(it)}"/>` + sole('c-' + it.id, foot, FY + 8, soleC, 30) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.fill(it)}"/>` + motif + `<path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -6838,6 +7134,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<path d="M146,722 l3,-3 l3,3 l3,-3 l3,3" fill="none" stroke="${cuffC}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
       const poms = `<path d="M${ca + 4},${cy - 2} q-3,8 -6,14 M${ca + 4},${cy - 2} q1,9 3,15" stroke="${ink(cuffC)}" stroke-width="1.4" fill="none"/>` +
         gem(ca - 2, cy + 13, 4, pom) + gem(ca + 7, cy + 14, 4, pom);
+      // one (left) shoe; pair() adds the mirrored right one
       const one = () =>
         `<path d="${foot}" fill="${H.pat('knit', c, shade(c, -.12), 8)}"/>` + sole('c-' + it.id, foot, FY + 12, shade(c, -.4), 20) + outline(foot, c, 'r') +
         `<path d="${sh.d}" fill="${H.pat('knit', c, shade(c, -.12), 8)}"/><path d="${sh.d}" fill="url(#soft-h)"/>` +
@@ -6906,6 +7203,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const st = it.style || 'knit';
       const knit = H.pat('knit', c, shade(c, -.28), 7);
       const clip = H.clip('c-' + it.id, MITT);
+      // vertical rib lines (knit cuff texture) between x0 and x1, from y0 down to y1
       const ribs = (x0, x1, y0, y1, col) => H.line(Array.from({ length: Math.round((x1 - x0) / 3.6) + 1 }, (_, i) => `M${(x0 + i * 3.6).toFixed(1)},${y0}V${y1}`).join(''), col, 1, .45);
       let body = '', cuff = '';
       if (st === 'ski') {
@@ -6960,6 +7258,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         cuff = `<path d="${CUFF}" fill="${H.grad(c2)}"/>` + ribs(-16, 16, -15, -1, c2) + outline(CUFF, c2) +
           (st === 'lopi' ? `<path d="M-17,-8.5 Q0,-11 17,-8.5" stroke="${mot}" stroke-width="2.2" stroke-dasharray="1.5 3" stroke-linecap="round" fill="none"/>` : '');
       }
+      // one mitten (side L or R), placed on the hand with its cuff
       const one = side => onHand(side, body + cuff);
       // mittens on a string: a cord from the inner cuff up the inside of the arm into the sleeve/armpit
       let cord = '';
@@ -7004,6 +7303,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // tail ends: front tail from under the knot to y 396, the second one shorter and to the side
       const T1 = { x0: 184, y0: 268, x1: 176, y1: 396, w: 24 };
       const T2 = { x0: 202, y0: 270, x1: 210, y1: 360, w: 22 };
+      // path of one scarf tail from its start/end points and width
       const tl = t => tailD(t.x0, t.y0, t.x1, t.y1, t.w);
       /** Decorations clipped inside one tail: stripes, lopi band, fringe. */
       const deco = (t, k) => {
@@ -7098,6 +7398,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, light = shade(c, .4), sp = '#ffffff'] = it.colors;
       // centre line: down the left front, round under the chin, down the right front
       const pts = [];
+      // adds n+1 points along a curve from a to b (control point ctl) to the list
       const qb = (a, ctl, b, n) => { for (let i = 0; i <= n; i++) { const t = i / n, u = 1 - t; pts.push([u * u * a[0] + 2 * u * t * ctl[0] + t * t * b[0], u * u * a[1] + 2 * u * t * ctl[1] + t * t * b[1]]); } };
       qb([166, 412], [160, 320], [176, 262], 9);
       qb([180, 254], [200, 274], [220, 254], 4);
@@ -7328,6 +7629,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('swim.js');
 /* =====================================================================
    Swim things (chest tab "Sundföt", cat 'swim'):
    swimsuits, a swim set, a shorty wetsuit, board shorts, a hooded lion
@@ -7350,6 +7654,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Number formatting and point helpers. */
   const F = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => F(p[0]) + ',' + F(p[1]);
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
@@ -7361,6 +7666,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     `<path d="${d}" fill="url(#soft-${soft})" stroke="${ink(base)}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/>`;
   /** Mirror any markup across the centre line (x → 400 - x), and "draw left, copy to the right". */
   const mirror = s => `<g transform="matrix(-1 0 0 1 400 0)">${s}</g>`;
+  // draw the markup as given and again mirrored, so one drawing makes both sides
   const both = s => s + mirror(s);
   /** Register a linear gradient with [offset, colour, opacity?] stops. Returns url(#id). */
   const grad = (id, stops, x2 = 0, y2 = 1) => H.def(id, `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}">` +
@@ -7437,6 +7743,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Cute front-facing unicorn face (for the unicorn swimsuit). s = size. */
   const unicornFace = (cx, cy, s) => {
+    // x and y on the face, moved to centre cx,cy and scaled by s
     const X = v => F(cx + v * s), Y = v => F(cy + v * s);
     // rainbow mane puffs behind the head
     const puffs = [[-22, -6], [-19, -18], [-9, -26], [9, -26], [19, -18], [22, -6]].map(([x, y], i) =>
@@ -7461,6 +7768,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Flamingo standing on one leg, facing left (for the flamingo swim dress). */
   const flamingo = (cx, cy, s, c) => {
+    // x and y on the flamingo, moved to centre cx,cy and scaled by s
     const X = v => F(cx + v * s), Y = v => F(cy + v * s);
     return `<path d="M${X(4)},${Y(12)} V${Y(34)} M${X(4)},${Y(22)} l${F(8 * s)},${F(-5 * s)} l${F(-3 * s)},${F(-4 * s)}" stroke="#d0607e" stroke-width="${F(2 * s)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` +
       // body, wing, S-shaped neck, head and bent black-tipped beak
@@ -7548,6 +7856,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // ruffled swim-dress skirt: lower tier first, then upper tier, then a sash with a bow
       if (deco === 'flamingo') {
         const t2 = ruffleTier(436, 512, 132, 100, 17, 8), t1 = ruffleTier(404, 468, G.torsoX(404) - 3, 118, 16, 8);
+        // draws one ruffle tier in colour c: fill, fold lines, outline and a dotted white hem
         const tierDraw = (t, c) => `<path d="${t.d}" fill="${H.grad(c)}"/>` + H.line(t.folds, c, 1.6, .35) + outline(t.d, c) +
           `<path d="${t.hem}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round" transform="translate(0,-4)"/>`;
         out += tierDraw(t2, second) + tierDraw(t1, main) +
@@ -7569,6 +7878,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   DOLL.shape('swim-fishset', {
     slot: 'suit', occupies: SUIT,
     thumb: [70, 236, 260, 300],
+    // draws the top (fish print with raglan seams and cuffs) and the shorts (side stripes and wave hem)
     draw(it) {
       const [topC, fishA, shortsC, fishB] = it.colors;
       const pid = `swim-fishp-${idf(topC)}${idf(fishA)}${idf(fishB)}`;
@@ -7675,6 +7985,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const terry = H.pat('dots', c, shade(c, .2), 7);
       const body = G.shirtPath({ sleeve: .55, pad: 12, sleevePad: 8, sleeveFlare: 12, bottom: 548, flare: 30, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, body);
+      // sleeve cuff in the mane colour, for the given side
       const cuff = s => `<path d="${G.armPath(s, .47, .56, 24)}" fill="${H.grad(mane)}"/>`;
       const poncho = `<path d="${body}" fill="${terry}"/><g clip-path="${clip}">` +
         `<rect x="0" y="522" width="400" height="30" fill="${H.grad(mane)}"/><path d="M0,530 H400" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>` +
@@ -7866,6 +8177,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      ================================================================= */
   /** Goggle lens outline round one eye: rounded, a little wider on the outer side. */
   const LENS = [[-22, -3], [-16, -14], [0, -17.5], [14, -13.5], [19.5, 0], [13, 13.5], [-2, 16.5], [-17, 11]];
+  // goggle lens outline round the eye on side s
   const lensD = s => { const [ex, ey] = G.eyes[s === 'L' ? 0 : 1], o = s === 'L' ? 1 : -1; return H.smooth(LENS.map(([x, y]) => [ex + x * o, ey + y])); };
   /* -------------------------------------------------------------
      Swim goggles: see-through tinted lenses with a rubber gasket, nose
@@ -7888,6 +8200,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<path d="${strapD}" stroke="${strap}" stroke-width="8" stroke-linecap="round" fill="none"/>` +
         `<path d="${strapD}" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 4" fill="none" opacity=".7"/>` +
         `<rect x="143" y="152" width="10" height="13" rx="3" fill="${H.grad(frame)}" stroke="${ink(frame)}" stroke-width="1.4"/>`;
+      // one goggle lens with its glass for side s
       const lens = s => {
         const d = lensD(s), [ex, ey] = G.eyes[s === 'L' ? 0 : 1], o = s === 'L' ? 1 : -1;
         return `<path d="${d}" fill="${tint}" opacity=".42"/>` +
@@ -7916,6 +8229,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   DOLL.shape('swim-mask', {
     slot: 'glasses',
     thumb: [96, 52, 214, 176],
+    // draws the mask, strap on both sides and the snorkel
     draw(it) {
       const [sk, strap, tube, topC] = it.colors;
       const outer = H.smooth(MASK), inner = H.smooth(MASK.map(([x, y]) => [200 + (x - 200) * .85, 160 + (y - 160) * .79]));
@@ -8007,8 +8321,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     thumb: [70, 672, 260, 100],
     draw(it) {
       const [c, pk = c, st = shade(c, -.25)] = it.colors;
+      // builds one side (s is "L" or "R")
       const side = s => {
         const L = s === 'L', X = x => L ? x : 400 - x;
+        // flips a left-side path string to the right side (x becomes 400 - x)
         const M = d => L ? d : d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => F(400 - x) + ',' + y);
         let blade, extra = '';
         if (it.frog) {
@@ -8049,6 +8365,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     thumb: [124, 680, 152, 74],
     draw(it) {
       const [c, edge, st, fl] = it.colors;
+      // builds one flip-flop (s is "L" or "R"), placed at that foot
       const side = s => {
         const L = s === 'L', [fx, fy] = G.feet[L ? 0 : 1], o = L ? -1 : 1;
         const sole = G.footPath(s, 8, 4);
@@ -8077,6 +8394,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     thumb: [86, 146, 228, 300],
     draw(it) {
       const [c, st, acc] = it.colors;
+      // draws one air tank centred at x = cx, with bands, a shine and a valve on top
       const tank = cx => {
         const d = `M${cx - 30},440 L${cx - 30},212 C${cx - 30},176 ${cx + 30},176 ${cx + 30},212 L${cx + 30},440 Z`;
         return `<path d="${d}" fill="${H.grad(c, 'h')}"/><path d="M${cx - 30},236 H${cx + 30} M${cx - 30},420 H${cx + 30}" stroke="${shade(c, -.25)}" stroke-width="5"/>` +
@@ -8260,6 +8578,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('costumes_work.js');
 /* =====================================================================
    Work costumes: firefighter, police, bus driver, pilot, astronaut,
    builder and farmer. Every piece is a normal item in its own chest tab
@@ -8602,6 +8923,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const hb = y => `<rect x="0" y="${y}" width="400" height="15" fill="${tape}"/><rect x="0" y="${y + 5}" width="400" height="5" fill="${mid}"/>`;
       /** Reflective band round a sleeve near the cuff. */
       const sb = side => `<path d="${G.armPath(side, .78, .86, 9)}" fill="${tape}"/><path d="${G.armPath(side, .806, .834, 9)}" fill="${mid}"/>`;
+      // plain darker cuff at the wrist of the given side
       const cuff = side => `<path d="${G.armPath(side, .93, 1.01, 8)}" fill="${shade(c, -.28)}"/>`;
       /** Big hip pocket with a flap that carries a strip of tape. */
       const pocket = x => `<path d="M${x},392 h34 v36 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2"/>` +
@@ -8638,9 +8960,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, ch1 = '#ffffff', ch2 = '#3f86d9', badge = '#f2c34d'] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 8, sleevePad: 6, bottom: 470, flare: 4, neck: 'round', neckDepth: 6 });
       const clip = H.clip('c-' + it.id, d);
+      // collar flap for one side (the left one is mirrored for the right)
       const collar = side => { const m = side === 'L' ? (s => s) : (s => mirror(s)); return m(`<path d="M185,246 Q170,252 162,268 L182,280 Q190,266 199,259 Z" fill="${H.grad(shade(c, .06))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`); };
       /** Shoulder strap with a button near the neck. */
       const strap = () => `<path d="M174,253 L136,268 L139,278 L176,262 Z" fill="${H.grad(shade(c, -.1))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` + button(170, 258, 2.8, badge);
+      // shoulder strap on the left shoulder with a button near the neck
       const pocket = x => `<path d="M${x},404 h32 v26 q0,6 -6,6 h-20 q-6,0 -6,-6 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<path d="M${x - 2},398 h36 v11 q-18,5 -36,0 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` + button(x + 16, 406, 2.6, shade(c, -.2));
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
@@ -8679,10 +9003,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<path d="M184,248 L196,266 L200,256 Z M216,248 L204,266 L200,256 Z" fill="${H.grad(shirt)}" stroke="${ink(shirt)}" stroke-width="1.3" stroke-linejoin="round"/>`;
       /** Lapel along the left side of the V (mirrored for the right). */
       const lapel = () => `<path d="M182,250 L199,326 L188,330 L168,290 L176,282 L164,268 Z" fill="${H.grad(shade(c, .08))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>`;
+      // shoulder strap with gold marks on it (left side)
       const strap = () => `<path d="M170,256 L136,268 L139,278 L172,265 Z" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="M148,265 L150,272 M154,263 L156,270 M160,261 L162,268" stroke="${gold}" stroke-width="2.2" stroke-linecap="round"/>`;
+      // three gold stripes on the sleeve of the given side
       const stripes = side => [.84, .89, .94].map(t => `<path d="${G.armPath(side, t, t + .022, 7)}" fill="${gold}"/>`).join('');
       const btns = [352, 392, 432].map(y => button(184, y, 4, gold) + button(216, y, 4, gold)).join('');
+      // pocket flap with its top-left corner at x
       const pocket = x => `<path d="M${x - 2},410 h36 v9 q-18,4 -36,0 Z" fill="${H.grad(shade(c, .05))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       return shirtV + `<path d="${d}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${clip}">${stripes('L')}${stripes('R')}</g>` +
@@ -8776,6 +9103,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const clip = H.clip('c-' + it.id, d);
       /** Silver band with a fine line in the middle (looks shiny). */
       const band = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${refl}"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#shine)" opacity=".6"/>`;
+      // breast pocket with its top-left corner at x and a dark binding on the top edge
       const pocket = x => `<path d="M${x},440 h32 v22 q0,6 -6,6 h-20 q-6,0 -6,-6 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.8"/>` +
         `<path d="M${x - 1},440 h34" stroke="${bind}" stroke-width="3.4" stroke-linecap="round"/>`;
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
@@ -8807,7 +9135,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, acc, panel = '#c9d2de'] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 12, sleevePad: 9, bottom: 470, flare: 8, neck: 'round', neckDepth: 2 });
       const clip = H.clip('c-' + it.id, d);
+      // thin ring line round the sleeve at position t (0 = shoulder, 1 = wrist)
       const ring = (side, t) => H.line(G.armPath(side, t, t, 9.5).replace(/Z$/, ''), c, 1.6, .5);
+      // patterned sleeve section on the given side, plus a coloured cuff
       const arm = side => `<path d="${G.armPath(side, .43, .57, 12)}" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="1.6"/>` +
         `<path d="${G.armPath(side, .88, 1.01, 10)}" fill="${H.grad(acc)}"/>` + `<path d="${G.armPath(side, .86, .885, 10)}" fill="${shade(acc, .35)}"/>` +
         ring(side, .3) + ring(side, .7);
@@ -8866,6 +9196,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       let inside = `<rect x="0" y="398" width="400" height="13" fill="${shade(c, -.1)}"/>` +
         `<rect x="0" y="690" width="400" height="18" fill="${shade(c, -.07)}"/>` + `<path d="M0,690 H400" stroke="${ink(c)}" stroke-width="1.4" opacity=".45"/>`;
       let over = '';
+      // belt in colour col with a buckle in colour buckle
       const belt = (col, buckle) => `<path d="M${n1(edge(400) + 4)},399 Q200,404 ${n1(396 - edge(400))},399 L${n1(396 - edge(410))},411 Q200,416 ${n1(edge(410) + 4)},411 Z" fill="${H.grad(col)}" stroke="${ink(col)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<rect x="191" y="400" width="18" height="14" rx="2.5" fill="none" stroke="${buckle}" stroke-width="2.8"/>`;
       const creases = H.line('M170,488 V700 M230,488 V700', c, 1.4, .35) + `<path d="M172,488 V700 M232,488 V700" stroke="#fff" stroke-width="1.2" opacity=".25"/>`;
@@ -8916,12 +9247,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const [FX, FY] = G.feet[0];
   /** Boot shaft for the left leg from top to low (built from the leg profile so it fits). */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // 0 at the top of the shaft, 1 at the bottom (how far down y is)
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
       outer.push([G.legOutX(y) - pad - flare * k(y), y]);
       inner.push([G.legInX(y) + pad + flare * k(y) * .6, y]);
     }
+    // "x,y" text of a point, rounded, for building SVG paths
     const pt = p => n1(p[0]) + ',' + n1(p[1]);
     return {
       outer, inner,
@@ -9087,6 +9420,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [rim = '#3a3640', sp = '#c9d2de', hub = '#f6c636'] = it.colors;
       const cx = 331, cy = 491, r = 40;
+      // path line from the wheel centre out to the rim at angle a (degrees)
       const spoke = a => { const x = cx + Math.cos(a * Math.PI / 180) * (r - 3), y = cy + Math.sin(a * Math.PI / 180) * (r - 3); return `M${cx},${cy} L${n1(x)},${n1(y)}`; };
       // little grip bumps all round the rim
       const bumps = Array.from({ length: 16 }, (_, i) => { const a = i * 22.5 * Math.PI / 180; return `<circle cx="${n1(cx + Math.cos(a) * (r + 3.8))}" cy="${n1(cy + Math.sin(a) * (r + 3.8))}" r="1.4" fill="${shade(rim, .35)}"/>`; }).join('');
@@ -9180,6 +9514,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, grip = '#f6c636'] = it.colors;
       let g;
       if (it.kind === 'spanner') {
+        // hexagon of radius r around the spanner head (the nut shape)
         const hex = r => H.polyPath(Array.from({ length: 6 }, (_, i) => [-38 + Math.cos(i * Math.PI / 3) * r, Math.sin(i * Math.PI / 3) * r]));
         const tool = 'M-30,-6 L40,-6 L46,-11 Q60,-20 70,-10 L61,-4 Q57,-7 53,-5 L53,5 Q57,7 61,4 L70,10 Q60,20 46,11 L40,6 L-30,6 Z';
         g = `<g transform="translate(302,463) rotate(-36) translate(8,0)">` +
@@ -9215,6 +9550,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [w = '#c98a4b', cloth = '#e2505b'] = it.colors;
       const body = 'M268,496 L340,496 L333,540 Q304,552 275,540 Z';
       const clip = H.clip('c-' + it.id, body);
+      // one decorated egg at x,y in colour c, tilted by rot degrees, with a shine spot
       const egg = (x, y, c, rot) => `<ellipse cx="${x}" cy="${y}" rx="9" ry="11.5" transform="rotate(${rot} ${x} ${y})" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1.5"/>` +
         `<ellipse cx="${x - 3}" cy="${y - 4}" rx="2.2" ry="3.4" fill="#fff" opacity=".7"/>`;
       const g = cord('M277,498 C274,444 334,444 331,498', w, 6) +
@@ -9246,6 +9582,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const cx = 316, cy = 500, rx = 30, ry = 20;
       // fluffy outline: a ring of puffs round the body
       const puffs = Array.from({ length: 16 }, (_, i) => { const a = i * Math.PI / 8; return `<circle cx="${n1(cx + Math.cos(a) * rx)}" cy="${n1(cy + Math.sin(a) * ry)}" r="8.5" fill="${H.grad(wool, 'r')}" stroke="${ink(wool)}" stroke-width="1.6"/>`; }).join('');
+      // one leg of the sheep, a rounded rectangle starting at x
       const leg = x => `<rect x="${x}" y="510" width="9" height="24" rx="4.5" fill="${H.grad(face)}" stroke="${ink(face)}" stroke-width="1.6"/>`;
       const hx = 352, hy = 486;
       const g = leg(294) + leg(306) + leg(320) + leg(332) +
@@ -9356,6 +9693,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('costumes_care.js');
 /* =====================================================================
    Costumes: doctor, nurse, vet (animal doctor), chef, artist (painter)
    and cowgirl. Every piece is a normal item in its own chest tab (hats,
@@ -9383,9 +9723,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /** Number formatting and point helpers. */
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Mirror x to the right side (x → 400 - x). */
   const X = (side, x) => (side === 'L' ? x : 400 - x);
+  // the same list of points mirrored to the right side
   const mirrorPts = pts => pts.map(([x, y]) => [400 - x, y]);
   /** Mirror any markup across the centre line (for right-side copies of left-side details). */
   const mirror = s => `<g transform="matrix(-1 0 0 1 400 0)">${s}</g>`;
@@ -9636,11 +9978,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // scattered paw prints (vet tops)
       const paws = it.paws ? [[160, 300, 8, -20], [236, 296, 7, 15], [204, 344, 8, 5], [150, 378, 7, -10], [252, 382, 8, 20], [184, 428, 7, -5], [234, 448, 7, 10], [116, 300, 6, -25], [284, 302, 6, 25]]
         .map(([x, y, r, rot]) => `<g transform="rotate(${rot} ${x} ${y})">${paw(x, y, r, motif, .5)}</g>`).join('') : '';
+      // small patch pocket with a trim-coloured top band, drawn with its top-left corner at x,y (w wide, h tall)
       const pocket = (x, y, w, h) => `<path d="M${x},${y} h${w} v${h - 6} q0,6 -6,6 h${-(w - 12)} q-6,0 -6,-6 Z" fill="${H.fill(it)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="M${x},${y + 5} h${w}" stroke="${trim}" stroke-width="3"/>`;
       const pen = `<rect x="168" y="306" width="5" height="18" rx="2" fill="${H.grad(motif === '#ffffff' ? trim : motif)}" stroke="${ink(trim)}" stroke-width="1.2"/>` +
         `<path d="M172,308 v10" stroke="#fff" stroke-width="1.2" opacity=".7"/>`;
       const badge = it.motif === 'paw' ? paw(162, 334, 6.5, trim) : heartO(162, 333, 6, trim, 1.2);
+      // trim-coloured band round the sleeve of the given side ("L" or "R")
       const sleeveHem = side => `<path d="${G.armPath(side, .26, .32, 5.5)}" fill="${H.grad(trim)}"/>`;
       return `<path d="${d}" fill="${H.fill(it)}"/>` +
         `<g clip-path="${clip}">${paws}${sleeveHem('L')}${sleeveHem('R')}<rect x="0" y="456" width="400" height="12" fill="${shade(c, -.05)}"/></g>` +
@@ -9669,8 +10013,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const clip = H.clip('c-' + it.id, d);
       // edge of the front flap that buttons over to the right
       const flap = 'M214,246 Q236,262 238,290 L238,472';
+      // a button, used for both the left and right column of buttons
       const knot = (x, y) => button(x, y, 4.4, btn);
       const buttons = [292, 330, 368].map(y => knot(178, y) + knot(222, y)).join('');
+      // coloured cuff band at the wrist of the given side, with a thin fold line
       const cuff = side => `<path d="${G.armPath(side, .84, .98, 7.5)}" fill="${H.grad(shade(c, -.04))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         H.line(G.armPath(side, .9, .91, 7.5), c, 1.2, .35);
       const collar = 'M183,232 Q200,240 217,232 L218,248 Q200,256 182,248 Z';
@@ -9712,6 +10058,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [c, apron = '#ffffff', heart = '#ef5b7a'] = it.colors;
       const skirt = G.skirtPath({ top: 400, bottom: 588, flare: 40, pad: 4 });
       const bodice = G.shirtPath({ sleeve: .27, pad: 4, sleevePad: 8, sleeveFlare: 3, bottom: 412, neck: 'round' });
+      // apron-coloured cuff at the sleeve end of the given side
       const cuff = side => `<path d="${G.armPath(side, .22, .27, 11)}" fill="${H.grad(apron)}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>`;
       const bib = 'M174,298 Q200,292 226,298 L224,404 L176,404 Z';
       const straps = 'M176,302 L160,262 M224,302 L240,262';
@@ -9766,6 +10113,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<path d="M148,322 h30" stroke="${trim}" stroke-width="3"/>`;
       const badge = `<rect x="222" y="318" width="32" height="18" rx="4" fill="${H.grad('#ffffff')}" stroke="${ink(trim)}" stroke-width="1.6"/>` +
         `<rect x="222" y="318" width="32" height="6" rx="3" fill="${trim}"/>` + heartO(238, 329, 4.5, heart, 1);
+      // coloured cuff with a thin trim stripe at the wrist of the given side
       const cuff = side => `<path d="${G.armPath(side, .86, .97, 10)}" fill="${H.grad(shade(c, -.03))}" stroke="${ink(c)}" stroke-width="1.8" stroke-linejoin="round"/>` +
         `<path d="${G.armPath(side, .86, .875, 10)}" fill="${trim}" opacity=".8"/>`;
       // collar lying on the shoulder and the lapel folded back below it (left; mirrored)
@@ -9943,8 +10291,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [c, sole = shade(c, -.35), st = shade(c, .4)] = it.colors;
       const top = 604, low = 716, pad = 5, flare = 2;
+      // builds one boot (s is "L" or "R")
       const side = s => {
         const L = s === 'L', Xs = x => (L ? x : 400 - x);
+        // 0 at the top of the boot shaft, 1 at the bottom (how far down y is)
         const k = y => (y - top) / (low - top);
         const outer = [], inner = [];
         for (let y = top; y <= low; y += 14) {
@@ -10034,6 +10384,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [fur, light, dark, collar = '#ef5b7a'] = it.colors;
       const line = shade(dark, -.35);
+      // plaster (sticking plaster) at x,y turned by deg degrees, with a tiny heart on it
       const plaster = (x, y, deg) => `<g transform="rotate(${deg} ${x} ${y})"><rect x="${x - 9}" y="${y - 3.5}" width="18" height="7" rx="3.5" fill="#f6c9b0" stroke="#c98a6a" stroke-width="1"/>` +
         `<rect x="${x - 3.5}" y="${y - 3}" width="7" height="6" rx="1.5" fill="#fbe6da"/></g>` + heartO(x, y, 2.4, '#ef5b7a', .6);
       if (it.kind === 'lion') {
@@ -10313,6 +10664,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('costumes_magic.js');
 /* =====================================================================
    Magic dress-up costumes: friendly witch, pirate, ballerina,
    superhero, knight and magician.
@@ -10335,6 +10689,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /* ---------------- small helpers ---------------- */
 
   const n1 = v => (Math.round(v * 10) / 10).toString();
+  // "x,y" text of a point, rounded, for building SVG paths
   const P = p => n1(p[0]) + ',' + n1(p[1]);
   /** Safe id fragment from a colour. */
   const idc = c => String(c).replace(/[^a-z0-9]/gi, '');
@@ -10409,6 +10764,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    * Returns the closed path, the two side edges and the edge points.
    */
   function shaft(top, low = 716, pad = 6, flare = 3) {
+    // 0 at the top of the shaft, 1 at the bottom (how far down y is)
     const k = y => (y - top) / (low - top), outer = [], inner = [];
     const step = (low - top) / Math.max(4, Math.round((low - top) / 13));
     for (let y = top; y <= low + .1; y += step) {
@@ -10503,6 +10859,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // bodice with bell sleeves
       const bod = G.shirtPath({ sleeve: 1, pad: 4, sleevePad: 5, sleeveFlare: 12, bottom: 414, neck: 'round' });
       const bclip = H.clip('c-' + it.id + '-bod', bod);
+      // wide sleeve cuff in the trim colour with a darker edge line, for the given side
       const cuff = side => `<path d="${G.armPath(side, .84, 1.04, 40)}" fill="${H.grad(trim)}"/>` +
         `<path d="${G.armPath(side, .84, .845, 40)}" fill="${ink(trim)}" opacity=".5"/>`;
       const cuffDots = pair([.9, .97].map(t => { const [x, y] = G.armPoint('L', t); return `<circle cx="${n1(x - 20)}" cy="${n1(y + 2)}" r="2.2" fill="${acc}"/>`; }).join(''));
@@ -10604,6 +10961,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const body = ellD(337, 556, 21, 26);
       const head = ellD(338, 500, 24, 22);
       const earL = 'M317,494 L318,468 L336,480 Z', earR = 'M340,479 L358,467 L360,494 Z';
+      // one cartoon eye (white, coloured iris, pupil and sparkle) centred at x
       const eyeAt = x => `<ellipse cx="${x}" cy="501" rx="5.6" ry="6.6" fill="#fff" stroke="${ink(fur)}" stroke-width="1"/>` +
         `<circle cx="${x + .5}" cy="502" r="4.2" fill="${eye}"/><circle cx="${x + .5}" cy="502.5" r="2.4" fill="#1d1a24"/><circle cx="${x + 2}" cy="500" r="1.3" fill="#fff"/>`;
       return {
@@ -10783,6 +11141,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [brass, leather] = it.colors;
       /** One tube section along the x axis from x0 to x1, radius r0 → r1. */
       const tube = (x0, x1, r0, r1, c) => { const d = `M${x0},${-r0} L${x1},${-r1} L${x1},${r1} L${x0},${r0} Z`; return `<path d="${d}" fill="${cyl(c)}"/>` + edge(d, c, 1.8); };
+      // thin brass ring round the tube at x, radius r, width w
       const ring = (x, r, w) => tube(x - w / 2, x + w / 2, r, r, shade(brass, -.08));
       const body = tube(-44, -14, 4.5, 4.5, brass) + ring(-15, 6.5, 6) +
         tube(-12, 42, 7.5, 7.5, leather) + `<path d="M-10,-4.5 H40" stroke="${shade(leather, .4)}" stroke-width="1.2" stroke-dasharray="3 2.5"/>` +
@@ -10808,6 +11167,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [paper, red = '#d8364a'] = it.colors;
       const sheet = 'M290,458 L360,458 Q356,480 360,502 Q364,526 358,556 L292,556 Q296,530 290,506 Q286,482 290,458 Z';
       const clip = H.clip('c-' + it.id, sheet);
+      // one rolled-up end of the paper at height y, spanning x0 to x1
       const roll = (y, x0, x1) => { const d = `M${x0 + 6},${y - 6} H${x1 - 6} a6,6 0 0 1 0,12 H${x0 + 6} a6,6 0 0 1 0,-12 Z`; return `<path d="${d}" fill="${cyl(shade(paper, -.1))}"/>` + edge(d, paper, 1.8) + `<ellipse cx="${x1 - 6}" cy="${y}" rx="2.4" ry="5" fill="${shade(paper, -.3)}"/>`; };
       const waves = [[300, 482], [340, 470], [306, 528], [340, 546]].map(([x, y]) => `M${x},${y} q3,-3 6,0 q3,3 6,0`).join('');
       const island = 'M318,508 Q322,494 336,494 Q350,494 352,508 Q336,514 318,508 Z';
@@ -10908,6 +11268,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         let s = '';
         for (let i = 0; i <= n; i++) {
           const [x, y] = D.at(i / n), a = Math.atan2(y - 404, x - 200), ca = Math.cos(a), sa = Math.sin(a);
+          // point at u along the feather and v across it, turned to point away from the waist
           const p = (u, v) => n1(x + u * ca - v * sa) + ',' + n1(y + u * sa + v * ca);
           s += `<path d="M${p(-len * .5, 0)}C${p(-len * .2, -8)} ${p(len * .4, -8)} ${p(len * .6, 0)}C${p(len * .4, 8)} ${p(-len * .2, 8)} ${p(-len * .5, 0)}Z"/>`;
         }
@@ -10987,6 +11348,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [m, fc, gem] = it.colors;
       const { cx, cy, rx, ry } = G.head;
+      // point on an ellipse around the head at angle deg (off pixels outside the head edge)
       const at = (deg, off) => [cx + Math.cos(deg * Math.PI / 180) * (rx + off), cy + Math.sin(deg * Math.PI / 180) * (ry + off)];
       const band = H.polyPath(G.headArc(214, 326, 8, 24).concat(G.headArc(326, 214, 1, 24)));
       let feathers = '';
@@ -11041,6 +11403,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     draw(it) {
       const [c, acc, disc = '#ffffff', collar = acc] = it.colors;
       const d = G.shirtPath({ sleeve: 1, pad: 3, sleevePad: 3, bottom: 446, neck: 'round' });
+      // glove-coloured lower sleeve on the given side, with a light cuff line
       const glove = side => { const g = G.armPath(side, .74, 1, 5, 3); return `<path d="${g}" fill="${H.grad(acc)}"/>` + outline(g, acc, 'h', 2) + `<path d="${G.armPath(side, .74, .78, 5.2, 0)}" fill="${shade(acc, -.15)}" opacity=".6"/>`; };
       const wx = G.torsoX(400) - 3;
       const belt = `M${n1(wx)},397 H${n1(400 - wx)} V411 H${n1(wx)} Z`;
@@ -11072,6 +11435,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const pad = it.loose ? 6 : 2;
       const d = G.pantsPath({ top: 400, bottom: it.loose ? 702 : 698, pad, flare: it.loose ? 3 : 0 });
       const clip = H.clip('c-' + it.id, d);
+      // x of the outer edge of the left leg at height y (the torso edge near the hip)
       const outX = y => (y <= 476 ? Math.min(G.torsoX(y), G.legOutX(y)) : G.legOutX(y)) - pad;
       // stripe down the outer seam of the left leg (mirrored for the right)
       const L = [], R = [];
@@ -11166,6 +11530,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const pb = 'M110,298 Q104,314 110,326 Q126,332 142,322 Q138,312 140,300 Q124,308 110,298 Z';
       const shoulder = `<path d="${pb}" fill="${metal(m)}"/>` + outline(pb, m, 'v', 2) + `<path d="${pa}" fill="${metal(m)}"/>` + outline(pa, m, 'v', 2) +
         `<circle cx="128" cy="292" r="2.4" fill="${trim}" stroke="${ink(trim)}" stroke-width=".9"/><path d="M118,286 Q132,272 156,268" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".55"/>`;
+      // armoured forearm guard on the given side, with a trim stripe
       const guard = side => { const g = G.armPath(side, .62, .95, 4.5); return `<path d="${g}" fill="${metal(m)}"/>` + outline(g, m, 'h', 2) + `<path d="${G.armPath(side, .76, .78, 4.6)}" fill="${trim}"/>`; };
       return `<path d="${shirt}" fill="${mail(chain)}"/>` + outline(shirt, chain) +
         guard('L') + guard('R') +
@@ -11218,6 +11583,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const [m, trim] = it.colors;
       const top = 604, low = 716, sh = shaft(top, low, 5, 2);
       const foot = G.footPath('L', 5, 4);
+      // x halfway between the left and right edge of the boot shaft at height y
       const midX = y => (shaftX(top, low, 5, 2, y, false) + shaftX(top, low, 5, 2, y, true)) / 2;
       const fclip = H.clip('c-' + it.id + '-f', foot);
       const lames = 'M154,704 Q150,718 154,734 M144,708 Q140,720 143,734 M164,702 Q160,716 163,734';
@@ -11331,6 +11697,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // long tails behind the legs (drawn behind the body)
       const tail = 'M146,404 C130,472 116,552 120,628 Q140,636 158,620 C166,546 178,474 194,408 Z';
       const lapel = 'M184,250 Q166,262 160,292 Q170,330 196,394 L199,397 L192,358 Q182,320 184,284 Q186,266 195,256 Z';
+      // satin cuff at the wrist of the given side
       const cuff = side => { const g = G.armPath(side, .88, 1, 7.5); return `<path d="${g}" fill="${H.grad(satin)}"/>` + outline(g, satin, 'h', 2); };
       const bowtie = `<path d="M200,262 l-14,-8 v16 Z M200,262 l14,-8 v16 Z" fill="${H.grad(tie)}" stroke="${ink(tie)}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="200" cy="262" r="4" fill="${shade(tie, .15)}" stroke="${ink(tie)}" stroke-width="1.4"/>`;
       return {
@@ -11506,6 +11873,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('tails.js');
 /* =====================================================================
    Tails – cat tails (slot "tail", behind the body) and a mermaid costume:
    mermaid tail (covers both legs and the feet), seashell tops, starfish /
@@ -11517,7 +11887,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   'use strict';
   const { shade, ink, mix } = H;
   const SW = G.stroke;
+  /** Round a number to 1 decimal, as text. */
   const F = v => (Math.round(v * 10) / 10).toString();
+  /** "x,y" text of a point, rounded for path strings. */
   const P = p => F(p[0]) + ',' + F(p[1]);
 
   /** Final pass for a shape: soft shading overlay plus the tinted outline. */
@@ -11546,7 +11918,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   const shell = (cx, cy, r, c, rot = 0) => {
     const ox = 0, oy = r * .55, R = r * 1.15, n = 5;           // fan centre (local) and radius
+    // angle (radians) of the i-th fan ridge on the shell
     const ang = i => (205 + 130 * i / n) * Math.PI / 180;
+    // point at angle a and distance rr from the fan centre
     const pt = (a, rr) => [ox + Math.cos(a) * rr, oy + Math.sin(a) * rr];
     let d = `M${P(pt(ang(0), r * .25))}L${P(pt(ang(0), R))}`;
     for (let i = 0; i < n; i++) {                              // one bump per rib gap
@@ -11594,6 +11968,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   function spine(pts, n) {
     const seg = pts.length - 1, p = i => pts[Math.max(0, Math.min(seg, i))];
+    // point on the smooth curve through pts at position s (0 = first point, seg = last)
     const at = s => {
       const i = Math.min(seg - 1, Math.floor(s)), t = s - i, t2 = t * t, t3 = t2 * t;
       const p0 = p(i - 1), p1 = p(i), p2 = p(i + 1), p3 = p(i + 2);
@@ -11708,6 +12083,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   // Left side of the tail, waist to just above the fin. Always outside the leg outline so no skin peeks out.
   const MT_L = [[G.torsoX(398) - 3, 398], [138, 418], [133.5, 440], [132, 470], [134, 510], [139, 555], [144, 600], [148, 640], [152, 670], [155, 692]];
+  /** Closed outline of the mermaid tail body: left edge down, across the bottom, mirrored right edge up. */
   const MT_BODY = (() => {
     const l = H.smooth(MT_L, false), r = H.smooth(mirror(MT_L).reverse(), false);
     return l + `Q200,700 ${r.slice(1)}Z`;
@@ -11717,6 +12093,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const FIN_D = H.smooth(FIN_L.concat(mirror(FIN_L.slice(1, -1)).reverse()), true, .4);
   // little frilly fins on the sides at knee height (left drawn, right mirrored)
   const SIDE_FIN = 'M145,586 C128,590 112,606 108,630 C116,624 124,624 130,630 C132,622 140,618 148,620 Z';
+  /** Mirror a path string to the right side (x becomes 400 - x). */
   const mirrorD = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => F(400 - x) + ',' + y);
 
   /**
@@ -11742,6 +12119,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         `<g clip-path="${clipF}"><path d="${ribs}${mirrorD(ribs)}" fill="none" stroke="${ink(fin)}" stroke-width="1.6" stroke-linecap="round" opacity=".42"/>` +
         `<path d="M98,744 Q140,722 170,742 M302,744 Q260,722 230,742" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".45"/></g>` +
         outline(FIN_D, fin, 'v');
+      // one side fin: fill, a few vein lines and outline (d is the left or the mirrored path)
       const sideFin = d => `<path d="${d}" fill="${finFill}"/>` +
         H.line(d === SIDE_FIN ? 'M140,594 Q124,606 116,624 M144,604 Q132,612 126,626' : mirrorD('M140,594 Q124,606 116,624 M144,604 Q132,612 126,626'), fin, 1.4, .45) + outline(d, fin, 'v', 2.2);
       // scales: a repeating tile of little scallops (every other row shifted half a scale)
@@ -11916,6 +12294,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   ]);
 })();
 
+</script>
+<script>
+FJ.loading('scenes.js');
 /* =====================================================================
    Fjársjóðskistan – Icelandic scenes and creatures
    Scenes are SVGs in a 1600×1000 space (cropped to fill the screen).
@@ -12050,6 +12431,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const r = rng(42);
     const stars = [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${-g * 1.3}s">` +
       Array.from({ length: 24 }, () => `<circle cx="${Math.round(r() * 1600)}" cy="${Math.round(r() * 520)}" r="${(1 + r() * 2.2).toFixed(1)}" fill="#fff"/>`).join('') + '</g>').join('');
+    // one band of northern lights along path d: a wide soft glow (gradient a) with a brighter core (gradient b)
     const aurora = (d, a, b, cls, delay) => `<g class="${cls}" style="animation-delay:${delay}s"><path d="${d}" fill="none" stroke="url(#${a})" stroke-width="90" stroke-linecap="round" opacity=".55"/><path d="${d}" fill="none" stroke="url(#${b})" stroke-width="30" stroke-linecap="round" opacity=".6"/></g>`;
     return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
       <linearGradient id="n-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#081634"/><stop offset=".7" stop-color="#1d3d70"/><stop offset="1" stop-color="#2e5688"/></linearGradient>
@@ -12095,6 +12477,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     s += `<path d="M${x - 5},${top + 2} L${x + w / 2},${peak} L${x + w + 5},${top + 2}Z" fill="${roof}" stroke="${sink(roof)}" stroke-width="2.5" stroke-linejoin="round"/>`;
     // corrugated iron: thin lines down the roof
     for (let i = 1; i < 6; i++) { const t = i / 6; s += `<path d="M${x + w / 2},${peak + 4} L${(x - 5 + (w + 10) * t).toFixed(0)},${top}" stroke="${sink(roof)}" stroke-width="1" opacity=".35"/>`; }
+    // a white-framed window with a cross, at wx,wy, size ww × wh
     const win = (wx, wy, ww, wh) => `<rect x="${wx}" y="${wy}" width="${ww}" height="${wh}" fill="#bfe3f2" stroke="#fff" stroke-width="3"/><path d="M${wx + ww / 2},${wy} V${wy + wh} M${wx},${wy + wh / 2} H${wx + ww}" stroke="#fff" stroke-width="2"/>`;
     const ww = w * .24, wh = h * .3;
     s += win(x + w * .14, top + h * .2, ww, wh) + win(x + w * .62, top + h * .2, ww, wh);
@@ -12145,6 +12528,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     ].map(([p, g]) => `<polygon points="${p}" fill="url(#${g})"/>`).join('');
     // honeycomb: pointy-top hexagons of radius 9 (one row every 13.5, every other row shifted half a cell)
     const HX = 9, HW = HX * Math.sqrt(3);
+    // path of one honeycomb cell (pointy-top hexagon) centred at x,y
     const hex = (x, y) => `M${x},${y - HX} L${(x + HW / 2).toFixed(1)},${y - HX / 2} V${y + HX / 2} L${x},${y + HX} L${(x - HW / 2).toFixed(1)},${y + HX / 2} V${y - HX / 2}Z`;
     const hexTile = [[HW / 2, HX], [0, 2.5 * HX], [HW, 2.5 * HX], [0, -.5 * HX], [HW, -.5 * HX], [HW / 2, 4 * HX]].map(([x, y]) => hex(+x.toFixed(1), y)).join('');
     let panes = '';
@@ -12268,6 +12652,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
        end on the far bank (y 690), and it gets narrower further away. The ducks swim under it.
        t = 0 near end ... 1 far end. */
     const bY = t => 752 - 62 * t, bL = t => 1136 + 20 * t, bR = t => 1224 - 20 * t, bH = t => 32 - 12 * t;
+    // a point as "x,y" text
     const pt = (x, y) => `${x.toFixed(1)},${y.toFixed(1)}`;
     let bridge = `<path d="M1166,662 H1194 L1204,690 H1156Z M1136,760 H1224 Q1236,880 1290,1000 H1070 Q1124,880 1136,760Z" fill="#e6dcc4" opacity=".8"/>` +    // gravel path on both banks
       `<polygon points="${pt(bL(0), bY(0))} ${pt(bR(0), bY(0))} ${pt(bR(1), bY(1))} ${pt(bL(1), bY(1))}" fill="#c48a52" stroke="#8a5a34" stroke-width="2.5" stroke-linejoin="round"/>`;
@@ -12345,10 +12730,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     };
     const wins = fill(BUS.doorHalf + 40, driverX - 40)                                   // between the door and the driver
       .concat(fill(-leftSpace - 40, -BUS.doorHalf - 40).reverse());                      // behind the door (nearest first)
+    // a window (or the driver) at bus position lx, width w, in scene units
     const rect = (lx, w) => ({ x: doorX + lx * k, y: groundY + BUS.winTop * k, w: w * k, h: (BUS.winBot - BUS.winTop) * k });
     return { doorX, groundY, k, left, right, driverX, wins, leftSpace,
       windows: wins.map(o => rect(o.x, o.w)), driver: rect(driverX, BUS.driverW) };
   }
+  /** The yellow bus, drawn around the door where the doll stands (o: see busLayout). */
   function bus(o) {
     const L = busLayout(o), k = L.k, T = BUS.winTop, B = BUS.winBot;
     const rearX = -L.leftSpace - 80, noseX = L.driverX + BUS.driverW + 230;
@@ -12357,6 +12744,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       `<rect x="${x}" y="${T}" width="${w}" height="${B - T}" rx="18" fill="url(#bus-glass)"/>` +
       (seats ? [x + w * .28, x + w * .72].map(cx => `<rect x="${cx - 44}" y="${B - 120}" width="88" height="140" rx="22" fill="#c8453e" stroke="#8e2a26" stroke-width="5"/><path d="M${cx - 30},${B - 100} h60 M${cx - 30},${B - 70} h60" stroke="#e7766c" stroke-width="5" stroke-dasharray="6 8"/>`).join('') : '') +
       `<path d="M${x + 24},${T + 40} L${x + 70},${T + 10} M${x + 24},${T + 90} L${x + 120},${T + 18}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".18"/>`;
+    // a wheel under its dark wheel arch, centred at x
     const wheel = x => `<path d="M${x - 170},30 V-90 Q${x - 170},-170 ${x},-170 Q${x + 170},-170 ${x + 170},-90 V30Z" fill="#3a3f48"/>` +
       `<circle cx="${x}" cy="40" r="130" fill="#26292f"/><circle cx="${x}" cy="40" r="72" fill="#c9ccd4" stroke="#8a8e98" stroke-width="8"/><circle cx="${x}" cy="40" r="24" fill="#8a8e98"/>`;
     let parts = '';
@@ -12419,20 +12807,33 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       for (let x = 8; x < 1600; x += 30) s += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="${(x / 30 | 0) % 2 ? a : b}" stroke="#2f5f80" stroke-width="1"/>`;
       return s; };
     const ropes = rope(PT + 40, '#e2564c', '#fbfaf6') + rope(PT + 96, '#3f7fd0', '#f7d16a') + rope(PT + 152, '#e2564c', '#fbfaf6');
-    // the big yellow water slide: tower with stairs on the right, a winding tube down into the pool
-    const TUBE = 'M1268,346 C1150,340 1090,372 1120,410 C1150,446 1330,436 1338,492 C1346,548 1210,548 1150,566 C1098,582 1082,612 1074,636';
+    /* The big yellow water slide. It starts in a little blue start house on top of the tower (right),
+       winds down, flattens out just above the water and ends in an OPEN mouth (dark inside, yellow rim)
+       with water pouring out of it into the pool. Rings around the tube show that it is a tube.
+       Drawn 40 units higher than written (translate) so it stands on the far side of the pool. */
+    const TUBE = 'M1280,330 C1150,330 1090,372 1120,410 C1150,446 1330,436 1338,492 C1346,548 1210,548 1150,566 C1126,573 1112,574 1096,574';
     const slide = `<g transform="translate(0,-40)">
-      ${[[1150, 566, 1150, 600], [1338, 492, 1338, 600], [1120, 410, 1120, 600]].map(([x, y, , y2]) => `<path d="M${x},${y + 20} V${y2}" stroke="#8a919e" stroke-width="7"/>`).join('')}
+      ${[[1150, 566], [1338, 492], [1120, 410]].map(([x, y]) => `<path d="M${x},${y + 20} V600" stroke="#8a919e" stroke-width="7"/>`).join('')}
       <path d="M1250,600 V346 M1310,600 V346" stroke="#c9ced6" stroke-width="10"/>
       ${Array.from({ length: 11 }, (_, i) => `<path d="M1250,${590 - i * 24} L1310,${578 - i * 24}" stroke="${i % 2 ? '#e2564c' : '#fbfaf6'}" stroke-width="6" stroke-linecap="round"/>`).join('')}
-      <path d="M1240,346 H1320 V334 H1240Z" fill="#3f7fd0" stroke="#2a5a96" stroke-width="2.5"/>
-      <path d="M1244,334 V306 M1316,334 V306 M1244,310 H1316" stroke="#3f7fd0" stroke-width="5" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#c98a14" stroke-width="54" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#ffcf3a" stroke-width="46" stroke-linecap="round"/>
-      <path d="${TUBE}" fill="none" stroke="#ffe98a" stroke-width="10" stroke-linecap="round" transform="translate(0,-12)" opacity=".9"/>
-      <path d="${TUBE}" fill="none" stroke="#e2a514" stroke-width="3" stroke-dasharray="4 26" transform="translate(0,8)" opacity=".7"/></g>`;
-    // splash where the slide ends
-    const splash = `<g class="foam"><ellipse cx="1074" cy="${PT + 36}" rx="56" ry="10" fill="#fff" opacity=".7"/><path d="M1044,${PT + 32} q-8,-18 -2,-30 M1074,${PT + 28} q0,-22 6,-34 M1104,${PT + 32} q8,-18 4,-30" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/></g>`;
+      <path d="${TUBE}" fill="none" stroke="#c98a14" stroke-width="54"/>
+      <path d="${TUBE}" fill="none" stroke="#ffcf3a" stroke-width="46"/>
+      <path d="${TUBE}" fill="none" stroke="#eab42a" stroke-width="46" stroke-dasharray="7 47" opacity=".8"/>
+      <path d="${TUBE}" fill="none" stroke="#ffe98a" stroke-width="9" transform="translate(0,-12)" opacity=".9"/>
+      <!-- the open end: dark inside, a light rim, and a sliver of water running inside -->
+      <g transform="rotate(-6 1096 574)">
+        <ellipse cx="1096" cy="574" rx="11" ry="25" fill="#8a5a10" stroke="#ffe27a" stroke-width="4"/>
+        <ellipse cx="1099" cy="576" rx="6" ry="17" fill="#5e3c08"/>
+        <path d="M1090,590 Q1097,598 1104,588" stroke="#bfe9f7" stroke-width="5" fill="none" stroke-linecap="round"/></g>
+      <!-- start house on top of the tower -->
+      <path d="M1236,354 V300 H1324 V354Z" fill="#3f7fd0" stroke="#2a5a96" stroke-width="2.5"/>
+      <path d="M1228,302 L1280,272 L1332,302Z" fill="#e2564c" stroke="#a83a33" stroke-width="2.5" stroke-linejoin="round"/>
+      <rect x="1290" y="312" width="22" height="18" rx="3" fill="#bfe3f2" stroke="#fff" stroke-width="2.5"/>
+      <!-- water pouring out of the mouth into the pool -->
+      <path d="M1092,574 C1068,576 1050,586 1038,602 L1062,602 C1070,594 1080,592 1095,594Z" fill="#bfe9f7" opacity=".9"/>
+      <path d="M1088,582 C1070,585 1056,592 1048,601" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="10 14" class="flow"/></g>`;
+    // splash where the water from the slide lands in the pool
+    const splash = `<g class="foam"><ellipse cx="1048" cy="${PT + 6}" rx="44" ry="8" fill="#fff" opacity=".7"/><path d="M1020,${PT + 4} q-8,-14 -2,-24 M1076,${PT + 4} q8,-14 4,-24" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/></g>`;
     // friendly whale fountain in the pool, spouting water
     const whale = `<g transform="translate(780,${PT + 126})">
       <path d="M-60,14 Q-62,-34 -10,-40 Q40,-44 58,-6 Q64,10 56,14Z" fill="#5d8fd6" stroke="#36609e" stroke-width="3" stroke-linejoin="round"/>
@@ -12527,6 +12928,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const stroke = (d, col, w = 1.6, op = 1) => `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${op < 1 ? ` opacity="${op}"` : ''}/>`;
   /** Soft ellipse (glows, shadows, blush, spots). */
   const oval = (cx, cy, rx, ry, fill, op = 1, more = '') => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}"${op < 1 ? ` opacity="${op}"` : ''}${more}/>`;
+  /** Round to one decimal (keeps the creature SVGs short). */
   const r1 = n => Math.round(n * 10) / 10;
   /**
    * Fluffy outline through a closed list of points (clockwise on screen):
@@ -12588,6 +12990,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       rad(`${p}-muz`, [[0, cmix(o.muzzle, '#ffffff', .35)], [1, o.muzzle]], .4, .3, .8) +
       `<clipPath id="${p}-bc"><path d="${BODY}"/></clipPath><clipPath id="${p}-hc"><path d="${HEAD}"/></clipPath>` +
       (o.unicorn ? lin(`${p}-horn`, [[0, '#fff3b8'], [.5, '#f6cf55'], [1, '#d9a42a']], 'h') : '');
+    // a hoof at x, width w (far = the legs on the other side, a little paler)
     const hoof = (x, w, far) => shape(`M${x},${162}h${w}c1,4 2,8 2,11h${-w - 3}c0,-4 0,-7 1,-11z`, `url(#${p}-hoof)`, cink(o.hoof[1], .4), 2, far ? ' opacity=".9"' : '');
     // tail: one full flowing shape from the croup to near the ground, with long locks on top for texture
     const TAIL = 'M62,78C44,72 28,84 24,104C20,124 22,146 16,162Q24,160 27,167Q33,158 38,165Q41,156 47,160Q44,146 46,132C48,116 46,104 54,92Z';
@@ -12596,6 +12999,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       stroke('M38,92C32,110 30,132 28,150M46,96C40,116 38,136 40,152', '#ffffff', 1.4, .45);
     // mane: a wavy band along the crest (poll to withers) with long locks hanging over the near side of the neck
     const crest = t => [(1 - t) * (1 - t) * 172 + 2 * (1 - t) * t * 154 + t * t * 140, (1 - t) * (1 - t) * 26 + 2 * (1 - t) * t * 40 + t * t * 78];
+    // a point beside the mane crest: t along the neck, k steps sideways
     const off = (t, k) => { const [x, y] = crest(t); return [r1(x + .85 * k), r1(y + .53 * k)]; };
     const band = [], ts = [0, .14, .28, .42, .56, .7, .84, 1];
     ts.forEach(t => band.push(off(t, 7)));
@@ -12668,6 +13072,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       rad(`${p}-belly`, [[0, '#ffffff'], [.5, o.belly], [1, cmix(o.belly, fd, .35)]], .45, .3, .8) +
       (o.mane ? rad(`${p}-mane`, [[0, o.mane[0]], [.6, o.mane[1]], [1, o.mane[2]]], .5, .45, .6) : '') +
       (o.spikes ? rad(`${p}-spk`, [[0, o.spikes[0]], [1, o.spikes[1]]], .5, .6, .7) : '');
+    // mirror a path from the left half of the drawing to the right half
     const mirror = (d) => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => r1(120 - x) + ',' + y);
     let back = '', ears = '';
     // tail (behind the body, wags)
@@ -12726,6 +13131,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     puffin: () => {
       const p = 'cr-puffin';
       const BEAK = 'M83,28C91,27 99,33 104,41C107,46 105,50 100,52C94,54 89,55 84,56C82,46 82,37 83,28Z';
+      // one webbed orange foot at x
       const foot = x => shape(`M${x - 3},128h7v9C${x + 10},138 ${x + 16},141 ${x + 20},145C${x + 16},148 ${x + 12},146 ${x + 9},148C${x + 6},149 ${x + 3},147 ${x},148C${x - 4},149 ${x - 8},148 ${x - 8},145C${x - 6},141 ${x - 4},139 ${x - 3},137Z`, `url(#${p}-foot)`, '#b24e22', 2) +
         stroke(`M${x + 1},140l7,6M${x + 4},139l12,6`, '#d65e26', 1.3, .7);
       const defs = rad(`${p}-blk`, [[0, '#5a5b70'], [.45, '#2e2e3c'], [1, '#18161f']], .32, .2, .9) +
@@ -12777,6 +13183,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     sheep: () => {
       const p = 'cr-sheep';
       const FLEECE = fluff(ring(76, 74, 52, 32, 16, 180, .03), .2);
+      // one leg at x (far = the leg behind, a bit darker)
       const leg = (x, far) => shape(`M${x - 4.5},92C${x - 4.5},102 ${x - 3.5},108 ${x - 3.5},117L${x + 3.5},117C${x + 3.5},108 ${x + 4.5},102 ${x + 4.5},92Z`, far ? `url(#${p}-legf)` : `url(#${p}-leg)`, '#8a7264', 1.8) +
         shape(`M${x - 3.8},116h7.6l1,6h-9.6z`, '#6a5550', '#4a3a38', 1.4);
       const defs = rad(`${p}-wool`, [[0, '#ffffff'], [.55, '#f8f2e8'], [1, '#d9cbb8']], .4, .25, .85) +
@@ -12815,8 +13222,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const TAIL = fluff([[62, 68], [58, 82], [46, 90], [30, 90], [16, 82], [8, 68], [6, 52], [10, 38], [18, 28], [30, 24], [40, 28], [43, 40], [41, 52], [46, 62], [54, 66]], .2);
       const BODY = fluff([[62, 60], [80, 54], [100, 54], [116, 52], [128, 62], [126, 80], [116, 92], [96, 95], [76, 95], [60, 90], [52, 76]], .14);
       const HEAD = fluff([[116, 32], [130, 28], [144, 32], [152, 42], [158, 52], [156, 60], [146, 66], [134, 70], [122, 68], [112, 62], [106, 54], [110, 42]], .1);
+      // one leg at x (far = the leg behind, a bit darker)
       const leg = (x, far) => shape(`M${x - 6},84C${x - 6},96 ${x - 5},104 ${x - 5},110C${x - 7},114 ${x - 6},118 ${x},118C${x + 6},118 ${x + 7},114 ${x + 5},110C${x + 5},104 ${x + 6},96 ${x + 6},84Z`, far ? `url(#${p}-far)` : `url(#${p}-fur)`, line, 2) +
         stroke(`M${x - 2},114v3M${x + 2},114v3`, line, 1.1, .8);
+      // one ear at x,y tilted by angle a
       const ear = (x, y, a) => `<g transform="translate(${x},${y}) rotate(${a})">${shape('M-8,8C-9,-2 -5,-10 0,-12C5,-10 9,-2 8,8Z', `url(#${p}-fur)`, line, 2)}${shape('M-4,6C-4.5,0 -2.5,-5 0,-7C2.5,-5 4.5,0 4,6Z', '#c9bfd2', 'none', 0)}</g>`;
       const defs = rad(`${p}-fur`, [[0, '#ffffff'], [.6, '#f7f8fd'], [1, '#d2d9e8']], .38, .25, .85) +
         lin(`${p}-far`, [[0, '#dde2ee'], [1, '#c3cbdd']]) +
@@ -12893,11 +13302,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     elf: (lantern) => {
       const p = 'cr-elf';
       const SK = { base: '#f7d7c3', light: '#fdeadd', shade: '#eab49c', line: '#c2857a' };
+      // one big eye at cx,cy with a shine
       const eye = (cx, cy) => oval(cx, cy, 4.8, 5.8, '#fff', 1, ' stroke="#b49094" stroke-width=".8"') +
         oval(cx, cy + .8, 4, 4.8, `url(#${p}-eye)`, 1, ' stroke="#4a2e22" stroke-width=".9"') +
         oval(cx, cy + 1, 2, 2.4, '#1e1620') + oval(cx + 1.6, cy - 1.2, 1.7, 1.5, '#fff') + `<circle cx="${cx - 1.6}" cy="${cy + 2.8}" r=".8" fill="#fff"/>` +
         stroke(`M${cx - 5.2},${cy - 1.8}Q${cx},${cy - 7.6} ${cx + 5.2},${cy - 2.2}`, '#3a2830', 1.8);
+      // one tunic sleeve along path d
       const sleeve = d => shape(d, `url(#${p}-tunic)`, '#2f6a3e', 2);
+      // one hand (mitten shape) at x,y
       const hand = (x, y) => shape(`M${x - 4.5},${y - 3}C${x - 6},${y + 2} ${x - 3},${y + 6} ${x},${y + 6}C${x + 4},${y + 6} ${x + 6},${y + 2} ${x + 4.5},${y - 3}Z`, `url(#${p}-skin)`, SK.line, 1.6);
       const defs = rad(`${p}-skin`, [[0, SK.light], [.6, SK.base], [1, SK.shade]], .4, .35, .75) +
         lin(`${p}-eye`, [[0, '#4a2a18'], [.5, '#8a5a32'], [1, '#d3a46a']]) +
@@ -13067,6 +13479,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
 </script>
 <script>
+FJ.loading('app.js');
 /* =====================================================================
    Fjársjóðskistan – the game
    Wires the doll, scenes, creatures, the treasure chest, dragging,
@@ -13074,7 +13487,11 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    ===================================================================== */
 (function () {
   'use strict';
+  /** Shorthand for document.querySelector. */
   const $ = s => document.querySelector(s);
+  // error codes (errors.js): report(code, detail, error) writes to the log in the parent menu;
+  // guard(code, detail, fn, fallback) runs fn and logs + returns fallback if it throws
+  const FJ = window.FJ, { report, guard } = FJ;
   const stage = $('#stage'), dollEl = $('#doll'), chestEl = $('#chest'), trayEl = $('#tray'),
     tabsEl = $('#tabs'), gridEl = $('#grid'), looseLayer = $('#loose'), sceneEl = $('#scene'),
     critterLayer = $('#critters'), galleryEl = $('#gallery'), menuEl = $('#menu'), defsEl = $('#defs defs');
@@ -13092,26 +13509,26 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const VERSION = 1;
   const MAX_OUTFITS = 200;            // ~300 bytes each, far below the browser limit
   const JAR_SIZE = 10;                // hearts in a full jar (a full jar brings a new friend)
-  /** Parse stored JSON; null when missing or unreadable. */
+  /** Parse stored JSON: { raw text, data } where data is null when missing or unreadable. */
   function readJSON(key) {
     let raw = null;
-    try { raw = localStorage.getItem(key); } catch (e) { return { raw: null, data: null }; }
+    try { raw = localStorage.getItem(key); } catch (e) { report('FJ-S03', key, e); return { raw: null, data: null }; }
     try { const d = JSON.parse(raw || 'null'); return { raw, data: d && typeof d === 'object' ? d : null }; }
     catch (e) { return { raw, data: null }; }
   }
   const LocalStore = {
     ok: true,                 // false when the browser refuses to store anything
-    /** Read the saved state. Falls back to the backup copy if the main copy is damaged. */
+    /** Read the saved state. Falls back to the backup copy if the main copy is damaged (code FJ-S02). */
     load() {
       const main = readJSON(KEY);
-      if (main.data) { try { localStorage.setItem(BACKUP, main.raw); } catch (e) { /* full or blocked */ } return main.data; }
-      if (main.raw) { try { localStorage.setItem(BROKEN, main.raw); } catch (e) { /* ignore */ } }
+      if (main.data) { try { localStorage.setItem(BACKUP, main.raw); } catch (e) { report('FJ-S01', 'backup copy', e); } return main.data; }
+      if (main.raw) { report('FJ-S02', main.raw.length + ' characters'); try { localStorage.setItem(BROKEN, main.raw); } catch (e) { report('FJ-S01', 'parking the damaged save', e); } }
       return readJSON(BACKUP).data;
     },
-    /** Write the whole state. Remembers if it failed so the parent menu can say so. */
+    /** Write the whole state. Remembers if it failed so the parent menu can say so (code FJ-S01). */
     save(data) {
       try { localStorage.setItem(KEY, JSON.stringify(data)); this.ok = true; }
-      catch (e) { this.ok = false; }
+      catch (e) { this.ok = false; report('FJ-S01', 'save', e); }
     },
   };
   const Store = LocalStore;
@@ -13131,6 +13548,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       rewards: { hearts: 0, friends: [], hairSeen: [] },
     };
   }
+  /** True for a plain object (not null, not a list). */
   const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
   /** Keep only well-formed outfits (from storage or from an imported backup file). */
   function cleanOutfits(list) {
@@ -13164,9 +13582,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     return s;
   }
   const state = upgrade(Store.load());
-  // drop ids of pieces that no longer exist (saved outfits keep theirs: the gallery skips them when drawing)
-  for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) delete state.worn[s];
+  // drop ids that no longer exist (saved outfits keep theirs: the gallery skips them when drawing).
+  // Each one is logged (FJ-S06): it usually means an id was renamed, which must never happen.
+  for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) { report('FJ-S06', 'worn ' + state.worn[s]); delete state.worn[s]; }
+  for (const p of state.loose) if (!DOLL.byId[p.id]) report('FJ-S06', 'loose ' + p.id);
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
+  if (!DOLL.hairstyles.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (!SCENES[state.scene]) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
 
   /* Zoom guard: the game should never be zoomed. If the page is zoomed in anyway
      (a pinch in some corner, or a browser setting that forces zoom), rewriting the
@@ -13199,7 +13621,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const Sound = {
     ctx: null,
     /** Create the audio context on first use. */
-    init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } } if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+    init() {
+      if (!this.ctx && !this.failed) {
+        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { this.ctx = null; this.failed = true; report('FJ-A03', '', e); }   // tried once; the game stays silent
+      }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    },
     /** One soft tone. */
     tone(freq, dur = .18, type = 'sine', vol = .06, delay = 0, slideTo = 0) {
       if (!state.settings.sound) return; this.init(); const c = this.ctx; if (!c) return;
@@ -13208,14 +13636,23 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .015); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
       o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + .02);
     },
+    /** A piece clicks onto the doll: two bright notes. */
     snap() { this.tone(1046, .16); this.tone(1318, .22, 'sine', .05, .08); },
+    /** A piece comes off: one note sliding down. */
     off() { this.tone(660, .14, 'sine', .045, 0, 440); },
+    /** An outfit is saved: four rising notes. */
     save() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, .25, 'sine', .05, i * .08)); },
+    /** Puffin (and fox) chirp. */
     chirp() { this.tone(1800, .08, 'sine', .04, 0, 2600); this.tone(2000, .08, 'sine', .04, .1, 2900); },
+    /** Sheep: a soft wobbly "baa". */
     baa() { this.tone(330, .35, 'triangle', .035, 0, 300); this.tone(338, .35, 'triangle', .02, .02, 305); },
+    /** Horse hooves: four soft clops. */
     clop() { [0, .14, .28, .42].forEach(d => this.tone(180, .05, 'square', .02, d, 120)); },
+    /** Unicorn magic: a quick run of high twinkles. */
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
+    /** The elf's little bell. */
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
+    /** Things fly back to the chest, or the scene changes. */
     whoosh() { this.tone(500, .25, 'triangle', .02, 0, 900); },
     /** The bus driver's friendly horn: a soft "bíb bíb". */
     horn() { this.tone(523, .16, 'triangle', .05, 0); this.tone(659, .2, 'triangle', .05, .2); },
@@ -13281,15 +13718,20 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /* ---------------------------------------------------------------
      Geometry helpers
      --------------------------------------------------------------- */
+  /** Where the doll is on screen (a rectangle in pixels). */
   const dollRect = () => dollEl.getBoundingClientRect();
+  /** Where the treasure chest is on screen. */
   const chestRect = () => chestEl.getBoundingClientRect();
+  /** Is point x,y inside rectangle r (grown by pad pixels on every side)? */
   const inside = (r, x, y, pad = 0) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+  /** The centre point [x, y] of a rectangle. */
   const centre = r => [r.left + r.width / 2, r.top + r.height / 2];
   /** Is a point over the doll's body area (generous, so small hands succeed)? */
   function overDoll(x, y, leaving = false) {
     const r = dollRect(), k = leaving ? .3 : .08;   // pulled off the doll: must leave her body area, not just the picture box
     return inside({ left: r.left + r.width * k, right: r.right - r.width * k, top: r.top + (leaving ? r.height * .05 : 0), bottom: r.bottom - (leaving ? r.height * .04 : 0) }, x, y, leaving ? 0 : 20);
   }
+  /** Is a point over the chest, or over the open tray of pieces? */
   function overChest(x, y) { return inside(chestRect(), x, y, 10) || (!trayEl.hidden && inside(trayEl.getBoundingClientRect(), x, y)); }
 
   /* ---------------------------------------------------------------
@@ -13314,6 +13756,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     // finish on the animation end, with a timer as a backup so a flying piece can never get stuck on screen
     return new Promise(res => {
       let done = false;
+      // remove the flying picture and finish (only once, whichever comes first)
       const end = () => { if (done) return; done = true; el.remove(); res(); };
       anim.onfinish = end; anim.oncancel = end; setTimeout(end, ms + 400);
     });
@@ -13335,10 +13778,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      Helpers who carry pieces: a puffin flies them over, or an elf does.
      --------------------------------------------------------------- */
   let helperTurn = 0;
+  /** A helper carries a piece from the chest to the doll and puts it on (puffin twice, then the elf). */
   function carry(id, fromRect) {
     const useElf = helperTurn++ % 3 === 2;
     Sound[useElf ? 'bell' : 'chirp']();
-    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, useElf ? CREATURES.elf() : CREATURES.puffin()).then(() => equip(id));
+    const helper = guard('FJ-D04', useElf ? 'elf' : 'puffin', () => (useElf ? CREATURES.elf() : CREATURES.puffin()), '');
+    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, helper).then(() => equip(id));
   }
 
   /* ---------------------------------------------------------------
@@ -13367,6 +13812,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const itemsIn = cat => DOLL.items.filter(i => i.cat === cat);
   /** Costume looks whose pieces all exist. */
   const looks = () => DOLL.looks.filter(l => l.items.length && l.items.every(id => DOLL.byId[id]));
+  /** Chest tabs that have something in them (hair always does). */
   const catsWithItems = () => CATS.filter(c => c.id === 'hair' || (c.id === 'costume' ? looks().length : itemsIn(c.id).length));
   /** Small picture of a whole look: the doll from head to knees wearing it. */
   const lookThumb = l => {
@@ -13388,12 +13834,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     // so it stays where she has scrolled to
     Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
   }
+  /** Is h a hairstyle that exists? */
   const HAIR_OK = h => DOLL.hairstyles.includes(h);
   /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
   const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
     if (!e.isIntersecting || !e.target._draw) return;
     e.target.innerHTML = e.target._draw(); e.target._draw = null; lazyIO.unobserve(e.target); syncDefs();
   }), { root: gridEl, rootMargin: '200px' }) : null;
+  /** Give a tile its picture later, when it scrolls into view (or right away in browsers without IntersectionObserver). */
   function lazyThumb(el, draw) { if (lazyIO) { el._draw = draw; lazyIO.observe(el); } else el.innerHTML = draw(); }
 
   /** Build the category tabs; each tab icon is the first piece in that category. */
@@ -13465,6 +13913,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      origin: 'tray' | 'loose' | 'doll'
      --------------------------------------------------------------- */
   let drag = null;
+  /** A finger (or mouse) goes down on a piece: get ready to drag it (the drag starts once it moves 10 px). */
   function startDrag(e, id, origin, el) {
     if (e.button > 0) return;
     // Only one drag at a time. A second finger (or a drag whose finger-up was lost) would
@@ -13479,6 +13928,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
   }
+  /** The finger moves: start the drag (show the floating piece) or move the piece along. */
   function onMove(e) {
     if (!drag || e.pointerId !== drag.pointer) return;
     const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
@@ -13496,6 +13946,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
     drag.lastX = e.clientX; drag.lastY = e.clientY;
   }
+  /** The finger lifts: a tap, or drop the piece on the doll, into the chest, or in the scene. */
   function onUp(e) {
     if (!drag || e.pointerId !== drag.pointer) return;
     const d = drag; cleanupDrag();
@@ -13507,6 +13958,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     else if (overChest(x, y)) { flyThumb(d.id, ghostRect, chestRect(), 350); Sound.off(); chestEl.classList.remove('wiggle'); void chestEl.offsetWidth; chestEl.classList.add('wiggle'); persist(); }
     else dropLoose(d.id, x, y);
   }
+  /** The browser cancelled the touch (e.g. a system gesture): put the piece down where it is. */
   function onCancel(e) {
     if (drag && e && e.pointerId !== undefined && e.pointerId !== drag.pointer) return;   // another finger was cancelled
     settleDrag();
@@ -13519,6 +13971,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   // the app is switched away from or loses focus mid-drag: put the piece down
   window.addEventListener('blur', () => { if (drag) settleDrag(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && drag) settleDrag(); });
+  /** Stop listening to the finger and forget the drag. */
   function cleanupDrag() {
     window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
     drag = null;
@@ -13535,11 +13988,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      --------------------------------------------------------------- */
   /** Keep a % position inside the screen edges. */
   const clampPct = v => Math.max(7, Math.min(93, v));
+  /** Leave a piece lying in the scene at screen point x,y (saved as % of the stage). */
   function dropLoose(id, x, y) {
     const sr = stage.getBoundingClientRect();
     const p = { id, x: +clampPct((x - sr.left) / sr.width * 100).toFixed(2), y: +clampPct((y - sr.top) / sr.height * 100).toFixed(2) };
     state.loose.push(p); addLooseEl(p); Sound.tone(587, .1, 'sine', .035); persist();
   }
+  /** Show one lying piece and let her pick it up again. */
   function addLooseEl(p) {
     const el = document.createElement('div'); el.className = 'loose';
     el.style.left = p.x + '%'; el.style.top = p.y + '%';
@@ -13547,6 +14002,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     el.addEventListener('pointerdown', e => { startDrag(e, p.id, 'loose', el); if (drag) drag.loosePiece = p; });
     looseLayer.appendChild(el);
   }
+  /** Draw every lying piece again (kept inside the screen edges). */
   function renderLoose() { looseLayer.innerHTML = ''; state.loose.forEach(p => { p.x = clampPct(p.x); p.y = clampPct(p.y); addLooseEl(p); }); syncDefs(); }
   // turning the tablet or phone: redraw loose pieces so none end up off screen
   window.addEventListener('resize', () => { clearTimeout(renderLoose.t); renderLoose.t = setTimeout(renderLoose, 200); });
@@ -13584,14 +14040,19 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** On wide screens (phone in landscape) the scene is cropped top and bottom, so animals get bigger to match. */
   const wideScale = () => Math.max(1.15, Math.min(1.7, (innerWidth / innerHeight) / 1.25));
   window.addEventListener('resize', () => { clearTimeout(renderScene.t); renderScene.t = setTimeout(renderScene, 250); });
+  /** Draw the chosen scene with its animals, her friends (or bus passengers) and snow. */
   function renderScene() {
-    const sc = SCENES[state.scene] || SCENES.meadow;
+    let sc = SCENES[state.scene] || SCENES.meadow;
     const opts = sc.layout ? busOptions() : undefined;     // the bus is drawn to fit where the doll stands
-    sceneEl.innerHTML = sc.svg(opts);
+    const svg = guard('FJ-D03', state.scene, () => sc.svg(opts), null);
+    if (svg === null) sc = SCENES.meadow;                   // a broken scene: show the meadow instead
+    sceneEl.innerHTML = svg ?? sc.svg();
     stage.style.setProperty('--wind', sc.wind + 's');
     critterLayer.innerHTML = '';
     if (sc.layout) seatPassengers(sc, opts);
     (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
+      const pic = guard('FJ-D04', c.k, () => CREATURES[c.k](c.lantern), null);
+      if (pic === null) return;                               // an animal that can't be drawn is left out
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
       if (c.friend) el.dataset.friend = c.k;
@@ -13600,7 +14061,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       // sc.ground: lowest line where the land starts (the sea is above it in Reykjavík), in % of the stage
       el.style.left = (spot ? spot[0] : c.x) + '%'; el.style.top = Math.max(spot ? spot[1] : c.y, sc.ground || 0) + '%'; el.style.height = (portrait ? c.h * .62 : c.h * wideScale()) + '%';
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', c.k);
-      el.innerHTML = `<div class="inner">${CREATURES[c.k](c.lantern)}</div>`;
+      el.innerHTML = `<div class="inner">${pic}</div>`;
       el.querySelectorAll('.tail,.head').forEach(n => n.style.animationDelay = (-i * .7) + 's');
       el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
       critterLayer.appendChild(el);
@@ -13625,6 +14086,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Where the doll stands, in scene units: the door goes behind her and is a bit taller than she is. */
   function busOptions() {
     const m = sceneMap(), d = dollRect();
+    // screen pixels → scene units
     const toX = px => (px - m.r.left - m.ox) / m.s, toY = py => (py - m.r.top - m.oy) / m.s;
     const head = toY(d.top + d.height * 50 / 780), feet = toY(d.top + d.height * 752 / 780);   // the doll drawing spans y 50–752 of 780
     return { doorX: toX(d.left + d.width / 2), groundY: feet, k: (feet - head) / 860, left: toX(m.r.left), right: toX(m.r.right) };
@@ -13636,13 +14098,16 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const L = sc.layout(opts), m = sceneMap();
     const friends = state.settings.rewards ? state.rewards.friends.filter(k => CREATURES[k] && friendOf(k)).slice().reverse() : [];
     const queue = friends.concat(sc.passengers);
+    // put one passenger (key) in window w; slot/of: seat 0 or 1 of 1 or 2 in that window
     const seat = (w, key, slot, of) => {
       const box = document.createElement('div'); box.className = 'seat-window';
       Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
+      const pic = guard('FJ-D04', key, () => CREATURES[key](), null);
+      if (pic === null) return;
       const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
       const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', f ? f.is : key);
-      el.innerHTML = `<div class="inner">${CREATURES[key]()}</div>`;
+      el.innerHTML = `<div class="inner">${pic}</div>`;
       const H = w.h * m.s * (key === 'driver' ? 1.05 : WIDE.includes(key) ? .95 : .85);   // creature height in px
       const vb = (el.querySelector('svg').getAttribute('viewBox') || '0 0 1 1').split(/\s+/).map(Number);
       const Wd = H * vb[2] / vb[3], bw = w.w * m.s;
@@ -13668,7 +14133,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   function spreadCreatures() {
     const sr = stage.getBoundingClientRect(), pad = 10;
+    // a rectangle grown by m pixels on every side
     const grow = (r, m) => ({ left: r.left - m, right: r.right + m, top: r.top - m, bottom: r.bottom + m });
+    // do two rectangles overlap?
     const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     const d = dollRect();
     const blockers = [
@@ -13684,6 +14151,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       for (let tries = 0; tries < 4 && !placed; tries++) {
         const r0 = el.getBoundingClientRect(), w = r0.width, h = r0.height;
         const ground = sr.top + sr.height * ((SCENES[state.scene] || {}).ground || 0) / 100;   // feet must stand on land
+        // would the animal fit at this spot: on screen, on land, and not overlapping anything?
         const fits = (left, top) => { const r = { left, right: left + w, top, bottom: top + h }; return left >= sr.left + 4 && left + w <= sr.right - 4 && top >= sr.top + sr.height * .45 && top + h >= ground && !blockers.some(b => hit(grow(r, pad), b)); };
         // try the planned height first, then a bit further back up the hill or nearer; at each, step outwards left and right
         for (const dy of [0, -.05, -.1, .04, -.15]) {
@@ -13737,7 +14205,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const pool = DOLL.items.filter(i => !Object.values(state.worn).includes(i.id));
     if (!pool.length) return;
     const it = pool[Math.floor(Math.random() * pool.length)];
-    setTimeout(() => flyThumb(it.id, chestRect(), dollRect(), 1000, CREATURES.elf()).then(() => { equip(it.id); renderDoll(); }), 400);
+    setTimeout(() => flyThumb(it.id, chestRect(), dollRect(), 1000, guard('FJ-D04', 'elf', () => CREATURES.elf(), '')).then(() => { equip(it.id); renderDoll(); }), 400);
   }
 
   /* ---------------------------------------------------------------
@@ -13745,6 +14213,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
      --------------------------------------------------------------- */
   /** Text fingerprint of an outfit: hair plus the sorted item ids. */
   function outfitKey(hair, worn) { return hair + '|' + Object.values(worn).sort().join(','); }
+  /** The heart button: save what she wears (a new outfit earns a heart). */
   function saveOutfit() {
     if (!Object.keys(state.worn).length) { Sound.tone(330, .15); return; }
     // Same clothes and hair already saved? Move that one to the front instead of making a copy.
@@ -13757,6 +14226,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
     persist(); if (!galleryEl.hidden) renderGallery();
   }
+  /** The saved-outfits picture frame: tap one to wear it, long-press to delete. */
   function renderGallery() {
     galleryEl.innerHTML = '';
     if (!state.outfits.length) {
@@ -13818,6 +14288,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     jarBtn.hidden = !state.settings.rewards;
     jarBtn.innerHTML = jarSVG(Math.max(0, Math.min(JAR_SIZE, jarShown)));
   }
+  /** Where the heart jar button is on screen. */
   const jarRect = () => jarBtn.getBoundingClientRect();
   /** Friend info by key. */
   const friendOf = k => FRIENDS.find(f => f.k === k);
@@ -13871,7 +14342,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
         const el = critterLayer.querySelector(`[data-friend="${friend}"]`);
         if (!el) return;
         el.classList.add('arriving');
-        flyMarkup(CREATURES[friend](), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
+        flyMarkup(guard('FJ-D04', friend, () => CREATURES[friend](), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
           el.classList.remove('arriving'); Sound.arrive(); sparkleAt(el.getBoundingClientRect(), 14);
           el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100);
           happy(1600);
@@ -13890,8 +14361,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     friendsEl.innerHTML = '';
     for (const k of state.rewards.friends) {
       const f = friendOf(k); if (!f || !CREATURES[k]) continue;
+      const pic = guard('FJ-D04', k, () => CREATURES[k](), null); if (pic === null) continue;
       const card = document.createElement('button'); card.className = 'card friend-card'; card.setAttribute('aria-label', f.is);
-      card.innerHTML = CREATURES[k]();
+      card.innerHTML = pic;
       card.addEventListener('click', () => { Sound.voice(f.voice); card.classList.remove('hop'); void card.offsetWidth; card.classList.add('hop'); });
       friendsEl.appendChild(card);
     }
@@ -13918,6 +14390,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /* ---------------------------------------------------------------
      Parent menu (opens on a long press so little fingers don't find it)
      --------------------------------------------------------------- */
+  /** Fill in the parent menu: switches, the storage note and the error log. */
   function renderMenu() {
     $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm; $('#optRewards').checked = state.settings.rewards;
     $('#backupMsg').hidden = true;
@@ -13925,7 +14398,32 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     $('#storeMsg').textContent = Store.ok
       ? `Allt er vistað á þessu tæki (${state.outfits.length} vistuð föt). Taktu afrit af og til.`
       : 'Vafrinn leyfir ekki að vista. Fötin gleymast þegar leiknum er lokað.';
+    renderErrors();
   }
+
+  /** The error log in the parent menu: one line per problem, newest first (code, how often, when, what). */
+  function renderErrors() {
+    const log = FJ.list();
+    $('#errSum').textContent = log.length ? `Villukóðar (${log.length})` : 'Villukóðar';
+    $('#errLog').textContent = log.length
+      ? log.map(e => `${e.code}${e.n > 1 ? ' ×' + e.n : ''}  ${(FJ.codes[e.code] || ['?'])[0]}\n  ${e.last.slice(0, 16).replace('T', ' ')}  ${e.detail}${e.msg ? ' – ' + e.msg : ''}`).join('\n')
+      : `Engar villur skráðar. (útgáfa ${FJ.build || '?'})`;
+    $('#errMsg').hidden = true;
+  }
+  /*  "Afrita" copies the whole log as text (with where in the code each happened), ready to paste
+      into a message so the problem can be traced. */
+  $('#errCopy').addEventListener('click', async () => {
+    const msg = $('#errMsg'); msg.hidden = false;
+    try { await navigator.clipboard.writeText(FJ.asText()); msg.textContent = 'Afritað. Límdu það í skilaboð.'; }
+    catch (e) {
+      // no clipboard access: show the text selected so it can be copied by hand
+      $('#errLog').textContent = FJ.asText();
+      getSelection().selectAllChildren($('#errLog'));
+      msg.textContent = 'Haltu inni á textanum til að afrita hann.';
+    }
+  });
+  $('#errClear').addEventListener('click', () => { FJ.clear(); renderErrors(); });
+  $('#errBox').addEventListener('toggle', () => { if ($('#errBox').open) renderErrors(); });   // always fresh when opened
   /** Short note under the backup buttons. */
   function backupNote(text) { const m = $('#backupMsg'); m.textContent = text; m.hidden = false; }
 
@@ -13939,10 +14437,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     const file = new File([data], name, { type: 'application/json' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupNote('Afrit sent.'); return; }
-    } catch (e) { if (e && e.name === 'AbortError') return; /* sharing failed: download instead */ }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    backupNote('Afrit vistað í niðurhal (Downloads).');
+    } catch (e) { if (e && e.name === 'AbortError') return; report('FJ-S05', 'share (now trying a download)', e); }
+    try {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      backupNote('Afrit vistað í niðurhal (Downloads).');
+    } catch (e) { report('FJ-S05', 'download', e); backupNote('Ekki tókst að búa til afrit. Sjá villukóða.'); }
   });
   /*  Opening a backup ADDS its outfits to the ones already here (nothing is deleted).
       The doll, scene and settings stay as they are. */
@@ -13950,8 +14450,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   $('#importFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
-    let d = null; try { d = JSON.parse(await f.text()); } catch (err) { d = null; }
-    if (!isObj(d) || !Array.isArray(d.outfits)) { backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
+    let d = null, why = null; try { d = JSON.parse(await f.text()); } catch (err) { why = err; }
+    if (!isObj(d) || !Array.isArray(d.outfits)) { report('FJ-S04', f.name, why); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
     const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn)));
     const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn)));
     state.outfits = state.outfits.concat(added)
@@ -14002,7 +14502,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   const sceneBar = $('#scenes');
   for (const k of Object.keys(SCENES)) {
     const b = document.createElement('button'); b.className = 'btn scene-btn'; b.dataset.scene = k; b.setAttribute('aria-label', SCENES[k].name);
-    b.innerHTML = SCENES[k].svg().replace('xMidYMax slice', 'xMidYMid slice');
+    b.innerHTML = guard('FJ-D03', k + ' (button)', () => SCENES[k].svg().replace('xMidYMax slice', 'xMidYMid slice'), '');
     b.addEventListener('click', () => { if (state.scene === k) return; state.scene = k; Sound.whoosh(); sceneEl.classList.add('fading'); setTimeout(() => { renderScene(); sceneEl.classList.remove('fading'); }, 300); persist(); });
     sceneBar.appendChild(b);
   }
@@ -14017,10 +14517,14 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   trayEl.hidden = true;
 })();
 
+</script>
+<script>
+FJ.loading('');
 document.getElementById('chest').innerHTML = document.getElementById('chest').innerHTML;
 </script>
 <script>
-if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+// offline copy of the game; if it can't be set up, note it in the error log (FJ-A04)
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => FJ.report('FJ-A04', '', e)));
 </script>
 </body>
 </html>

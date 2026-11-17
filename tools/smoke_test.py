@@ -5,7 +5,7 @@ Needs Playwright (pip install playwright) and Google Chrome.
     python tools/smoke_test.py
 
 Covers: saving and its safety nets, backup export/import, offline start, two-finger drag,
-normal drags, the heart jar and friend arrival. Prints PASS/FAIL lines; exit code 1 on any FAIL.
+normal drags, the heart jar and friend arrival, and the error codes (errors.js). Prints PASS/FAIL lines; exit code 1 on any FAIL.
 
 Gotcha for writing tests: the game saves on page hide, so seeding localStorage while the
 game page is open gets overwritten on reload. Seed from another page of the same site
@@ -18,12 +18,17 @@ root = pathlib.Path(__file__).resolve().parent.parent
 PORT = 8791
 URL = f'http://localhost:{PORT}/'
 KEY = 'fjarsjodskistan.v1'
+ERRKEY = 'fjarsjodskistan.errors'
 fails = 0
 
 def ok(cond, msg):
     global fails
     fails += 0 if cond else 1
     print(('PASS ' if cond else 'FAIL ') + msg)
+
+def codes(pg):
+    """Error codes in the game's error log (newest first)."""
+    return pg.evaluate('FJ.list().map(e => e.code)')
 
 def seed(pg, state):
     """Write a save while the game is NOT open, then open the game."""
@@ -53,6 +58,7 @@ try:
         ok(st()['worn'] == {}, 'a change right before closing is saved')
         pg.goto(URL + 'manifest.webmanifest'); pg.evaluate(f'localStorage.setItem("{KEY}", "{{broken")'); pg.goto(URL); pg.wait_for_timeout(1200)
         ok(pg.evaluate(f'localStorage.getItem("{KEY}.broken")') == '{broken', 'damaged save is parked, not overwritten')
+        ok('FJ-S02' in codes(pg), 'a damaged save is logged with code FJ-S02')
         ok(pg.evaluate("document.querySelector('#btnGallery').click(), document.querySelectorAll('#gallery .card').length") == 1, 'outfits come back from the backup copy')
         pg.evaluate("document.querySelector('#gallery').hidden = true")
         g = pg.locator('#btnGear').bounding_box(); pg.mouse.move(g['x'] + 20, g['y'] + 20); pg.mouse.down(); pg.wait_for_timeout(1200); pg.mouse.up()
@@ -64,12 +70,31 @@ try:
         f = tmpdir / 'import.json'; f.write_text(json.dumps(exp), encoding='utf-8')
         pg.set_input_files('#importFile', str(f)); pg.wait_for_timeout(400)
         ok(len(st()['outfits']) == 2, 'importing adds only new outfits')
+        bad = tmpdir / 'bad.json'; bad.write_text('not a backup', encoding='utf-8')
+        pg.set_input_files('#importFile', str(bad)); pg.wait_for_timeout(400)
+        ok('FJ-S04' in codes(pg) and len(st()['outfits']) == 2, 'a wrong backup file is refused and logged (FJ-S04)')
+        pg.click('#errSum'); pg.wait_for_timeout(100)
+        ok('FJ-S04' in pg.inner_text('#errLog') and 'FJ-S02' in pg.inner_text('#errLog'), 'the parent menu shows the error codes')
         pg.click('#menuClose'); pg.reload(); pg.wait_for_timeout(1500)
         ok(pg.evaluate('navigator.serviceWorker.controller !== null'), 'service worker active')
         ctx.set_offline(True); pg.reload(); pg.wait_for_timeout(1500)
         ok(pg.locator('#doll svg').count() == 1, 'starts offline'); ctx.set_offline(False)
         ok(not errors, f'no page errors {errors}')
         ctx.close()
+
+        # ---- error codes: a broken piece is skipped, a broken file is named ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800}); pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate('FJ.clear()')
+        drawn = pg.evaluate("""(() => { DOLL.shape('test-broken', { slot: 'top', draw() { throw new Error('boom'); } });
+          DOLL.add([{ id: 'top-test-broken', shape: 'test-broken', cat: 'top', colors: [] }]);
+          return DOLL.renderDoll({ hair: 'loose', worn: { top: 'top-test-broken' } }).length; })()""")
+        log = pg.evaluate('FJ.list()')
+        ok(drawn > 1000 and log and log[0]['code'] == 'FJ-D01' and log[0]['detail'] == 'top-test-broken', 'a broken piece is left out and logged (FJ-D01 + its id)')
+        pg.add_script_tag(content="FJ.loading('test-file.js');"); pg.add_script_tag(content="throw new Error('start-up boom');"); pg.add_script_tag(content="FJ.loading('');")
+        log = pg.evaluate('FJ.list()')
+        ok(log[0]['code'] == 'FJ-A05' and log[0]['detail'] == 'test-file.js', 'a file that breaks while starting is named (FJ-A05)')
+        pg.evaluate('setTimeout(() => { null.x; })'); pg.wait_for_timeout(200)
+        ok(pg.evaluate('FJ.list()[0].code') == 'FJ-A01', 'an unexpected error later gets FJ-A01')
+        pg.evaluate('FJ.clear()'); pg.close()
 
         # ---- touch: two-finger drag and normal drags ----
         ctx = b.new_context(viewport={'width': 1280, 'height': 800}, has_touch=True, is_mobile=True); pg = ctx.new_page()
@@ -91,6 +116,7 @@ try:
         for k in range(1, 13): T('touchMove', [(1, x0 + (x1 - x0) * k / 12, y0 + (y1 - y0) * k / 12)]); pg.wait_for_timeout(16)
         T('touchEnd', []); pg.wait_for_timeout(900)
         ok(bool(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn || null')), 'dragging a piece onto the doll dresses her')
+        ok(codes(pg) == [], f'normal play logs no errors {codes(pg)}')
         ctx.close()
 
         # ---- costume tab: tapping a look keeps the list where she scrolled to ----

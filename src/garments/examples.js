@@ -23,6 +23,7 @@
 
   /** Point on a circle, angle in degrees. */
   const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
+  // turn a point [x, y] into the text 'x,y' (one decimal) for use in SVG paths
   const P = p => p[0].toFixed(1) + ',' + p[1].toFixed(1);
 
   /* -------------------------------------------------------------
@@ -72,6 +73,7 @@
       const band = (y) => `<rect x="0" y="${y}" width="400" height="5" fill="${dark}"/><rect x="0" y="${y + 6}" width="400" height="9" fill="${mid}"/>` +
         Array.from({ length: 34 }, (_, i) => `<circle cx="${i * 12 + 4}" cy="${y + 10.5}" r="2.2" fill="${light}"/>`).join('');
       const rib = Array.from({ length: 50 }, (_, i) => `M${i * 5 + 76},442v12`).join('');
+      // two coloured bands near the wrist, for one side
       const cuff = side => `<path d="${G.armPath(side, .84, .88, 7)}" fill="${dark}"/><path d="${G.armPath(side, .89, .95, 7)}" fill="${mid}"/>`;
       return `<path d="${d}" fill="${H.pat('knit', base, shade(base, -.25), 10)}"/>` +
         `<g clip-path="${clip}">${yoke}${band(424)}<path d="${rib}" stroke="${ink(base)}" stroke-width="1.2" opacity=".35"/>${cuff('L')}${cuff('R')}</g>` +
@@ -92,9 +94,11 @@
       const clip = H.clip('c-' + it.id, d);
       const hood = 'M148,264 C144,240 168,226 200,226 C232,226 256,240 252,264 Z';  // hood lying down behind the neck
       const collar = 'M186,244 Q172,250 168,266 Q184,272 199,262 Z M214,244 Q228,250 232,266 Q216,272 201,262 Z';
+      // patch pocket with a flap and a button; x is the left edge of the pocket
       const pocket = x => `<path d="M${x},402 h34 v24 q0,8 -8,8 h-18 q-8,0 -8,-8 Z" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="2"/>` +
         `<path d="M${x - 2},398 h38 v10 q-19,5 -38,0 Z" fill="${H.grad(shade(c, -.06))}" stroke="${ink(c)}" stroke-width="2" stroke-linejoin="round"/>` +
         `<circle cx="${x + 17}" cy="${405}" r="2.4" fill="${ink(c)}"/>`;
+      // reflective stripe across the sleeve, for one side
       const strip = side => `<path d="${G.armPath(side, .7, .76, 9)}" fill="${refl}"/>`;
       const shine = `<path d="M142,300 Q132,330 134,380 Q138,338 150,306 Z" fill="#fff" opacity=".45"/>` +
         `<path d="M170,280 Q160,310 162,350 Q166,316 176,288 Z" fill="#fff" opacity=".35"/>`;
@@ -122,6 +126,7 @@
       const c = it.colors[0], stitch = it.colors[1] || '#e7a54b';
       const d = G.pantsPath({ top: 398, bottom: 704, pad: 4, flare: 3 });
       const clip = H.clip('c-' + it.id, d);
+      // dashed stitching line along the given path
       const dash = (path) => `<path d="${path}" fill="none" stroke="${stitch}" stroke-width="1.5" stroke-dasharray="3 2.5" stroke-linecap="round"/>`;
       return `<path d="${d}" fill="${H.grad(c)}"/>` +
         `<g clip-path="${clip}">` +
@@ -167,6 +172,7 @@
         for (let y = Math.floor((yEnd - 1) / 20) * 20; y > top; y -= 20) d += `L${(400 - xl(y)).toFixed(1)},${y}`;
         return d + `L${400 - wx},${top}Z`;
       };
+      // make a gradient for this item (id suffix + colour stops) and return it for use as a fill
       const g = (id, stops) => addGrad('ig-' + it.id + id, stops);
       const t3 = tier(700, 19, 12, true), t2 = tier(612, 26, 14), t1 = tier(526, 30, 14);
       /** Scalloped white frost band at hem height y (drawn just above a tier edge). */
@@ -185,15 +191,18 @@
       const swirls = [[110, 660, 1], [170, 676, 1], [230, 668, -1], [290, 656, -1], [128, 586, 1], [272, 590, -1], [200, 640, 1], [150, 500, 1], [250, 496, -1]].map(a => swirl(...a)).join('');
       const flakes = [[118, 646, 10], [282, 640, 11], [200, 676, 9], [160, 570, 9], [244, 566, 10], [200, 488, 8], [134, 470, 6], [266, 468, 6]]
         .map(([x, y, r]) => H.flake(x, y, r, '#ffffff') + `<circle cx="${x}" cy="${y}" r="${r * .22}" fill="${lilac}"/>`).join('');
+      // little four-pointed sparkle at x,y with radius r
       const twinkle = (x, y, r) => `<path d="M${x},${y - r}Q${x},${y} ${x + r},${y}Q${x},${y} ${x},${y + r}Q${x},${y} ${x - r},${y}Q${x},${y} ${x},${y - r}Z" fill="#fff"/>`;
       const twinkles = [[140, 540, 5], [262, 530, 6], [104, 690, 4], [300, 684, 5], [186, 600, 4], [226, 616, 5], [176, 452, 4], [232, 444, 4]].map(a => twinkle(...a)).join('');
       // bodice, sleeves with fluffy trim, crystal belt, snowflake brooch
       const sleeves = G.shirtPath({ sleeve: .24, pad: 3, sleevePad: 8, sleeveFlare: 3, bottom: 380, neck: 'scoop' });
       const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'scoop', neckDepth: 18 });
+      // row of five fluffy white balls along the sleeve edge, for one side
       const fluff = side => Array.from({ length: 5 }, (_, i) => { const [x, y] = G.armPoint(side, .25); const k = (i - 2) * 6.5; const sx = side === 'L' ? 1 : -1; return `<circle cx="${(x + sx * k * .96).toFixed(1)}" cy="${(y + k * .28).toFixed(1)}" r="5.2" fill="#fff" stroke="#c9dceb" stroke-width="1.2"/>`; }).join('');
       const belt = Array.from({ length: 9 }, (_, i) => H.diamond(160 + i * 10, 408, 5, i % 2 ? '#ffffff' : lilac)).join('');
       const brooch = H.flake(200, 300, 13, '#ffffff') + H.flake(200, 300, 7, lilac) + `<circle cx="200" cy="300" r="3.5" fill="#fff" stroke="${ink(deep)}" stroke-width="1"/>`;
       const tierCols = [[shade(deep, -.08), deep], [shade(deep, .18), shade(ice, -.05)], [ice, '#e8f7ff']];
+      // gradient fill for skirt tier number i (0 = top tier, 2 = bottom tier)
       const tierFill = (i) => g(String(i), [[0, tierCols[i][0]], [1, tierCols[i][1]]]);
       /** White frosted ruffle along a tier's scalloped hem. */
       const frost = d => `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="5" stroke-dasharray="0 1000"/>`;
@@ -239,7 +248,9 @@
     draw(it) {
       const [metal, gem, gem2] = it.colors;
       const { cx, cy, rx, ry } = G.head;
+      // point on the head outline at angle deg, pushed outward by off
       const at = (deg, off) => [cx + Math.cos(deg * Math.PI / 180) * (rx + off), cy + Math.sin(deg * Math.PI / 180) * (ry + off)];
+      // one pointed crown spike on the head outline at angle a, with height h and half-width w
       const peak = (a, h, w) => `M${P(at(a - w, 7))}Q${P(at(a - w * .35, 7 + h * .55))} ${P(at(a, 7 + h))}Q${P(at(a + w * .35, 7 + h * .55))} ${P(at(a + w, 7))}Z`;
       const peaks = [[234, 13, 8], [252, 19, 9], [270, 30, 10], [288, 19, 9], [306, 13, 8]].map(([a, h, w]) => peak(a, h, w)).join('');
       const outer = G.headArc(214, 326, 7, 24), inner = G.headArc(326, 214, 0, 24);
@@ -260,6 +271,7 @@
   const heartD = (cx, cy, r) => `M${cx},${cy + r * .95} C${cx - r * 1.5},${cy + r * .05} ${cx - r * .95},${cy - r * 1.05} ${cx},${cy - r * .38} C${cx + r * .95},${cy - r * 1.05} ${cx + r * 1.5},${cy + r * .05} ${cx},${cy + r * .95} Z`;
   DOLL.shape('glasses-heart', {
     slot: 'glasses',
+    // heart-shaped see-through lenses over the eyes, with a frame and a bridge over the nose
     draw(it) {
       const frame = it.colors[0], lens = it.colors[1] || '#f7a6c2';
       const [[lx, ly], [rx, ry]] = G.eyes;
@@ -280,8 +292,10 @@
     draw(it) {
       const c = it.colors[0], rim = it.colors[1] || shade(c, .25), sole = it.colors[2] || '#4a3b3f';
       const top = 612, low = 716, pad = 6, flare = 3;
+      // one boot (s = 'L' or 'R'): glossy shaft, rim and sole
       const side = (s) => {
         const L = s === 'L', X = x => L ? x : 400 - x;
+        // how far down the boot y is: 0 at the top edge, 1 at the bottom
         const k = y => (y - top) / (low - top);
         const outer = [], inner = [];
         for (let y = top; y <= low; y += 13) {
@@ -311,6 +325,7 @@
     slot: 'shoes',
     draw(it) {
       const c = it.colors[0], sole = it.colors[1] || '#5a3a3f';
+      // one Mary Jane shoe (s = 'L' or 'R'): shoe, sole, strap across the foot and a button
       const side = s => {
         const L = s === 'L', [fx, fy] = G.feet[L ? 0 : 1], o = L ? -1 : 1;
         const foot = G.footPath(s, 3, 2);

@@ -58,6 +58,9 @@
   /** Safe id fragment from a colour/name. */
   const idOf = s => String(s).replace(/[^a-z0-9]/gi, '');
 
+  /** Log a drawing problem with an error code (see errors.js). In the preview tools, where errors.js isn't loaded, just warn. */
+  const fail = (code, detail, e) => (root.FJ ? root.FJ.report(code, detail, e) : console.warn(code, detail, e));
+
   // Global soft-shading overlays. Draw a shape a second time with one of
   // these fills to get the storybook "rounded" look without SVG filters
   // (filters are slow on older Android tablets).
@@ -94,6 +97,7 @@
     rainbow: (c1, c2, s) => ['#ef6f6c', '#f6a65a', '#f7d660', '#7fcf8a', '#6fb3e6', '#a58be0'].map((c, i) => `<rect y="${i * s / 6}" width="${s}" height="${s / 6 + .3}" fill="${c}"/>`).join(''),
   };
 
+  /** Five-pointed star centred at cx,cy (radius r, colour c), for the "stars" pattern. */
   function star(cx, cy, r, c) {
     let d = '';
     for (let i = 0; i < 10; i++) {
@@ -102,9 +106,11 @@
     }
     return `<path d="${d}Z" fill="${c}"/>`;
   }
+  /** Little heart centred at cx,cy (size r, colour c), for the "hearts" pattern. */
   function heart(cx, cy, r, c) {
     return `<path d="M${cx},${cy + r * .9} C${cx - r * 1.4},${cy} ${cx - r * .7},${cy - r} ${cx},${cy - r * .35} C${cx + r * .7},${cy - r} ${cx + r * 1.4},${cy} ${cx},${cy + r * .9}Z" fill="${c}"/>`;
   }
+  /** Snowflake: three crossing strokes centred at cx,cy (radius r, colour c). */
   function flake(cx, cy, r, c) {
     let d = '';
     for (let i = 0; i < 3; i++) {
@@ -113,6 +119,7 @@
     }
     return `<path d="${d}" stroke="${c}" stroke-width="${(r * .28).toFixed(2)}" stroke-linecap="round" fill="none"/>`;
   }
+  /** Five-petal flower with a yellow middle, centred at cx,cy (size r, petal colour c). */
   function flower(cx, cy, r, c) {
     let s = '';
     for (let i = 0; i < 5; i++) {
@@ -121,10 +128,12 @@
     }
     return s + `<circle cx="${cx}" cy="${cy}" r="${(r * .3).toFixed(2)}" fill="#ffd84d"/>`;
   }
+  /** Strawberry (red berry with green leaves) centred at cx,cy, size r. */
   function berry(cx, cy, r) {
     return `<path d="M${cx},${cy + r} C${cx - r * 1.1},${cy + r * .2} ${cx - r},${cy - r * .7} ${cx},${cy - r * .55} C${cx + r},${cy - r * .7} ${cx + r * 1.1},${cy + r * .2} ${cx},${cy + r}Z" fill="#e8475a"/>` +
       `<path d="M${cx - r * .6},${cy - r * .55} L${cx},${cy - r * .25} L${cx + r * .6},${cy - r * .55} L${cx},${cy - r}Z" fill="#4fae5b"/>`;
   }
+  /** Diamond / sparkle shape centred at cx,cy (height 2r, colour c). */
   function diamond(cx, cy, r, c) {
     return `<path d="M${cx},${cy - r} L${cx + r * .6},${cy} L${cx},${cy + r} L${cx - r * .6},${cy}Z" fill="${c}"/>`;
   }
@@ -137,6 +146,7 @@
   function smooth(pts, closed = true, tension = 0.5) {
     const n = pts.length;
     if (n < 3) return 'M' + pts.map(p => p.join(',')).join('L') + (closed ? 'Z' : '');
+    // the i-th point; a closed path wraps around, an open one repeats its end points
     const p = i => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
     let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
     const segs = closed ? n : n - 1;
@@ -148,6 +158,7 @@
     }
     return d + (closed ? 'Z' : '');
   }
+  /** Round a number to one decimal and turn it into text (keeps the SVG short). */
   const f = v => (Math.round(v * 10) / 10).toString();
 
   /** Linear interpolation of x along a list of [y,x] stops. */
@@ -199,6 +210,7 @@
     { t: .5, x: 113, y: 364, hw: 14 },
     { t: 1, x: 101, y: 442, hw: 11.5 },
   ];
+  /** Where the arm is at t (0 shoulder … 1 wrist): centre point, direction and half-width. */
   function armAt(t) {
     const i = t <= .5 ? 0 : 1, a = ARM[i], b = ARM[i + 1];
     const k = (t - a.t) / (b.t - a.t);
@@ -253,6 +265,7 @@
     const s = (-dx * v[1] + dy * v[0]) / det;
     return [p[0] + u[0] * s, p[1] + u[1] * s];
   }
+  /** Turn the arrow x,y into length 1 (the same direction). */
   const unit = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
   /** Edge of the left arm at t. dir -1 = outer edge (away from body), +1 = inner edge. w = half-width. */
   function armEdge(t, dir, w) {
@@ -277,12 +290,14 @@
     const depth = neckDepth ?? { round: 10, v: 46, high: 2, square: 26, scoop: 30, boat: 4 }[neck] ?? 10;
     const nw = { round: 17, v: 17, high: 15, square: 22, scoop: 25, boat: 34 }[neck] ?? 17;
     const ny = 252 - (neck === 'high' ? 8 : 0) - pad * .3;
+    // left edge of the garment at height y: the torso edge, pushed out by pad and flaring towards the bottom
     const side = y => G.torsoX(y) - pad - flare * Math.max(0, (y - 320) / Math.max(1, bottom - 320));
     const N = [200 - nw, ny];
     const T = [160, 258 - pad * .7];                     // top of the shoulder
     const L = [N, ...qpts(N, [174, ny + 1], T, 6)];      // neck → shoulder (gentle slope)
     if (sleeve > 0) {
       const t0 = Math.min(0.12, sleeve * 0.6);           // where the shoulder curve joins the sleeve
+      // half-width of the sleeve at arm position t (wider towards the end when the sleeve flares)
       const w = t => armAt(t).hw + sp + sleeveFlare * Math.max(0, (t - t0) / Math.max(.01, sleeve - t0));
       const P1 = armEdge(t0, -1, w(t0));
       const a0 = armAt(t0), up = unit(-a0.dx, -a0.dy);
@@ -308,6 +323,7 @@
     for (let y = Math.ceil((startY + 4) / 8) * 8; y < bottom; y += 8) L.push([side(y), y]);
     L.push([side(bottom), bottom]);
     const R = L.slice().reverse().map(([x, y]) => [mx(x), y]);
+    /** A point [x, y] as 'x,y' text for an SVG path. */
     const pt = p => f(p[0]) + ',' + f(p[1]);
     let d = 'M' + L.map(pt).join('L');
     d += `Q200,${f(bottom + 6)} ${pt(R[0])}`;            // slightly curved hem
@@ -347,6 +363,7 @@
   G.pantsPath = function ({ top = 398, bottom = 700, pad = 3, flare = 0 } = {}) {
     const crotch = G.crotchY + 2 + pad * .4;
     const ys = [top, 434, 476, 520, 574, 640, 702].filter(y => y > top && y < bottom).concat([bottom]);
+    // how far down the leg y is, from the crotch (0) to the trouser bottom (1): used to widen flares
     const k = y => Math.max(0, (y - 476) / Math.max(1, bottom - 476));
     const outL = [[G.torsoX(top) - pad, top]].concat(ys.map(y => [(y <= 476 ? Math.min(G.torsoX(y), G.legOutX(y)) : G.legOutX(y)) - pad - flare * k(y), y]));
     const inL = ys.filter(y => y > crotch).map(y => [G.legInX(y) + pad + flare * k(y) * .6, y]).reverse();
@@ -540,6 +557,7 @@
      * Tapping a look dresses the doll in all of it; she can then swap single parts in the other tabs.
      */
     looks: [],
+    /** Register costume looks (one look or a list); a duplicate id is skipped with a warning. */
     look(list) {
       for (const l of [].concat(list)) {
         if (DOLL.looks.some(x => x.id === l.id)) { console.warn('duplicate look id', l.id); continue; }
@@ -549,13 +567,14 @@
 
     /** Slot an item is worn in, and the slots it blocks. */
     slotOf(item) { return DOLL.shapes[item.shape].slot; },
+    /** Slots this item blocks (a dress blocks top and bottom too). */
     occupiesOf(item) { return item.occupies || DOLL.shapes[item.shape].occupies; },
 
-    /** Draw one item, returning {back, front} strings (either may be ''). */
+    /** Draw one item, returning {back, front} strings (either may be ''). A piece that fails is left out (code FJ-D01). */
     drawItem(item) {
       let out;
       try { out = DOLL.shapes[item.shape].draw(item); }
-      catch (e) { console.warn('draw failed', item.id, e); out = ''; }
+      catch (e) { fail('FJ-D01', item.id, e); out = ''; }
       return typeof out === 'string' ? { back: '', front: out } : { back: out.back || '', front: out.front || '' };
     },
 
@@ -629,7 +648,9 @@
 
   /** Bare body with a cream vest and shorts underneath everything. */
   function drawBody() {
+    // one arm or leg shape, filled with skin and outlined
     const limb = d => `<path d="${d}" fill="${SK.limb}" stroke="${SKIN.line}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    // one bare foot (L or R) with toes
     const foot = side => {
       const s = side === 'L' ? -1 : 1, [fx, fy] = G.feet[side === 'L' ? 0 : 1];
       return `<path d="${G.footPath(side, -2)}" fill="${SK.face}" stroke="${SKIN.line}" stroke-width="2.2"/>` +
@@ -770,9 +791,12 @@
   const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e' });
   const MINT_BOW = ['#5fc9a0', '#2f8a68', '#bdf0dc', '#86dcbb'], SKY_BOW = ['#6cb8ec', '#2f6fa8', '#cfe9fb', '#93cdf2'];
 
+  /** One hair shape: fill (front or darker back colours of palette pal) plus outline and soft shading. */
   const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="url(#soft-h)" opacity=".55"/>`;
+  /** A darker strand line drawn inside the hair (gives it texture). */
   const strand = (d, w = 2, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.deep}" stroke-width="${w}" stroke-linecap="round" opacity=".45"/>`;
+  /** A light shine strand drawn inside the hair. */
   const lstrand = (d, w = 1.8, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.glow}" stroke-width="${w}" stroke-linecap="round" opacity=".7"/>`;
   /** Glossy shine: a few light lens shapes following the curve of the head. */
   const shine = (pal = BROWN) => [
@@ -785,6 +809,7 @@
 
   // Hair cap with a side-swept fringe, shared by all styles.
   const CAP = 'M122,170 C114,108 150,62 202,62 C254,62 288,106 278,170 C273,146 266,128 254,116 C246,128 230,132 214,124 C204,134 184,138 168,130 C158,140 140,150 122,170 Z';
+  /** The hair cap with the side-swept fringe, in any palette (shared by all styles). */
   const capFront = (pal = BROWN) => hp(CAP, false, pal) +
     strand('M170,74 Q150,96 146,128', 2, pal) + strand('M214,70 Q236,86 250,112', 2, pal) + strand('M168,128 Q186,108 206,90', 1.8, pal) +
     strand('M214,122 Q232,104 244,92', 1.8, pal) + lstrand('M156,124 Q164,104 182,90', 1.8, pal) + lstrand('M236,104 Q246,112 252,122', 1.8, pal) +
@@ -799,6 +824,7 @@
    */
   const LOOSE_BACK = 'M200,58 C138,58 106,98 106,162 C106,222 98,286 96,338 Q116,356 138,342 Q160,360 182,346 Q200,362 218,346 Q240,360 262,342 Q284,356 304,338 C302,286 294,222 294,162 C294,98 262,58 200,58 Z';
   const LOOSE_LOCK_L = 'M138,128 C120,168 112,236 118,300 Q120,336 136,352 Q146,330 144,298 C140,246 146,186 154,146 Z';
+  /** Her long loose hair in any palette; extra adds markup inside the back hair and each front lock. */
   function looseHair(pal, extra = {}) {
     const backD = LOOSE_BACK;
     const back = `<g class="sway-b">` + hp(backD, true, pal) +
@@ -843,6 +869,7 @@
   /** One loc (dreadlock): a soft rope from (x0,y0) curving through (cx,cy) to (x1,y1), with a bead near the end. */
   const loc = (x0, y0, cx, cy, x1, y1, w, pal, bead) => {
     const d = `M${x0},${y0} Q${cx},${cy} ${x1},${y1}`;
+    // point on the curve at t (0 start … 1 end), to place the bead
     const at = t => [(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1];
     const [bx, by] = at(.82);
     return `<path d="${d}" fill="none" stroke="${pal.line}" stroke-width="${w + 4}" stroke-linecap="round"/>` +
@@ -861,6 +888,7 @@
   /** Two braids with bows at the ends. */
   function braidsHair(pal = BROWN, bow = PINK_BOW) {
     const back = hp(NAPE, true, pal);
+    // one braid hanging from x; s = -1 left, 1 right (the bumps zig-zag); cls = the sway class
     const braid = (x, s, cls) => {
       let g = `<g class="${cls}">`;
       for (let i = 0; i < 7; i++) {
@@ -885,6 +913,7 @@
   function bobHair(pal = BROWN) {
     const backD = 'M200,58 C136,58 104,100 106,160 C108,196 108,224 116,246 Q134,258 152,250 L248,250 Q266,258 284,246 C292,224 292,196 294,160 C296,100 264,58 200,58 Z';
     const sideL = 'M132,126 C114,160 110,206 116,238 Q122,254 138,256 Q154,256 162,246 Q146,236 142,212 C138,188 140,160 150,140 Z';
+    // one side of the bob (s -1 left, 1 right) with its strands
     const side = (d, cls, s) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(s < 0 ? 'M130,150 Q120,200 132,246' : mirrorD('M130,150 Q120,200 132,246'), 2, pal) +
       lstrand(s < 0 ? 'M140,148 Q132,190 140,232' : mirrorD('M140,148 Q132,190 140,232'), 1.8, pal) + `</g>`;
@@ -897,8 +926,10 @@
   function longestHair(pal = BROWN) {
     const backD = 'M200,58 C138,58 106,98 106,162 C106,240 100,330 102,420 C104,500 112,560 120,600 Q140,588 158,604 Q178,590 200,606 Q222,590 242,604 Q260,588 280,600 C288,560 296,500 298,420 C300,330 294,240 294,162 C294,98 262,58 200,58 Z';
     const lockLD = 'M138,128 C120,170 110,250 114,340 C116,400 120,440 130,480 Q144,466 148,440 C144,380 142,300 146,230 C148,190 150,160 154,146 Z';
+    // one long front lock; m mirrors the left-side path to the right
     const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(m('M134,170 Q122,300 134,460'), 2, pal) + lstrand(m('M142,156 Q132,260 140,420'), 1.8, pal) + `</g>`;
+    // "do not mirror" (the left lock is used as it is)
     const id = d => d;
     return {
       back: `<g class="sway-b">` + hp(backD, true, pal) +
@@ -910,6 +941,7 @@
   /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
   function pigtailsHair(pal = BROWN, bow = PINK_BOW) {
     const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
+    // one pigtail with its bow; m mirrors the left-side path to the right
     const tail = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
       strand(m('M108,130 C88,150 92,200 86,250'), 2, pal) + strand(m('M116,150 C104,180 104,220 98,270'), 1.6, pal) +
       lstrand(m('M98,122 C84,140 82,170 84,196'), 2, pal) + hairBow(m === mirrorD ? 276 : 124, 122, ...bow) + `</g>`;
@@ -931,8 +963,11 @@
   }
 
   const HAIRSTYLES = {
+    /** Her own long loose brown hair (the default; approved, never change). */
     loose() { return looseHair(BROWN); },
+    /** Two brown braids with pink bows (approved, never change). */
     braids() { return braidsHair(); },
+    /** Brown ponytail with a blue hair tie (approved, never change). */
     ponytail() { return ponytailHair(); },
 
     /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
@@ -951,6 +986,7 @@
       const backD = 'M200,58 C138,58 104,98 104,162 C104,220 94,262 104,300 C114,340 96,380 102,420 C108,460 96,490 108,524 Q126,512 142,528 Q160,512 178,526 Q200,512 222,526 Q240,512 258,528 Q274,512 292,524 C304,490 292,460 298,420 C304,380 286,340 296,300 C306,262 296,220 296,162 C296,98 262,58 200,58 Z';
       const lockLD = 'M138,128 C118,170 128,210 116,250 C104,290 128,330 118,370 C112,400 118,430 132,456 Q148,438 144,410 C142,380 136,350 144,320 C152,290 140,260 148,220 C152,190 150,160 154,146 Z';
       const wave = 'M132,170 C124,210 128,240 122,270 C116,300 132,330 126,370 C122,400 126,420 134,440';
+      // one long wavy front lock; m mirrors the left-side path to the right
       const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, MERMAID) + strand(m(wave), 2, MERMAID) +
         lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, MERMAID) + `</g>`;
       // shell clip above the left ear: a fan with ridges
@@ -991,6 +1027,7 @@
 
     /** Space buns: two round buns on top of the head with scrunchies. The buns hide under hats. */
     spacebuns(o = {}) {
+      // one bun at x with its scrunchie (colour c); s nudges the scrunchie inwards
       const bun = (x, s, c) => {
         const cy = 74;
         return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`) +
@@ -1035,7 +1072,9 @@
       // locs in front, lying over the shoulders
       // roots tucked under the hair cap at the temples; they curve outwards so the face stays free
       const sideL = [[126, 150, 100, 220, 96, 312], [136, 140, 112, 230, 112, 332], [146, 136, 120, 200, 130, 300]];
+      // the three locs on one side lying over the shoulder; m = true for the right side
       const front = (s, m) => sideL.map(([x0, y0, cx, cy, x1, y1], i) => {
+        // x on this side (mirrored for the right)
         const X = v => m ? 400 - v : v;
         return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, BROWN, BEADS[(i + (m ? 2 : 0)) % 5]);
       }).join('');
@@ -1063,14 +1102,20 @@
     cherry() { return longestHair(CHERRY); },
   };
 
+  /** Draw a hairstyle by key. An unknown key or a style that fails falls back to her own loose hair (code FJ-D02). */
+  function drawHair(style, o = {}) {
+    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(o);
+    try { return HAIRSTYLES[style](o); }
+    catch (e) { fail('FJ-D02', style, e); return HAIRSTYLES.loose(o); }
+  }
+
   /* ---------------------------------------------------------------
      Doll renderer
      state: { hair: a key of HAIRSTYLES, worn:{slot:itemId}, mood:'smile'|'happy' }
      Returns the inner markup of an <svg viewBox="0 0 400 800">.
      --------------------------------------------------------------- */
   DOLL.renderDoll = function (state = {}) {
-    const hairDef = HAIRSTYLES[state.hair] || HAIRSTYLES.loose;
-    const hair = hairDef({ hat: !!(state.worn && state.worn.hat) });
+    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) });
     const layers = [];                      // [z, markup]
     layers.push([10, `<g class="hair-back">${hair.back}</g>`]);
     layers.push([20, `<g class="body">${drawBody()}</g>`]);
@@ -1105,7 +1150,7 @@
   /** Hairstyle "items" so hair can be picked from the chest like clothes. */
   DOLL.hairstyles = Object.keys(HAIRSTYLES);
   DOLL.renderHairThumb = function (style) {
-    const h = HAIRSTYLES[style]();
+    const h = drawHair(style);
     return `<svg viewBox="70 40 260 340" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${h.back}<g>${drawFace('smile')}</g>${h.front}${drawEars()}</svg>`;
   };
 
