@@ -73,6 +73,15 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   background: var(--parchment); box-shadow: inset 0 2px 8px rgba(90, 50, 20, .25); align-content: start; touch-action: pan-y; }
 .tile { aspect-ratio: 1; border-radius: 16px; background: #fff; border: 3px solid #ecdcbf; padding: 6px; cursor: grab; touch-action: pan-y; }
 .tile.worn { border-color: var(--gold); background: #fff8dc; }
+/* hair colour dots: one row across the whole grid, above the hairstyles */
+.hair-colors { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 2px 0 4px; }
+.hair-dot { width: 46px; height: 46px; padding: 2px; border-radius: 50%; border: 3px solid #ecdcbf; background: #fff; cursor: pointer; }
+.hair-dot svg { width: 100%; height: 100%; display: block; }
+.hair-dot.on { border-color: var(--gold); transform: scale(1.12); box-shadow: 0 0 0 3px #fff8dc; }
+/* backup reminder: a small soft dot on the gear (parents only), and the menu line in a warmer colour */
+#btnGear { position: relative; }
+#btnGear.remind::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #f2a65a; }
+.menu p#backupWhen.due { color: #b8481e; font-weight: 600; }
 .tile.look { aspect-ratio: 4 / 5; background: linear-gradient(#e6f4fb, #f4fbef); }
 
 /* buttons */
@@ -298,6 +307,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     <p id="fullMsg" hidden>Vafrinn leyfir ekki allan skjá hér.</p>
     <div class="row"><button id="menuExport">Vista afrit</button><button id="menuImport">Opna afrit</button></div>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
+    <p id="backupWhen"></p>
     <p id="backupMsg" hidden></p>
     <p id="storeMsg">Allt er vistað á þessu tæki. Taktu afrit af og til.</p>
     <details id="errBox"><summary id="errSum">Villukóðar</summary>
@@ -419,7 +429,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   root.FJ = FJ;
 })(window);
 
-FJ.build = '16fd45036e';
+FJ.build = 'dd4607aa88';
 </script>
 <script>
 FJ.loading('core.js');
@@ -1195,6 +1205,7 @@ FJ.loading('core.js');
     const fs = front || [[0, P.light], [.25, P.light], [.6, P.base], [1, P.dark]];
     const bs = back || [[0, P.base], [.55, P.dark], [1, P.deep]];
     return Object.assign({}, P, {
+      stops: fs,                                   // the front colours, also used for the colour dot in the chest
       fill: () => addDef(fid, `<linearGradient id="${fid}"${dir}>${stopsOf(fs)}</linearGradient>`),
       bfill: () => addDef(bid, `<linearGradient id="${bid}"${dir}>${stopsOf(bs)}</linearGradient>`),
     });
@@ -1211,10 +1222,32 @@ FJ.loading('core.js');
     [[0, '#3fa8a8'], [.5, '#4f78c8'], [1, '#7a55b8']], [60, 540]);
   // Dark chocolate brown (curly cloud).
   const DARK = hairPalette('dark', { base: '#6e4532', light: '#a06e52', glow: '#e0bea2', dark: '#4b2c1f', deep: '#2f1b13', line: '#3b2319' });
-  // Copper red (natural red hair) and bright cherry red (dyed, for fun).
-  const COPPER = hairPalette('copper', { base: '#c8642f', light: '#f2a46a', glow: '#ffdcb6', dark: '#9c4524', deep: '#6e2c16', line: '#7a3a1e' });
-  const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e' });
+  /* Bow colours [fill, outline, highlight, centre] and hair-tie colours [fill, outline, shine].
+     A palette can name its own (bow, tie, flower) so they show up nicely against that hair colour;
+     otherwise pink bows, a blue tie and a pink flower, as on her own brown hair. */
   const MINT_BOW = ['#5fc9a0', '#2f8a68', '#bdf0dc', '#86dcbb'], SKY_BOW = ['#6cb8ec', '#2f6fa8', '#cfe9fb', '#93cdf2'];
+  const MINT_TIE = ['#5fc9a0', '#2f8a68', '#d6f7ea'];
+  // Copper red (natural red hair) and bright cherry red (dyed, for fun).
+  const COPPER = hairPalette('copper', { base: '#c8642f', light: '#f2a46a', glow: '#ffdcb6', dark: '#9c4524', deep: '#6e2c16', line: '#7a3a1e',
+    bow: MINT_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e',
+    bow: MINT_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  // More colours for the colour dots in the chest: blonde, pastel pink, sky blue and lilac.
+  const BLONDE = hairPalette('blonde', { base: '#e8c46e', light: '#fbe7a6', glow: '#fff8de', dark: '#c9a050', deep: '#97733a', line: '#9c7a3e' });
+  const PINKH = hairPalette('pink', { base: '#f49ac0', light: '#ffc9df', glow: '#fff0f6', dark: '#d9709f', deep: '#a84a78', line: '#a85582',
+    bow: SKY_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  const BLUEH = hairPalette('blue', { base: '#6aaee8', light: '#a9d8fb', glow: '#eaf7ff', dark: '#4a86c8', deep: '#2f5f98', line: '#33649a',
+    tie: ['#f48cc0', '#c4568c', '#ffd6ea'] });
+  const LILAC = hairPalette('lilac', { base: '#b49be8', light: '#dccbff', glow: '#f6f0ff', dark: '#8f74d0', deep: '#64499e', line: '#6c55a0', bow: MINT_BOW });
+
+  /** The colour dots above the hairstyles in the chest, in order. Keys are stored in her save: never rename. */
+  const HAIR_COLORS = [
+    ['brown', 'Brúnt', BROWN], ['blonde', 'Ljóst', BLONDE], ['copper', 'Rautt', COPPER], ['cherry', 'Kirsuberjarautt', CHERRY],
+    ['dark', 'Dökkt', DARK], ['pink', 'Bleikt', PINKH], ['blue', 'Blátt', BLUEH], ['lilac', 'Fjólublátt', LILAC],
+    ['mermaid', 'Hafmeyja', MERMAID], ['rainbow', 'Regnbogi', RAINBOW],
+  ];
+  /** Palette for a colour key; undefined for '' (each style keeps its own colours) or an unknown key. */
+  const paletteOf = k => (HAIR_COLORS.find(c => c[0] === k) || [])[2];
 
   /** One hair shape: fill (front or darker back colours of palette pal) plus outline and soft shading. */
   const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
@@ -1311,7 +1344,7 @@ FJ.loading('core.js');
   /** Bow colours: [fill, outline, highlight, centre]. */
   const PINK_BOW = ['#e45a73', '#a8344c', '#f7a6b6', '#f07d92'];
   /** Two braids with bows at the ends. */
-  function braidsHair(pal = BROWN, bow = PINK_BOW) {
+  function braidsHair(pal = BROWN, bow = pal.bow || PINK_BOW) {
     const back = hp(NAPE, true, pal);
     // one braid hanging from x; s = -1 left, 1 right (the bumps zig-zag); cls = the sway class
     const braid = (x, s, cls) => {
@@ -1327,7 +1360,7 @@ FJ.loading('core.js');
     return { back, front: braid(124, -1, 'sway-l') + braid(276, 1, 'sway-r') + capFront(pal) };
   }
   /** Ponytail high on the right, with a hair tie (tie = [fill, outline, shine]). */
-  function ponytailHair(pal = BROWN, tie = ['#7ac0e8', '#3e7ea6', '#d7f0ff']) {
+  function ponytailHair(pal = BROWN, tie = pal.tie || ['#7ac0e8', '#3e7ea6', '#d7f0ff']) {
     const tailD = 'M262,96 C306,92 322,150 314,214 C308,262 316,300 302,334 Q292,316 290,292 C286,250 292,200 280,150 C274,124 262,110 262,96 Z';
     const back = hp('M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z', true, pal) +
       `<g class="sway-p">` + hp(tailD, false, pal) + strand('M300,140 Q308,220 300,310', 2, pal) + lstrand('M292,126 Q300,190 296,260', 1.8, pal) + strand('M286,160 Q292,230 292,290', 1.6, pal) + `</g>`;
@@ -1364,7 +1397,7 @@ FJ.loading('core.js');
     };
   }
   /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
-  function pigtailsHair(pal = BROWN, bow = PINK_BOW) {
+  function pigtailsHair(pal = BROWN, bow = pal.bow || PINK_BOW) {
     const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
     // one pigtail with its bow; m mirrors the left-side path to the right
     const tail = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
@@ -1373,7 +1406,7 @@ FJ.loading('core.js');
     return { back: hp(NAPE, true, pal), front: tail(tailL, 'sway-l', d => d) + tail(mirrorD(tailL), 'sway-r', mirrorD) + capFront(pal) };
   }
   /** Side braid: one thick braid over her shoulder, finished with a flower. */
-  function sidebraidHair(pal = BROWN, flower = '#f48cc0') {
+  function sidebraidHair(pal = BROWN, flower = pal.flower || '#f48cc0') {
     let braid = '<g class="sway-r">';
     const pts = [];
     for (let i = 0; i < 10; i++) {
@@ -1387,47 +1420,50 @@ FJ.loading('core.js');
     return { back: hp(NAPE, true, pal), front: braid + capFront(pal) };
   }
 
+  /* Every style takes o = { hat, pal }: hat = she wears a hat (hide what would poke through it),
+     pal = the hair colour she picked with the colour dots (missing: the style's own colours). */
   const HAIRSTYLES = {
-    /** Her own long loose brown hair (the default; approved, never change). */
-    loose() { return looseHair(BROWN); },
-    /** Two brown braids with pink bows (approved, never change). */
-    braids() { return braidsHair(); },
-    /** Brown ponytail with a blue hair tie (approved, never change). */
-    ponytail() { return ponytailHair(); },
+    /** Her own long loose brown hair (the default; approved, never change how it looks in brown). */
+    loose(o = {}) { return looseHair(o.pal || BROWN); },
+    /** Two brown braids with pink bows (approved, never change how it looks in brown). */
+    braids(o = {}) { return braidsHair(o.pal || BROWN); },
+    /** Brown ponytail with a blue hair tie (approved, never change how it looks in brown). */
+    ponytail(o = {}) { return ponytailHair(o.pal || BROWN); },
 
     /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
 
-    /** Rainbow: her long loose hair in rainbow colours, red at the top to violet at the tips. */
+    /** Rainbow: her long loose hair in rainbow colours (old style key, now made with the colour dots; see LEGACY_HAIR). */
     rainbow() { return looseHair(RAINBOW); },
 
     /** Bob: short hair that ends just under the chin and curls in at the ends. */
-    bob() { return bobHair(); },
+    bob(o = {}) { return bobHair(o.pal || BROWN); },
 
     /** Extra long: straight hair all the way down past the hands. */
-    longest() { return longestHair(); },
+    longest(o = {}) { return longestHair(o.pal || BROWN); },
 
     /** Mermaid: long wavy hair, sea green to ocean blue to violet, with a shell clip. */
-    mermaid() {
+    mermaid(o = {}) {
+      const M = o.pal || MERMAID;
       const backD = 'M200,58 C138,58 104,98 104,162 C104,220 94,262 104,300 C114,340 96,380 102,420 C108,460 96,490 108,524 Q126,512 142,528 Q160,512 178,526 Q200,512 222,526 Q240,512 258,528 Q274,512 292,524 C304,490 292,460 298,420 C304,380 286,340 296,300 C306,262 296,220 296,162 C296,98 262,58 200,58 Z';
       const lockLD = 'M138,128 C118,170 128,210 116,250 C104,290 128,330 118,370 C112,400 118,430 132,456 Q148,438 144,410 C142,380 136,350 144,320 C152,290 140,260 148,220 C152,190 150,160 154,146 Z';
       const wave = 'M132,170 C124,210 128,240 122,270 C116,300 132,330 126,370 C122,400 126,420 134,440';
       // one long wavy front lock; m mirrors the left-side path to the right
-      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, MERMAID) + strand(m(wave), 2, MERMAID) +
-        lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, MERMAID) + `</g>`;
+      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, M) + strand(m(wave), 2, M) +
+        lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, M) + `</g>`;
       // shell clip above the left ear: a fan with ridges
       const shell = `<path d="M150,112 L136,94 Q150,84 166,92 Z" fill="#fbd3e0" stroke="#c97a98" stroke-width="2" stroke-linejoin="round"/>` +
         `<path d="M150,112 L141,92 M150,112 L150,88 M150,112 L159,90" stroke="#c97a98" stroke-width="1.4" stroke-linecap="round"/>` +
         `<circle cx="150" cy="111" r="3.4" fill="#fff6fa" stroke="#c97a98" stroke-width="1.4"/>`;
       return {
-        back: `<g class="sway-b">` + hp(backD, true, MERMAID) +
-          ['M122,220 C110,280 128,330 116,380 C108,430 120,470 124,512', 'M140,380 C134,420 146,470 150,516'].map(d => strand(d, 2, MERMAID) + strand(mirrorD(d), 2, MERMAID)).join('') +
-          lstrand('M114,200 C104,260 120,310 110,360', 1.6, MERMAID) + lstrand(mirrorD('M114,200 C104,260 120,310 110,360'), 1.6, MERMAID) + `</g>`,
-        front: lock(lockLD, 'sway-l', d => d) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(MERMAID) + shell,
+        back: `<g class="sway-b">` + hp(backD, true, M) +
+          ['M122,220 C110,280 128,330 116,380 C108,430 120,470 124,512', 'M140,380 C134,420 146,470 150,516'].map(d => strand(d, 2, M) + strand(mirrorD(d), 2, M)).join('') +
+          lstrand('M114,200 C104,260 120,310 110,360', 1.6, M) + lstrand(mirrorD('M114,200 C104,260 120,310 110,360'), 1.6, M) + `</g>`,
+        front: lock(lockLD, 'sway-l', d => d) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(M) + shell,
       };
     },
 
     /** Extensions: her loose hair with clip-in coloured streaks (pink, lilac, blue, mint) and little clips at the roots. */
-    extensions() {
+    extensions(o = {}) {
       const COLS = ['#f48cc0', '#a98be0', '#5cc8e8', '#7fdc9a'];
       const clipB = addDef('hx-back', `<clipPath id="hx-back"><path d="${LOOSE_BACK}"/></clipPath>`);
       const clipL = addDef('hx-lockL', `<clipPath id="hx-lockL"><path d="${LOOSE_LOCK_L}"/></clipPath>`);
@@ -1443,7 +1479,7 @@ FJ.loading('core.js');
       const backS = ['M114,190 Q100,280 110,350', 'M132,220 Q124,290 134,350'];
       const back = `<g clip-path="${clipB}">` + backS.map((d, i) => streak(d, COLS[i], 13) + streak(mirrorD(d), COLS[3 - i], 13)).join('') + `</g>`;
       const front = 'M138,140 Q124,230 130,350', front2 = 'M147,150 Q138,240 141,330';
-      return looseHair(BROWN, {
+      return looseHair(o.pal || BROWN, {
         back,
         lockL: `<g clip-path="${clipL}">` + streak(front, COLS[0], 9) + streak(front2, COLS[2], 6) + `</g>` + hairClip(138, 164, COLS[0]),
         lockR: `<g clip-path="${clipR}">` + streak(mirrorD(front), COLS[1], 9) + streak(mirrorD(front2), COLS[3], 6) + `</g>` + hairClip(262, 164, COLS[1]),
@@ -1452,47 +1488,50 @@ FJ.loading('core.js');
 
     /** Space buns: two round buns on top of the head with scrunchies. The buns hide under hats. */
     spacebuns(o = {}) {
+      const pal = o.pal || BROWN;
       // one bun at x with its scrunchie (colour c); s nudges the scrunchie inwards
       const bun = (x, s, c) => {
         const cy = 74;
-        return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`) +
-          strand(`M${x - 20},${cy - 4} q10,-16 26,-6 q10,8 0,18`, 2) + strand(`M${x - 14},${cy + 10} q12,8 24,-4`, 1.8) +
-          lstrand(`M${x - 18},${cy - 12} q8,-10 20,-8`, 2.2) +
+        return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`, false, pal) +
+          strand(`M${x - 20},${cy - 4} q10,-16 26,-6 q10,8 0,18`, 2, pal) + strand(`M${x - 14},${cy + 10} q12,8 24,-4`, 1.8, pal) +
+          lstrand(`M${x - 18},${cy - 12} q8,-10 20,-8`, 2.2, pal) +
           scrunchie(x + s * 6, cy + 26, 26, 8, c);
       };
       const buns = o.hat ? '' : bun(146, 1, '#f48cc0') + bun(254, -1, '#a98be0');
-      return { back: buns + hp(NAPE, true), front: capFront() };
+      return { back: buns + hp(NAPE, true, pal), front: capFront(pal) };
     },
 
     /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
-    pigtails() { return pigtailsHair(); },
+    pigtails(o = {}) { return pigtailsHair(o.pal || BROWN); },
 
     /** Curly cloud: a big round cloud of dark curls with a curly fringe. */
-    curls() {
+    curls(o = {}) {
+      const D = o.pal || DARK;
       const ring = [];
       for (let i = 0; i < 22; i++) {
         const a = Math.PI / 2 + i / 22 * Math.PI * 2;
         ring.push([200 + Math.cos(a) * 126, 156 + Math.sin(a) * 120]);
       }
-      const back = hp(bumpy(ring, .32), true, DARK) +
-        curlMarks([[96, 150], [104, 200], [114, 240], [92, 110], [300, 150], [292, 200], [282, 240], [304, 110], [130, 60], [170, 44], [226, 44], [266, 60], [112, 228], [288, 228]], DARK);
+      const back = hp(bumpy(ring, .32), true, D) +
+        curlMarks([[96, 150], [104, 200], [114, 240], [92, 110], [300, 150], [292, 200], [282, 240], [304, 110], [130, 60], [170, 44], [226, 44], [266, 60], [112, 228], [288, 228]], D);
       // fringe: bumpy top following the head, curls along the forehead
       const fringe = bumpy([[122, 172], [116, 136], [126, 104], [148, 80], [176, 66], [200, 62], [226, 66], [252, 80], [274, 104], [284, 136], [278, 172],
         [270, 150], [258, 132], [242, 124], [224, 128], [208, 122], [190, 128], [172, 124], [156, 132], [140, 146], [130, 160]], .22);
-      const front = hp(fringe, false, DARK) +
-        curlMarks([[142, 96], [168, 80], [196, 74], [222, 78], [250, 92], [138, 128], [264, 122], [182, 102], [214, 100], [234, 108], [160, 112]], DARK) +
-        shine(DARK);
+      const front = hp(fringe, false, D) +
+        curlMarks([[142, 96], [168, 80], [196, 74], [222, 78], [250, 92], [138, 128], [264, 122], [182, 102], [214, 100], [234, 108], [160, 112]], D) +
+        shine(D);
       return { back, front };
     },
 
     /** Locs: rope-like locs falling to the shoulders, with colourful beads. */
-    locs() {
+    locs(o = {}) {
+      const pal = o.pal || BROWN;
       const BEADS = ['#e2464c', '#f7c948', '#4caf6a', '#f48ca0', '#6cc6f2'];
-      let back = hp(NAPE, true);
+      let back = hp(NAPE, true, pal);
       // locs behind the head, hanging down the back
       for (let i = 0; i < 10; i++) {
         const x = 112 + i * 19.5, out = (x - 200) * .28, y1 = 300 + (i % 3) * 18;
-        back += loc(x, 150, x + out, 230, x + out * 1.1, y1, 13, BROWN, i % 2 ? BEADS[(i >> 1) % 5] : '');
+        back += loc(x, 150, x + out, 230, x + out * 1.1, y1, 13, pal, i % 2 ? BEADS[(i >> 1) % 5] : '');
       }
       // locs in front, lying over the shoulders
       // roots tucked under the hair cap at the temples; they curve outwards so the face stays free
@@ -1501,16 +1540,17 @@ FJ.loading('core.js');
       const front = (s, m) => sideL.map(([x0, y0, cx, cy, x1, y1], i) => {
         // x on this side (mirrored for the right)
         const X = v => m ? 400 - v : v;
-        return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, BROWN, BEADS[(i + (m ? 2 : 0)) % 5]);
+        return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, pal, BEADS[(i + (m ? 2 : 0)) % 5]);
       }).join('');
-      return { back, front: `<g class="sway-l">${front(0, false)}</g><g class="sway-r">${front(0, true)}</g>` + capFront() };
+      return { back, front: `<g class="sway-l">${front(0, false)}</g><g class="sway-r">${front(0, true)}</g>` + capFront(pal) };
     },
 
     /** Side braid: one thick braid over her shoulder, finished with a flower. */
-    sidebraid() { return sidebraidHair(); },
+    sidebraid(o = {}) { return sidebraidHair(o.pal || BROWN); },
 
     /* ---- Red hair (owner's request). Copper red, like real red hair, plus one bright cherry red.
-       Bows and ties in mint, white and sky blue so they show up nicely against the red. ---- */
+       Old style keys: these are now made with the colour dots (see LEGACY_HAIR), but the keys stay
+       because saved outfits use them, and they keep drawing exactly as they did. ---- */
     /** Long loose copper-red hair. */
     redloose() { return looseHair(COPPER); },
     /** Two copper braids with mint bows. */
@@ -1527,20 +1567,34 @@ FJ.loading('core.js');
     cherry() { return longestHair(CHERRY); },
   };
 
-  /** Draw a hairstyle by key. An unknown key or a style that fails falls back to her own loose hair (code FJ-D02). */
-  function drawHair(style, o = {}) {
-    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(o);
-    try { return HAIRSTYLES[style](o); }
-    catch (e) { fail('FJ-D02', style, e); return HAIRSTYLES.loose(o); }
+  /**
+   * Old style keys that are really "a style in a colour". They are not shown in the chest any more (the colour
+   * dots make them), but still draw for saved outfits; the app turns them into [style, colour] when she wears one.
+   */
+  const LEGACY_HAIR = {
+    rainbow: ['loose', 'rainbow'], redloose: ['loose', 'copper'], redbraids: ['braids', 'copper'], redponytail: ['ponytail', 'copper'],
+    redpigtails: ['pigtails', 'copper'], redbob: ['bob', 'copper'], redsidebraid: ['sidebraid', 'copper'], cherry: ['longest', 'cherry'],
+  };
+
+  /**
+   * Draw a hairstyle by key in a hair colour (a HAIR_COLORS key; '' = the style's own colours).
+   * An unknown key or a style that fails falls back to her own loose hair (code FJ-D02).
+   */
+  function drawHair(style, o = {}, color = '') {
+    const pal = paletteOf(color), opts = pal ? Object.assign({}, o, { pal }) : o;
+    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(opts);
+    try { return HAIRSTYLES[style](opts); }
+    catch (e) { fail('FJ-D02', style + (color ? ' / ' + color : ''), e); return HAIRSTYLES.loose(o); }
   }
 
   /* ---------------------------------------------------------------
      Doll renderer
-     state: { hair: a key of HAIRSTYLES, worn:{slot:itemId}, mood:'smile'|'happy' }
+     state: { hair: a key of HAIRSTYLES, hairColor: a HAIR_COLORS key ('' = the style's own colours),
+              worn:{slot:itemId}, mood:'smile'|'happy' }
      Returns the inner markup of an <svg viewBox="0 0 400 800">.
      --------------------------------------------------------------- */
   DOLL.renderDoll = function (state = {}) {
-    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) });
+    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) }, state.hairColor);
     const layers = [];                      // [z, markup]
     layers.push([10, `<g class="hair-back">${hair.back}</g>`]);
     layers.push([20, `<g class="body">${drawBody()}</g>`]);
@@ -1572,11 +1626,26 @@ FJ.loading('core.js');
     return `<svg viewBox="${box.join(' ')}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${out.back}${out.front}</svg>`;
   };
 
-  /** Hairstyle "items" so hair can be picked from the chest like clothes. */
-  DOLL.hairstyles = Object.keys(HAIRSTYLES);
-  DOLL.renderHairThumb = function (style) {
-    const h = drawHair(style);
+  /** Hairstyles shown in the chest (old "style in a colour" keys are left out: the colour dots make them). */
+  DOLL.hairstyles = Object.keys(HAIRSTYLES).filter(k => !LEGACY_HAIR[k]);
+  /** Every hairstyle key that can be drawn (also the old ones, for saved outfits). */
+  DOLL.hairKeys = Object.keys(HAIRSTYLES);
+  /** Old key → [style, colour] (see LEGACY_HAIR). */
+  DOLL.legacyHair = LEGACY_HAIR;
+  /** The hair colour dots: [{ k, is }] in chest order. */
+  DOLL.hairColors = HAIR_COLORS.map(([k, is]) => ({ k, is }));
+  /** Chest tile for a hairstyle: her face with the style, in a hair colour ('' = the style's own colours). */
+  DOLL.renderHairThumb = function (style, color = '') {
+    const h = drawHair(style, {}, color);
     return `<svg viewBox="70 40 260 340" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${h.back}<g>${drawFace('smile')}</g>${h.front}${drawEars()}</svg>`;
+  };
+
+  /** A round colour dot for the hair colour picker (the colour's front gradient, top to bottom, with a shine). */
+  DOLL.renderHairSwatch = function (color) {
+    const pal = paletteOf(color); if (!pal) return '';
+    const id = addDef('hsw-' + color, `<linearGradient id="hsw-${color}" x1="0" y1="0" x2="0" y2="1">${stopsOf(pal.stops)}</linearGradient>`);
+    return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="${id}" stroke="${pal.line}" stroke-width="2.5"/>` +
+      `<path d="M11,15 Q15,8 23,8" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".7"/></svg>`;
   };
 
   root.G = G; root.H = H; root.DOLL = DOLL; root.SLOTS = SLOTS; root.CATS = CATS;
@@ -12283,6 +12352,997 @@ FJ.loading('tails.js');
 
 </script>
 <script>
+FJ.loading('christmas.js');
+/* =====================================================================
+   Christmas clothes (jólaföt): Santa and elf hats, reindeer antlers,
+   Christmas sweaters (jólapeysur), party dresses, a Santa coat and
+   trousers, boots and elf shoes, a red reindeer nose, a necklace of
+   Christmas lights, bauble earrings, mittens, a candy-cane scarf,
+   things to hold (candy cane, present, lantern) and Christmas pyjamas.
+   Every piece is a normal item in its own chest tab, and four finished
+   costumes are registered as looks for the "Búningar" tab.
+   Same style as examples.js: fill → details → soft shading → tinted outline.
+   Our own friendly designs only: no film characters, no logos, no text.
+   Shape names start with "xm-" (Christmas).
+   ===================================================================== */
+(function () {
+  'use strict';
+  const { shade, ink } = H;
+  const SW = G.stroke;
+
+  /* ---------------------------------------------------------------
+     Small helpers
+     --------------------------------------------------------------- */
+  // round a number to one decimal and turn it into text (keeps the SVG short)
+  const n1 = v => (Math.round(v * 10) / 10).toString();
+  // turn a point [x, y] into the text 'x,y' for use in SVG paths
+  const P = p => n1(p[0]) + ',' + n1(p[1]);
+  /** Final pass for a shape: soft shading overlay plus the tinted outline. */
+  const outline = (d, base, soft = 'v', sw = SW) =>
+    `<path d="${d}" fill="url(#soft-${soft})" stroke="${ink(base)}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  /** Mirror markup drawn on the left side over to the right side (x → 400 - x). */
+  const mirror = m => `<g transform="matrix(-1,0,0,1,400,0)">${m}</g>`;
+  /** Left piece plus its mirrored right piece. */
+  const pair = fn => fn() + mirror(fn());
+  /** A line drawn twice (ink underneath, colour on top): ribbons, cords, antlers. */
+  const cord = (d, c, w) => `<path d="${d}" fill="none" stroke="${ink(c)}" stroke-width="${n1(w + 2.6)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  /** White highlight stroke. */
+  const gloss = (d, w = 4, op = .5) => `<path d="${d}" fill="none" stroke="#fff" stroke-width="${w}" stroke-linecap="round" opacity="${op}"/>`;
+  /** Point on a circle, angle in degrees. */
+  const pol = (cx, cy, r, deg) => [cx + Math.cos(deg * Math.PI / 180) * r, cy + Math.sin(deg * Math.PI / 180) * r];
+  /** Point on the head ellipse grown by `off` (degrees, 270 = top of the head). */
+  const at = (deg, off) => {
+    const { cx, cy, rx, ry } = G.head, a = deg * Math.PI / 180;
+    return [cx + Math.cos(a) * (rx + off), cy + Math.sin(a) * (ry + off)];
+  };
+  /** Safe id fragment from colours. */
+  const idOf = s => String(s).replace(/[^a-z0-9]/gi, '');
+  /** n+1 points along a quadratic curve from a to b with control point c. */
+  const qb = (a, c, b, n) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; });
+  /** Points every `step` px along a line through pts (both ends included). */
+  const resample = (pts, step) => {
+    const out = [pts[0]];
+    let carry = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0);
+      let s = step - carry;
+      while (s <= L) { out.push([x0 + (x1 - x0) * s / L, y0 + (y1 - y0) * s / L]); s += step; }
+      carry = L - (s - step);
+    }
+    const last = pts[pts.length - 1], prev = out[out.length - 1];
+    if (Math.hypot(last[0] - prev[0], last[1] - prev[1]) > step * .4) out.push(last);
+    return out;
+  };
+
+  const FUR = '#fbf8f4';   // the soft white of Santa fur trims
+  /**
+   * Fluffy white fur trim along a line of points (pts): a row of round puffs
+   * gives the scalloped fluffy edge, a thick stroke fills in the middle, and
+   * little grey curls give it a furry texture. r = puff radius (half the trim width).
+   */
+  const fur = (pts, r, c = FUR) => {
+    const s = resample(pts, r * 1.05);
+    const line = 'M' + pts.map(P).join('L');
+    return s.map(p => `<circle cx="${n1(p[0])}" cy="${n1(p[1])}" r="${r}" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1.5"/>`).join('') +
+      `<path d="${line}" fill="none" stroke="${c}" stroke-width="${n1(2 * r - 2.6)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+      s.filter((_, i) => i % 2).map(([x, y]) => `<path d="M${n1(x - r * .35)},${n1(y + r * .2)} q${n1(r * .3)},${n1(-r * .45)} ${n1(r * .7)},0" fill="none" stroke="${shade(c, -.25)}" stroke-width="1.3" stroke-linecap="round" opacity=".7"/>`).join('');
+  };
+  /** Fur cuff round the left arm at position t (0 shoulder … 1 wrist); hw = half its width. Mirror for the right arm. */
+  const furCuffL = (t, hw, r) => {
+    const [x, y] = G.armPoint('L', t), [x2, y2] = G.armPoint('L', Math.min(1, t + .05));
+    const l = Math.hypot(x2 - x, y2 - y), nx = (y2 - y) / l, ny = -(x2 - x) / l;   // across the arm
+    return fur([[x - nx * hw, y - ny * hw], [x + nx * hw, y + ny * hw]], r);
+  };
+
+  /** Fluffy pompom: a ring of small puffs around a centre ball. */
+  const pompom = (cx, cy, r, col) => {
+    let s = '';
+    for (let a = 0; a < 360; a += 30) { const [x, y] = pol(cx, cy, r, a); s += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r * .58)}" fill="${H.grad(col, 'r')}" stroke="${ink(col)}" stroke-width="1.6"/>`; }
+    return s + `<circle cx="${cx}" cy="${cy}" r="${n1(r * .93)}" fill="${H.grad(col, 'r')}"/>` +
+      `<path d="M${n1(cx - r * .5)},${n1(cy - r * .3)} q${n1(r * .3)},${n1(-r * .4)} ${n1(r * .7)},${n1(-r * .3)}" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"/>`;
+  };
+  /** Little jingle bell hanging at (x, y) with radius r: a dome, a rim, a slot and a shine. */
+  const bell = (x, y, r, c = '#f2c34d') => {
+    const d = `M${n1(x - r)},${n1(y + r * .55)} C${n1(x - r)},${n1(y - r * .9)} ${n1(x + r)},${n1(y - r * .9)} ${n1(x + r)},${n1(y + r * .55)} Q${n1(x + r * 1.25)},${n1(y + r * .8)} ${n1(x)},${n1(y + r * .85)} Q${n1(x - r * 1.25)},${n1(y + r * .8)} ${n1(x - r)},${n1(y + r * .55)} Z`;
+    return `<circle cx="${n1(x)}" cy="${n1(y - r * .85)}" r="${n1(r * .3)}" fill="none" stroke="${ink(c)}" stroke-width="1.2"/>` +
+      `<path d="${d}" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1.3" stroke-linejoin="round"/>` +
+      `<path d="M${n1(x - r * .55)},${n1(y + r * .25)} H${n1(x + r * .55)}" stroke="${ink(c)}" stroke-width="1.1" opacity=".7"/>` +
+      `<circle cx="${n1(x)}" cy="${n1(y + r * .85)}" r="${n1(r * .28)}" fill="${shade(c, -.35)}"/>` +
+      `<path d="M${n1(x - r * .45)},${n1(y - r * .1)} q${n1(r * .1)},${n1(-r * .4)} ${n1(r * .4)},${n1(-r * .5)}" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".85"/>`;
+  };
+  /** Holly sprig at (x, y): two spiky leaves and three red berries; s = size, rot = turn in degrees. */
+  const holly = (x, y, s = 1, rot = 0, leafC = '#3f9a4a', berryC = '#e0313c') => {
+    const leaf = 'M0,0 Q4,-6 8,-4 Q10,-9 14,-6 Q17,-10 21,-5 Q24,-3 27,0 Q24,3 21,5 Q17,10 14,6 Q10,9 8,4 Q4,6 0,0 Z';
+    // one leaf turned by a degrees, with a light middle vein
+    const one = a => `<g transform="rotate(${a})"><path d="${leaf}" fill="${H.grad(leafC)}" stroke="${ink(leafC)}" stroke-width="1.3" stroke-linejoin="round"/><path d="M2,0 H23" stroke="${shade(leafC, .35)}" stroke-width="1.1"/></g>`;
+    // one shiny red berry at (bx, by)
+    const berry = (bx, by) => `<circle cx="${bx}" cy="${by}" r="3.6" fill="${H.grad(berryC, 'r')}" stroke="${ink(berryC)}" stroke-width="1.1"/><circle cx="${bx - 1.2}" cy="${by - 1.2}" r="1" fill="#fff" opacity=".85"/>`;
+    return `<g transform="translate(${n1(x)},${n1(y)}) rotate(${rot}) scale(${s})">` + one(-160) + one(-20) + berry(-3, -2) + berry(3, -2.5) + berry(0, 3) + `</g>`;
+  };
+  /** Small ribbon bow at (x, y): two loops, two tails and a knot; s = size. */
+  const bow = (x, y, s, c) => {
+    const loop = 'M0,0 C-6,-9 -16,-10 -15,-2 C-14,5 -6,4 0,0 Z', tail = 'M-1,1 L-7,13 L-3,12 L-1,15 L2,2 Z';
+    const half = `<path d="${tail}" fill="${H.grad(shade(c, -.08))}" stroke="${ink(c)}" stroke-width="1.3" stroke-linejoin="round"/><path d="${loop}" fill="${H.grad(c)}" stroke="${ink(c)}" stroke-width="1.3" stroke-linejoin="round"/>`;
+    return `<g transform="translate(${n1(x)},${n1(y)}) scale(${s})">${half}<g transform="scale(-1,1)">${half}</g>` +
+      `<ellipse cx="0" cy="0" rx="3.4" ry="4" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1.3"/></g>`;
+  };
+  /** Outlined five-point star. */
+  const starO = (cx, cy, r, col, sw = 1.5) => {
+    let d = '';
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .48 : r; d += (i ? 'L' : 'M') + n1(cx + Math.cos(a) * rr) + ',' + n1(cy + Math.sin(a) * rr); }
+    return `<path d="${d}Z" fill="${H.grad(col, 'r')}" stroke="${ink(col)}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+  };
+  /** Snowflake with little branch ticks (stroke based), with a soft darker edge. */
+  const flakeO = (cx, cy, r, col, w = 2.2) => {
+    let d = '';
+    for (let i = 0; i < 6; i++) {
+      const a = i * 60 - 90, [x, y] = pol(cx, cy, r, a), [bx, by] = pol(cx, cy, r * .55, a);
+      const [t1x, t1y] = pol(bx, by, r * .32, a - 45), [t2x, t2y] = pol(bx, by, r * .32, a + 45);
+      d += `M${n1(cx)},${n1(cy)}L${n1(x)},${n1(y)}M${n1(bx)},${n1(by)}L${n1(t1x)},${n1(t1y)}M${n1(bx)},${n1(by)}L${n1(t2x)},${n1(t2y)}`;
+    }
+    return `<path d="${d}" stroke="${ink(col)}" stroke-width="${w + 2}" stroke-linecap="round" fill="none" opacity=".45"/>` +
+      `<path d="${d}" stroke="${col}" stroke-width="${w}" stroke-linecap="round" fill="none"/>`;
+  };
+
+  /** Tartan (plaid) fill: base colour, wide crossing bands and thin lines. Shared by items with the same colours. */
+  const tartan = (c1, c2, c3, size = 36) => {
+    const id = 'xm-tartan-' + idOf(c1) + idOf(c2) + idOf(c3) + size, u = size / 36;
+    return H.def(id, `<pattern id="${id}" width="${size}" height="${size}" patternUnits="userSpaceOnUse">` +
+      `<rect width="${size}" height="${size}" fill="${c1}"/>` +
+      `<rect y="${12 * u}" width="${size}" height="${12 * u}" fill="${c2}" opacity=".55"/><rect x="${12 * u}" width="${12 * u}" height="${size}" fill="${c2}" opacity=".55"/>` +
+      `<rect y="${17 * u}" width="${size}" height="${2 * u}" fill="${c3}" opacity=".85"/><rect x="${17 * u}" width="${2 * u}" height="${size}" fill="${c3}" opacity=".85"/>` +
+      `<rect y="${31 * u}" width="${size}" height="${1.5 * u}" fill="${shade(c1, -.4)}" opacity=".5"/><rect x="${31 * u}" width="${1.5 * u}" height="${size}" fill="${shade(c1, -.4)}" opacity=".5"/>` +
+      `</pattern>`);
+  };
+  /** Candy-cane fill: diagonal stripes of two colours. Shared by items with the same colours. */
+  const candy = (c1, c2, size = 16) => {
+    const id = 'xm-candy-' + idOf(c1) + idOf(c2) + size;
+    return H.def(id, `<pattern id="${id}" width="${size}" height="${size}" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">` +
+      `<rect width="${size}" height="${size}" fill="${c1}"/><rect width="${size * .45}" height="${size}" fill="${c2}"/></pattern>`);
+  };
+
+  /** Cute reindeer face motif centred at (cx, cy), s = size: antlers, ears, head, light muzzle, red nose, smile. */
+  const reindeerFace = (cx, cy, s, furC = '#a8754a', light = '#ecd3ae', nose = '#e2363e', antler = '#e0bb7e') => {
+    const ant = cord('M-8,-17 C-11,-28 -17,-34 -25,-42 M-14,-29 C-21,-30 -27,-27 -32,-22 M-19,-35 C-19,-42 -17,-47 -14,-52', antler, 3.6);
+    const ear = `<g transform="rotate(-12 -21 -8)"><ellipse cx="-21" cy="-8" rx="10" ry="5" fill="${H.grad(furC)}" stroke="${ink(furC)}" stroke-width="1.6"/><ellipse cx="-22.5" cy="-8" rx="6" ry="2.4" fill="${light}"/></g>`;
+    const half = ant + ear;
+    return `<g transform="translate(${n1(cx)},${n1(cy)}) scale(${s})">` + half + `<g transform="scale(-1,1)">${half}</g>` +
+      `<ellipse cx="0" cy="0" rx="17" ry="19" fill="${H.grad(furC, 'r')}" stroke="${ink(furC)}" stroke-width="1.8"/>` +
+      `<ellipse cx="0" cy="9.5" rx="11" ry="8.5" fill="${H.grad(light, 'r')}" stroke="${ink(light)}" stroke-width="1.2"/>` +
+      `<circle cx="-7" cy="-4" r="2.8" fill="#3a2a30"/><circle cx="7" cy="-4" r="2.8" fill="#3a2a30"/>` +
+      `<circle cx="-6" cy="-5" r="1" fill="#fff"/><circle cx="8" cy="-5" r="1" fill="#fff"/>` +
+      `<circle cx="-11" cy="5" r="2.8" fill="#f28a8c" opacity=".5"/><circle cx="11" cy="5" r="2.8" fill="#f28a8c" opacity=".5"/>` +
+      `<path d="M-4,13 q4,4 8,0" fill="none" stroke="#5a3a36" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<circle cx="0" cy="6" r="5.5" fill="${H.grad(nose, 'r')}" stroke="${ink(nose)}" stroke-width="1.3"/>` +
+      `<circle cx="-1.8" cy="4.2" r="1.6" fill="#fff" opacity=".85"/></g>`;
+  };
+  /** Little Christmas tree motif centred at (cx, cy), s = size: three green tiers, garland, baubles, a star and a trunk. */
+  const xmasTree = (cx, cy, s, green = '#3f9a4a', star = '#f6d04d') => {
+    // one tier of the tree: a triangle from its top point to a softly rounded bottom edge
+    const tier = (top, bot, w) => `M0,${top} L${-w / 2},${bot} Q0,${bot + 7} ${w / 2},${bot} Z`;
+    const tiers = [[-14, 32, 70], [-30, 8, 54], [-44, -14, 38]].map(([t, b, w]) =>
+      `<path d="${tier(t, b, w)}" fill="${H.grad(green)}" stroke="${ink(green)}" stroke-width="1.8" stroke-linejoin="round"/>`).join('');
+    const balls = [[-14, 20, '#e2363e'], [12, 24, '#f6d04d'], [-2, 4, '#5aa9ec'], [14, 0, '#e2363e'], [-12, -4, '#f6d04d'], [3, -22, '#f58bb8']]
+      .map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="1"/><circle cx="${x - 1.1}" cy="${y - 1.1}" r="1" fill="#fff" opacity=".85"/>`).join('');
+    return `<g transform="translate(${n1(cx)},${n1(cy)}) scale(${s})">` +
+      `<rect x="-6" y="34" width="12" height="11" rx="2" fill="${H.grad('#9a6a44')}" stroke="${ink('#9a6a44')}" stroke-width="1.5"/>` + tiers +
+      `<path d="M-24,14 Q0,24 26,10 M-18,-8 Q0,0 20,-12" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round"/>` +
+      balls + starO(0, -46, 9, star, 1.4) + `</g>`;
+  };
+
+  /* ---------------------------------------------------------------
+     Held props: the right hand (G.hands[1]) holds them.
+     A prop is drawn twice: `back` sits just under the hands layer (z 40)
+     so the fingers lie over the handle, and `front` (z 66) draws the same
+     prop again everywhere EXCEPT inside the hand outline, so the prop is
+     still on top of sleeves and coats. (Same trick as costumes_work.js.)
+     --------------------------------------------------------------- */
+  // The doll's hand outline from core.js (local space: wrist at 0,0, fingers down), closed a little above the wrist.
+  const HAND_LOCAL = 'M-11.5,-3 L-11.5,0 C-13,5 -14.5,11 -14.5,17 C-14.8,23 -13.5,28.5 -10.5,29.2 C-7.8,29.8 -7,27 -7,24 ' +
+    'C-7.2,30 -6,34.5 -3.4,34.8 C-0.8,35.1 0,32 0,28.5 C0,34 1.4,37.6 3.8,37.6 C6.3,37.6 7,34.5 7,31 ' +
+    'C7.3,34 8.6,35.2 10.6,34.7 C12.8,34.1 13.8,30.5 13.7,26.5 C13.6,24.5 14,23 15.2,22.2 ' +
+    'C17.2,20.8 17.8,17.5 17,14.5 C16,10.5 14,7 12.4,4.5 C11.8,3 11.5,1.5 11.5,0 L11.5,-3 Z';
+  // Move it onto the right hand exactly like core.js does: translate(wrist) rotate(-8.7) scale(-1,1).
+  const HAND_R = (() => {
+    const re = /-?\d*\.?\d+/g, nums = HAND_LOCAL.match(re).map(Number), out = [];
+    const [wx, wy] = G.armPoint('R', 1), a = -8.7 * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    for (let i = 0; i < nums.length; i += 2) {
+      const x = -nums[i], y = nums[i + 1];
+      out.push(wx + x * ca - y * sa, wy - 2 + x * sa + y * ca);
+    }
+    let k = 0;
+    return HAND_LOCAL.replace(re, () => n1(out[k++]));
+  })();
+  // Clip = everything except the right hand.
+  const HAND_OUT = H.def('xm-handout', `<clipPath id="xm-handout"><path clip-rule="evenodd" d="M-100,-100H500V900H-100Z${HAND_R}"/></clipPath>`);
+  /** Split a prop into back (under the fingers) and front (over everything but the hand). extra = front-only bits. */
+  const held = (m, extra = '') => ({ back: m, front: `<g clip-path="${HAND_OUT}">${m}</g>` + extra });
+
+  /* =================================================================
+     HATS (slot hat, cat hat)
+     Hats cover the top of the hair (hair top ≈ 58, outer width ≈ 106–294)
+     and come down to ≈ y 120–135 at the sides.
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Santa hat (jólasveinahúfa): soft hat whose top flops over to the
+     right side of the head, a thick fluffy fur band and a fur pompom
+     hanging at the tip.
+     colors: [hat, fur, pompom]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-santahat', {
+    slot: 'hat',
+    thumb: [80, 4, 270, 192],
+    draw(it) {
+      const [c, furC = FUR, pom = furC] = it.colors;
+      const body = 'M110,118 C100,58 140,20 196,16 C252,12 292,40 308,86 C318,114 324,140 327,166 C314,152 302,130 290,112 Z';
+      // the soft fold where the top flops over
+      const fold = 'M236,28 C272,44 292,78 298,114';
+      return `<path d="${body}" fill="${H.grad(c)}"/>` +
+        `<path d="M254,34 C286,54 304,100 312,142 C304,110 290,82 272,60 Z" fill="${shade(c, -.18)}" opacity=".5"/>` +
+        H.line(fold, c, 2, .5) + H.line('M150,58 Q164,74 166,98', c, 1.6, .35) +
+        gloss('M130,82 Q140,54 172,42', 5, .4) + outline(body, c) +
+        // thick fur band round the head, then the pompom on the tip
+        fur(qb([106, 120], [200, 100], [294, 120], 12), 14, furC) +
+        pompom(327, 170, 14, pom);
+    },
+  });
+
+  /* -------------------------------------------------------------
+     Elf hat (álfahúfa): tall striped cone leaning to the left, a cuff
+     with felt points round the forehead and a little bell on the tip.
+     colors: [hat, stripes, cuff, bell]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-elfhat', {
+    slot: 'hat',
+    thumb: [84, -4, 232, 160],
+    draw(it) {
+      const [c, stripe, cuffC, bellC = '#f2c34d'] = it.colors;
+      const cone = 'M110,114 C110,76 116,42 124,14 C170,30 262,54 290,114 Z';
+      const clip = H.clip('c-' + it.id, cone);
+      // stripes across the cone (perpendicular to its lean)
+      let stripes = '';
+      for (let k = 0; k < 7; k++) stripes += `<rect x="-100" y="${96 - k * 26}" width="600" height="13" fill="${stripe}"/>`;
+      // cuff: top edge curved, bottom edge cut into felt points
+      const yb = x => 112 + 9 * Math.pow((x - 200) / 96, 2);
+      let cuff = 'M104,104 Q200,84 296,104 L296,' + n1(yb(296));
+      const N = 9, w = 192 / N;
+      for (let i = 0; i < N; i++) {
+        const x1 = 296 - (i + .5) * w, x2 = 296 - (i + 1) * w;
+        cuff += `L${n1(x1)},${n1(yb(x1) + 15)}L${n1(x2)},${n1(yb(x2))}`;
+      }
+      cuff += 'Z';
+      return `<path d="${cone}" fill="${H.grad(c)}"/>` +
+        `<g clip-path="${clip}"><g transform="rotate(-37 200 114)">${stripes}</g></g>` +
+        gloss('M128,90 Q130,60 136,40', 4, .4) + outline(cone, c) +
+        `<path d="${cuff}" fill="${H.grad(cuffC)}"/>` +
+        `<path d="M108,108 Q200,90 292,108" fill="none" stroke="${shade(cuffC, .35)}" stroke-width="2" stroke-dasharray="3 3" opacity=".8"/>` +
+        outline(cuff, cuffC, 'v', 2.2) +
+        // little bell hanging from the tip on a short cord
+        cord('M124,15 Q118,18 115,24', bellC, 1.6) + bell(114, 32, 10, bellC);
+    },
+  });
+
+  /* =================================================================
+     HAIRBAND: reindeer antlers (slot hairband, cat hairband)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Reindeer antlers on a headband. The left antler is drawn and
+     mirrored for the right. it.deco = 'holly' (holly sprig) or 'bells'
+     (a bow with a little bell at each antler); it.ears = soft reindeer ears.
+     colors: [antlers, band, ears, bow]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-antlers', {
+    slot: 'hairband',
+    thumb: [92, 0, 216, 150],
+    draw(it) {
+      const [c, band, earC = '#a8754a', bowC = '#e0313c'] = it.colors;
+      const [bx, by] = at(242, 2);
+      // one antler on the left: a curved beam with three tines, as thick rounded strokes
+      const antlerD = `M${bx},${by + 6} C${bx - 2},${by - 16} ${bx - 12},${by - 34} ${bx - 28},${by - 52} ` +
+        `M${bx - 4},${by - 16} C${bx},${by - 26} ${bx + 4},${by - 34} ${bx + 6},${by - 44} ` +
+        `M${bx - 13},${by - 34} C${bx - 21},${by - 36} ${bx - 29},${by - 34} ${bx - 37},${by - 28} ` +
+        `M${bx - 20},${by - 43} C${bx - 19},${by - 53} ${bx - 16},${by - 60} ${bx - 11},${by - 67}`;
+      const antler = cord(antlerD, c, 8) +
+        `<path d="${antlerD}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".35" transform="translate(-1.5,-1)"/>`;
+      // soft ear pointing out to the side, with a lighter inside
+      const [ex, ey] = at(226, 8);
+      const ear = it.ears ? `<g transform="rotate(28 ${n1(ex - 10)} ${n1(ey)})"><ellipse cx="${n1(ex - 10)}" cy="${n1(ey)}" rx="18" ry="8.5" fill="${H.grad(earC)}" stroke="${ink(earC)}" stroke-width="2"/>` +
+        `<ellipse cx="${n1(ex - 13)}" cy="${n1(ey)}" rx="11" ry="4" fill="${shade(earC, .55)}"/></g>` : '';
+      // decoration at the bottom of the left antler
+      const deco = it.deco === 'bells'
+        ? bell(bx - 6, by + 14, 6.5) + bow(bx + 2, by + 4, .75, bowC)
+        : holly(bx + 12, by + 2, .85, -10);
+      const arc = G.headArc(197, 343, 3, 30), mid = 'M' + arc.map(P).join('L');
+      return mirror(antler + ear) + antler + ear +
+        // the band itself: ink edge, fill, a highlight line
+        `<path d="${mid}" fill="none" stroke="${ink(band)}" stroke-width="11.6" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<path d="${mid}" fill="none" stroke="${H.grad(band)}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<path d="M${G.headArc(214, 326, 5.5, 20).map(P).join('L')}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".45"/>` +
+        deco + (it.deco === 'bells' ? mirror(deco) : '');
+    },
+  });
+
+  /* =================================================================
+     SWEATERS: jólapeysur (slot sweater, cat sweater)
+     ================================================================= */
+
+  /** A knitted pattern band across the sweater at y (height h): bg colour, fg motif ('tree' | 'flake' | 'heart' | 'zig'). */
+  const bandRow = (y, h, bg, fg, kind) => {
+    const cy = y + h / 2;
+    let m = `<rect x="0" y="${y}" width="400" height="${h}" fill="${bg}"/>` +
+      `<rect x="0" y="${y + 2}" width="400" height="1.8" fill="${fg}" opacity=".85"/><rect x="0" y="${y + h - 3.8}" width="400" height="1.8" fill="${fg}" opacity=".85"/>`;
+    if (kind === 'zig') {
+      let z = `M0,${cy + 3.5}`;
+      for (let x = 0; x < 400; x += 8) z += `l4,-7l4,7`;
+      return m + `<path d="${z}" fill="none" stroke="${fg}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    }
+    for (let x = 8; x < 400; x += 16) {
+      if (kind === 'tree') m += `<path d="M${x},${n1(cy - 5.5)} l5,9 h-10 Z" fill="${fg}"/>`;
+      else if (kind === 'heart') m += H.heart(x, cy, 4.2, fg);
+      else m += H.flake(x, cy, 4.6, fg);
+    }
+    return m;
+  };
+
+  /* -------------------------------------------------------------
+     Christmas sweater (jólapeysa): knitted look, ribbed cuffs, hem and
+     neck, a knitted pattern band across the chest and above the hem,
+     bands on the sleeves and a big motif on the front.
+     it.motif = 'reindeer' | 'tree' | 'snow' (snowflakes and stars) |
+                'fawn' (brown reindeer-costume sweater with a cream tummy and a bell collar)
+     it.band = band motif ('tree' | 'flake' | 'heart' | 'zig')
+     colors: [knit, band background, band motif, motif colour, accent]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-jolapeysa', {
+    slot: 'sweater',
+    draw(it) {
+      const [c, bandBg, bandFg = '#ffffff', mot = '#ffffff', acc = '#f6d04d'] = it.colors;
+      const d = G.shirtPath({ sleeve: 1, pad: 8, sleevePad: 5, bottom: 456, neck: 'round', neckDepth: 6 });
+      const clip = H.clip('c-' + it.id, d);
+      const rib = shade(c, -.18);
+      const fawn = it.motif === 'fawn';
+      // ribbed cuff (darker, with rib lines) at the wrist of the given side
+      const cuff = side => `<path d="${G.armPath(side, .9, 1.02, 7)}" fill="${H.pat('stripes', rib, shade(rib, -.15), 5)}"/>`;
+      // knitted band round the sleeve of the given side
+      const sband = side => `<path d="${G.armPath(side, .72, .8, 7)}" fill="${bandBg}"/>` +
+        `<path d="${G.armPath(side, .745, .775, 7)}" fill="${bandFg}" opacity=".9"/>`;
+      let inner = '';
+      if (!fawn) inner += bandRow(292, 26, bandBg, bandFg, it.band) + bandRow(404, 22, bandBg, bandFg, it.band) + sband('L') + sband('R');
+      else inner += `<ellipse cx="200" cy="384" rx="38" ry="58" fill="${H.pat('knit', mot, shade(mot, -.2), 10)}"/>` +
+        `<ellipse cx="200" cy="384" rx="38" ry="58" fill="none" stroke="${ink(mot)}" stroke-width="1.6" stroke-dasharray="3 3" opacity=".5"/>` +
+        // little light spots like a young deer
+        [[156, 330], [244, 340], [150, 368], [250, 380], [160, 414], [240, 420]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${mot}" opacity=".85"/>`).join('');
+      inner += `<rect x="0" y="438" width="400" height="24" fill="${H.pat('stripes', rib, shade(rib, -.15), 5)}"/>` + cuff('L') + cuff('R');
+      let motif = '';
+      if (it.motif === 'reindeer') motif = reindeerFace(200, 362, 1.25);
+      else if (it.motif === 'tree') motif = xmasTree(200, 356, .95);
+      else if (it.motif === 'snow') {
+        motif = [[178, 350, 15], [228, 376, 12], [164, 392, 8], [244, 340, 8], [206, 392, 7]].map(([x, y, r]) => flakeO(x, y, r, mot, 2.6)).join('') +
+          [[210, 336, 7], [150, 344, 5], [250, 400, 5.5], [186, 382, 4.5]].map(([x, y, r]) => starO(x, y, r, acc, 1.2)).join('');
+      } else if (fawn) {
+        // red ribbon collar with a jingle bell
+        motif = cord('M180,262 Q200,276 220,262', it.colors[4] || '#e0313c', 5) + bell(200, 282, 9);
+      }
+      return `<path d="${d}" fill="${H.pat('knit', c, shade(c, -.25), 10)}"/>` +
+        `<g clip-path="${clip}">${inner}</g>` +
+        H.line('M151,322 q7,12 4,26 M249,322 q-7,12 -4,26', c, 1.8, .4) +
+        outline(d, c) +
+        // ribbed crew neck
+        `<path d="M184,252 Q200,268 216,252" fill="none" stroke="${ink(rib)}" stroke-width="10.4" stroke-linecap="round"/>` +
+        `<path d="M184,252 Q200,268 216,252" fill="none" stroke="${rib}" stroke-width="8" stroke-linecap="round"/>` +
+        motif;
+    },
+  });
+
+  /* =================================================================
+     DRESSES (slot dress, cat frock)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Christmas dress (jólakjóll): fitted bodice, A-line skirt to the knee.
+     it.style = 'velvet': red velvet with long sleeves, white fur at the
+                 neck, cuffs and hem, a holly brooch and a gold waist ribbon.
+                colors: [velvet, fur, gold]
+     it.style = 'tartan': plaid with puff sleeves, a white round collar,
+                 a sash with a big bow and a ribbon near the hem.
+                colors: [tartan base, tartan band, tartan line, sash]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-frock', {
+    slot: 'dress', occupies: ['dress', 'top', 'bottom'],
+    thumb: [56, 236, 288, 384],
+    draw(it) {
+      const velvet = it.style !== 'tartan';
+      const [c, c2, c3, sash = '#d23a40'] = it.colors;
+      const fill = velvet ? H.grad(c) : tartan(c, c2, c3);
+      const hemY = 588, hx = 102, xw = 142, top = 404;
+      const skirt = `M${xw},${top} C${xw - 8},440 ${hx + 10},${hemY - 70} ${hx},${hemY} Q200,${hemY + 14} ${400 - hx},${hemY} C${400 - hx - 10},${hemY - 70} ${400 - xw + 8},440 ${400 - xw},${top} Z`;
+      const sclip = H.clip('c-' + it.id + '-sk', skirt);
+      const sleeves = G.shirtPath(velvet ? { sleeve: 1, pad: 3, sleevePad: 4, bottom: 380, neck: 'round' } : { sleeve: .3, pad: 3, sleevePad: 9, sleeveFlare: 2, bottom: 380, neck: 'round' });
+      const bodice = G.shirtPath({ sleeve: 0, pad: 2, bottom: 412, neck: 'round' });
+      const line = velvet ? c : shade(c, -.1);
+      // gathered folds falling from the waist
+      const folds = 'M168,420 Q160,500 148,576 M188,424 Q186,500 180,584 M212,424 Q214,500 220,584 M232,420 Q240,500 252,576';
+      // velvet sheen: soft light bands down the skirt
+      const sheen = `<path d="M150,410 Q132,500 116,586 L134,590 Q148,500 162,412 Z M206,410 Q206,500 204,594 L216,594 Q216,500 214,410 Z" fill="#fff" opacity=".14"/>`;
+      let out = `<path d="${skirt}" fill="${fill}"/><g clip-path="${sclip}">${velvet ? sheen : `<rect x="0" y="${hemY - 30}" width="400" height="8" fill="${sash}"/>`}</g>` +
+        H.line(folds, c, 1.6, .35) + outline(skirt, line, 'h');
+      if (velvet) out += fur(qb([hx - 2, hemY], [200, hemY + 14], [402 - hx, hemY], 14), 9, c2);
+      // sleeves, then the bodice on top
+      out += `<path d="${sleeves}" fill="${fill}"/>` + outline(sleeves, line);
+      if (velvet) out += pair(() => furCuffL(.93, 18, 7));
+      else out += H.line('M140,286 q-6,10 -4,22 M260,286 q6,10 4,22', c, 1.4, .45);
+      out += `<path d="${bodice}" fill="${fill}"/>` +
+        (velvet ? `<path d="M168,268 Q160,330 164,400 L174,400 Q170,330 176,270 Z" fill="#fff" opacity=".12"/>` : '') +
+        outline(bodice, line);
+      if (velvet) {
+        // gold ribbon at the waist, fur round the neckline, holly brooch
+        out += `<path d="M${xw},404 Q200,412 ${400 - xw},404" fill="none" stroke="${ink(c3)}" stroke-width="7.6" stroke-linecap="round"/>` +
+          `<path d="M${xw},404 Q200,412 ${400 - xw},404" fill="none" stroke="${c3}" stroke-width="5" stroke-linecap="round"/>` +
+          fur(qb([182, 252], [200, 274], [218, 252], 6), 6.5, c2) +
+          holly(200, 290, .9, 0);
+      } else {
+        // white round collar (left half mirrored), sash and big bow
+        const collar = `<path d="M200,262 C190,262 186,256 183,251 C168,252 156,264 161,277 C168,291 193,287 200,264 Z" fill="${H.grad('#ffffff')}" stroke="${ink('#ffffff')}" stroke-width="1.8" stroke-linejoin="round"/>`;
+        out += collar + mirror(collar) +
+          `<path d="M${xw - 1},398 Q200,406 ${401 - xw},398 L${401 - xw},412 Q200,420 ${xw - 1},412 Z" fill="${H.grad(sash)}" stroke="${ink(sash)}" stroke-width="2" stroke-linejoin="round"/>` +
+          bow(200, 408, 1.25, sash) + bell(200, 278, 6);
+      }
+      return out;
+    },
+  });
+
+  /* =================================================================
+     JACKETS AND TOPS
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Santa coat (jólasveinajakki): long red coat with fluffy white fur
+     down the front, round the hem, the cuffs and the collar, and a black
+     belt with a big gold buckle.
+     colors: [coat, fur, belt, buckle]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-santacoat', {
+    slot: 'jacket',
+    thumb: [50, 226, 300, 296],
+    draw(it) {
+      const [c, furC = FUR, belt = '#2e2a33', buckle = '#f2c34d'] = it.colors;
+      const bottom = 492, pad = 9, flare = 8;
+      const d = G.shirtPath({ sleeve: 1, pad, sleevePad: 7, bottom, flare, neck: 'round', neckDepth: 6 });
+      const clip = H.clip('c-' + it.id, d);
+      const hx = G.torsoX(bottom) - pad - flare;   // left edge of the hem
+      return `<path d="${d}" fill="${H.grad(c)}"/>` +
+        `<g clip-path="${clip}"><rect x="0" y="390" width="400" height="18" fill="${H.grad(belt)}"/>` +
+        `<path d="M0,393 H400" stroke="#fff" stroke-width="1.6" opacity=".25"/></g>` +
+        H.line('M151,320 q7,12 4,26 M249,320 q-7,12 -4,26 M170,450 q4,10 2,22 M232,448 q-3,11 -1,22', c, 1.8, .45) +
+        gloss('M142,298 Q132,326 134,370', 4.5, .3) +
+        outline(d, c) +
+        fur([[200, 262], [200, bottom]], 9, furC) +
+        fur(qb([hx + 4, bottom - 2], [200, bottom + 8], [396 - hx, bottom - 2], 12), 9, furC) +
+        pair(() => furCuffL(.93, 19, 8)) +
+        fur(qb([180, 252], [200, 272], [220, 252], 6), 8, furC) +
+        // gold buckle over the fur
+        `<rect x="184" y="386" width="32" height="26" rx="4" fill="${H.grad(buckle)}" stroke="${ink(buckle)}" stroke-width="2"/>` +
+        `<rect x="191" y="393" width="18" height="12" rx="2" fill="${H.grad(belt)}" stroke="${ink(buckle)}" stroke-width="1.4"/>` +
+        gloss('M188,390 h10', 2, .7);
+    },
+  });
+
+  /* -------------------------------------------------------------
+     Elf tunic (álfakyrtill): long-sleeved tunic with a pointy hem,
+     a belt with a gold buckle, red cuffs and a pointy felt collar
+     with little bells on the points.
+     colors: [tunic, collar / cuffs, belt, bells]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-elftunic', {
+    slot: 'top',
+    thumb: [56, 226, 288, 290],
+    draw(it) {
+      const [c, col = '#d23a40', belt = '#3a2e2a', bellC = '#f2c34d'] = it.colors;
+      const body = G.shirtPath({ sleeve: 1, pad: 6, sleevePad: 4, bottom: 446, neck: 'round' });
+      const bclip = H.clip('c-' + it.id, body);
+      // pointy skirt part below the belt: from the hips down to 8 felt points
+      const x0 = G.torsoX(436) - 6, x1 = 116, N = 8, w = (400 - 2 * x1) / N;
+      let pd = `M${n1(x0)},430 L${x1},486`;
+      for (let i = 0; i < N; i++) pd += `L${n1(x1 + (i + .5) * w)},${i % 2 ? 504 : 500}L${n1(x1 + (i + 1) * w)},486`;
+      pd += `L${n1(400 - x0)},430 Z`;
+      // pointy collar lying on the shoulders: teeth round the neck, back along the neckline
+      let cd = '';
+      for (let i = 0; i <= 10; i++) {
+        const a = (172 - i * 16.4) * Math.PI / 180, tip = i % 2 === 0;
+        const rx = tip ? 54 : 38, ry = tip ? 44 : 26;
+        cd += (i ? 'L' : 'M') + n1(200 + Math.cos(a) * rx) + ',' + n1(250 + Math.sin(a) * ry);
+      }
+      cd += 'L217,251 Q200,272 183,251 Z';
+      const tips = [0, 2, 4, 6, 8, 10].map(i => { const a = (172 - i * 16.4) * Math.PI / 180; return [200 + Math.cos(a) * 54, 250 + Math.sin(a) * 44]; });
+      return `<path d="${pd}" fill="${H.grad(c)}"/>` + H.line('M150,488 l4,-30 M250,488 l-4,-30 M200,500 v-34', c, 1.4, .35) + outline(pd, c) +
+        `<path d="${body}" fill="${H.grad(c)}"/>` +
+        `<g clip-path="${bclip}"><rect x="0" y="428" width="400" height="40" fill="${H.grad(belt)}"/>` +
+        `<path d="${G.armPath('L', .9, 1.02, 6)}${G.armPath('R', .9, 1.02, 6)}" fill="${H.grad(col)}"/></g>` +
+        H.line('M151,322 q7,12 4,26 M249,322 q-7,12 -4,26', c, 1.8, .4) + outline(body, c) +
+        `<rect x="186" y="428" width="28" height="22" rx="4" fill="${H.grad(bellC)}" stroke="${ink(bellC)}" stroke-width="2"/>` +
+        `<rect x="192" y="434" width="16" height="10" rx="2" fill="${belt}" stroke="${ink(bellC)}" stroke-width="1.2"/>` +
+        `<path d="${cd}" fill="${H.grad(col)}"/>` + outline(cd, col, 'v', 2.2) +
+        tips.filter((_, i) => i > 0 && i < 5).map(([x, y]) => bell(x, y + 5, 5.5, bellC)).join('');
+    },
+  });
+
+  /* =================================================================
+     TROUSERS (slot bottom, cat pants)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Santa trousers: roomy trousers with an elastic waist and fluffy
+     fur cuffs at the ankles (tuck them into the boots, or not).
+     colors: [trousers, fur cuffs]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-pants', {
+    slot: 'bottom',
+    draw(it) {
+      const [c, furC = FUR] = it.colors;
+      const pad = 6, flare = 5, bottom = 690;
+      const d = G.pantsPath({ top: 398, bottom, pad, flare });
+      const clip = H.clip('c-' + it.id, d);
+      const xo = G.legOutX(bottom) - pad - flare, xi = G.legInX(bottom) + pad + flare * .6;
+      // elastic waistband with little gathers
+      const gathers = Array.from({ length: 24 }, (_, i) => `M${140 + i * 5},400 v12`).join('');
+      return `<path d="${d}" fill="${H.grad(c)}"/>` +
+        `<g clip-path="${clip}"><rect x="0" y="398" width="400" height="15" fill="${shade(c, -.08)}"/>` +
+        `<path d="${gathers}" stroke="${ink(c)}" stroke-width="1.2" opacity=".35"/>` +
+        `<ellipse cx="170" cy="580" rx="14" ry="30" fill="#fff" opacity=".1"/><ellipse cx="230" cy="580" rx="14" ry="30" fill="#fff" opacity=".1"/></g>` +
+        H.line('M190,472 l-10,9 M210,472 l10,9 M156,570 q12,6 26,0 M218,570 q12,6 26,0 M170,500 q-4,30 -2,60 M230,500 q4,30 2,60', c, 1.6, .4) +
+        outline(d, c, 'h') +
+        // fur cuffs kept inside the trouser leg, so they hide neatly inside boots
+        pair(() => fur([[xo + 9, bottom - 5], [xi - 9, bottom - 5]], 7.5, furC));
+    },
+  });
+
+  /* =================================================================
+     SHOES (slot shoes)
+     ================================================================= */
+  /** x of the left boot shaft's outer / inner edge at height y (pad = looseness, flare = extra width at the bottom). */
+  const shaftX = (top, low, pad, flare, y, inner) => {
+    const k = (y - top) / (low - top);
+    return inner ? G.legInX(y) + pad + flare * k * .6 : G.legOutX(y) - pad - flare * k;
+  };
+
+  /* -------------------------------------------------------------
+     Boots with a fluffy fur cuff (Santa boots): glossy shaft, a sole,
+     and white fur round the top.
+     colors: [boot, fur, sole]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-boots', {
+    slot: 'shoes',
+    thumb: [116, 600, 168, 156],
+    draw(it) {
+      const [c, furC = FUR, soleC = shade(c, -.35)] = it.colors;
+      const top = 632, low = 716, pad = 8, flare = 4;
+      // one boot (left side; the right one is mirrored)
+      const one = () => {
+        const outer = [], inner = [];
+        for (let y = top; y <= low + .1; y += (low - top) / 6) {
+          outer.push([shaftX(top, low, pad, flare, y, false), y]);
+          inner.push([shaftX(top, low, pad, flare, y, true), y]);
+        }
+        const sh = H.polyPath(outer.concat(inner.slice().reverse()));
+        const edges = 'M' + outer.map(P).join('L') + 'M' + inner.map(P).join('L');
+        const foot = G.footPath('L', 6, 3);
+        const [fx, fy] = G.feet[0];
+        return `<path d="${foot}" fill="${H.grad(c)}"/>` +
+          `<g clip-path="${H.clip('c-' + it.id + '-sole', foot)}"><rect x="${fx - 60}" y="${fy + 9}" width="120" height="30" fill="${soleC}"/></g>` + outline(foot, c, 'r') +
+          `<path d="${sh}" fill="${H.grad(c, 'h')}"/><path d="${sh}" fill="url(#soft-h)"/>` +
+          `<path d="${edges}" fill="none" stroke="${ink(c)}" stroke-width="${SW}" stroke-linecap="round"/>` +
+          gloss('M157,654 Q155,676 158,698', 4, .45) + gloss(`M${fx - 18},${fy - 6} q-3,5 -2,10`, 3, .6) +
+          fur([[outer[0][0] + 5, top + 2], [inner[0][0] - 9, top + 2]], 10, furC);
+      };
+      return pair(one);
+    },
+  });
+
+  /* -------------------------------------------------------------
+     Elf shoes (álfaskór): soft felt shoes whose toes curl up into a
+     point with a little bell, and a pointy cuff round the ankle.
+     colors: [shoe, cuff, bell]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-elfshoes', {
+    slot: 'shoes',
+    thumb: [96, 646, 208, 104],
+    draw(it) {
+      const [c, cuffC = '#d23a40', bellC = '#f2c34d'] = it.colors;
+      const [fx, fy] = G.feet[0];
+      // the curled toe: a tapering band along a curve that rolls up and back, built from both edges
+      const curve = [...Array.from({ length: 13 }, (_, i) => { const t = i / 12, u = 1 - t;
+        return [u * u * u * 152 + 3 * u * u * t * 128 + 3 * u * t * t * 108 + t * t * t * 110, u * u * u * 728 + 3 * u * u * t * 732 + 3 * u * t * t * 716 + t * t * t * 696]; }),
+        ...Array.from({ length: 6 }, (_, i) => { const t = (i + 1) / 6, u = 1 - t;
+          return [u * u * u * 110 + 3 * u * u * t * 111 + 3 * u * t * t * 124 + t * t * t * 122, u * u * u * 696 + 3 * u * u * t * 684 + 3 * u * t * t * 686 + t * t * t * 696]; })];
+      const L = [], R = [];
+      curve.forEach((p, i) => {
+        const q = curve[Math.min(curve.length - 1, i + 1)], o = curve[Math.max(0, i - 1)];
+        const dx = q[0] - o[0], dy = q[1] - o[1], l = Math.hypot(dx, dy) || 1, w = 11 * (1 - i / curve.length) + 1.6;
+        L.push([p[0] - dy / l * w, p[1] + dx / l * w]); R.push([p[0] + dy / l * w, p[1] - dx / l * w]);
+      });
+      const toe = H.polyPath(L.concat(R.reverse()));
+      const end = curve[curve.length - 1];
+      // pointy felt cuff round the ankle
+      let cuff = 'M152,700 Q170,694 188,700';
+      for (let i = 0; i < 5; i++) { const x = 188 - (i + .5) * 7.2; cuff += `L${n1(x)},${i % 2 ? 712 : 714}L${n1(188 - (i + 1) * 7.2)},703`; }
+      cuff += 'Z';
+      // one shoe (left side; the right one is mirrored)
+      const one = () => {
+        const foot = G.footPath('L', 4, 2);
+        return `<path d="${toe}" fill="${H.grad(c)}"/>` + outline(toe, c, 'v', 2.2) +
+          `<path d="${foot}" fill="${H.grad(c)}"/>` +
+          `<g clip-path="${H.clip('c-' + it.id + '-sole', foot)}"><rect x="${fx - 60}" y="${fy + 10}" width="120" height="30" fill="${shade(c, -.3)}"/></g>` +
+          outline(foot, c, 'r') +
+          H.line(`M${fx - 4},${fy - 14} q-6,10 -4,22`, c, 1.4, .4) +
+          gloss(`M${fx - 14},${fy - 4} q-3,4 -2,9`, 2.6, .6) +
+          `<path d="${cuff}" fill="${H.grad(cuffC)}"/>` + outline(cuff, cuffC, 'v', 2) +
+          bell(end[0] - 1, end[1] + 6, 5.5, bellC);
+      };
+      return pair(one);
+    },
+  });
+
+  /* =================================================================
+     FACE: red reindeer nose (slot face, cat face)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Red reindeer nose: a round shiny red nose over her own nose with a
+     soft glow round it.
+     colors: [nose]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-nose', {
+    slot: 'face',
+    thumb: [164, 150, 72, 66],
+    draw(it) {
+      const [c] = it.colors;
+      return `<circle cx="200" cy="183" r="17" fill="${c}" opacity=".18"/>` +
+        `<circle cx="200" cy="183" r="11.5" fill="${H.grad(c, 'r')}" stroke="${ink(c)}" stroke-width="2"/>` +
+        `<ellipse cx="196" cy="178.5" rx="4.2" ry="2.8" fill="#fff" opacity=".85"/>` +
+        `<circle cx="205" cy="188" r="1.4" fill="#fff" opacity=".5"/>`;
+    },
+  });
+
+  /* =================================================================
+     NECKLACE: Christmas lights (slot necklace, cat necklace)
+     ================================================================= */
+  // the wire follows a U round the base of the neck (like the necklaces in heads.js, a little wider)
+  const NA = [178, 248], NC1 = [176, 300], NC2 = [224, 300], NB = [222, 248];
+  /** Point and direction on the necklace curve at t (0..1). */
+  const neckAt = t => {
+    const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    const x = a * NA[0] + b * NC1[0] + c * NC2[0] + d * NB[0], y = a * NA[1] + b * NC1[1] + c * NC2[1] + d * NB[1];
+    const dx = 3 * u * u * (NC1[0] - NA[0]) + 6 * u * t * (NC2[0] - NC1[0]) + 3 * t * t * (NB[0] - NC2[0]);
+    const dy = 3 * u * u * (NC1[1] - NA[1]) + 6 * u * t * (NC2[1] - NC1[1]) + 3 * t * t * (NB[1] - NC2[1]);
+    return { x, y, dx, dy };
+  };
+
+  /* -------------------------------------------------------------
+     Christmas lights necklace: a dark green wire round the neck with
+     little glowing bulbs in many colours, pointing outwards.
+     colors: [wire, bulb colours...]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-lights', {
+    slot: 'necklace',
+    thumb: [150, 232, 100, 92],
+    draw(it) {
+      const [wire, ...bulbs] = it.colors;
+      const cols = bulbs.length ? bulbs : ['#ef4a4f', '#f6c63d', '#4cbf6a', '#4aa8e8', '#f27ab6'];
+      const wd = `M${NA.join(',')} C${NC1.join(',')} ${NC2.join(',')} ${NB.join(',')}`;
+      let g = cord(wd, wire, 2.4) + `<path d="${wd}" fill="none" stroke="${shade(wire, .35)}" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>`;
+      const n = 9;
+      for (let i = 0; i < n; i++) {
+        const { x, y, dx, dy } = neckAt(.08 + .84 * i / (n - 1));
+        // the bulb points away from the neck: normal of the curve, turned to face outwards/down
+        let nx = dy, ny = -dx; if (ny < 0 || (Math.abs(ny) < .01 && nx * (x - 200) < 0)) { nx = -nx; ny = -ny; }
+        const ang = Math.atan2(ny, nx) * 180 / Math.PI - 90, col = cols[i % cols.length];
+        g += `<g transform="translate(${n1(x)},${n1(y)}) rotate(${n1(ang)})">` +
+          `<circle cx="0" cy="11" r="9" fill="${col}" opacity=".22"/>` +
+          `<rect x="-2.8" y="-1" width="5.6" height="5.4" rx="1.2" fill="${H.grad(wire)}" stroke="${ink(wire)}" stroke-width="1"/>` +
+          `<path d="M-3.6,4.2 C-5,9 -3.6,15 0,17 C3.6,15 5,9 3.6,4.2 Z" fill="${H.grad(col, 'r')}" stroke="${ink(col)}" stroke-width="1.1"/>` +
+          `<path d="M-1.6,7 q-.6,3 .2,6" stroke="#fff" stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".85"/></g>`;
+      }
+      return g;
+    },
+  });
+
+  /* =================================================================
+     EARRINGS: Christmas baubles (slot earrings, cat earrings)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Bauble earrings: a little Christmas-tree bauble on a gold hook,
+     with a gold cap, a white band and a shine. The left and right
+     baubles can have different colours.
+     colors: [left bauble, right bauble, cap, band]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-bauble', {
+    slot: 'earrings',
+    thumb: [105, 162, 44, 50],
+    draw(it) {
+      const [cl, cr = cl, cap = '#f2c34d', band = '#ffffff'] = it.colors;
+      const [x, y] = G.earlobes[0];
+      // one bauble hanging from the left earlobe, in colour c (the right one is mirrored)
+      const one = c => {
+        const clip = H.clip('c-' + it.id + '-' + idOf(c), `M${x - 8},${y + 18}a8,8 0 1 0 16,0a8,8 0 1 0 -16,0Z`);
+        return `<path d="M${x},${y - 1} V${y + 7}" stroke="${ink(cap)}" stroke-width="2.8" stroke-linecap="round"/><path d="M${x},${y - 1} V${y + 7}" stroke="${cap}" stroke-width="1.4" stroke-linecap="round"/>` +
+          `<circle cx="${x}" cy="${y}" r="2.4" fill="${H.grad(cap, 'r')}" stroke="${ink(cap)}" stroke-width="1"/>` +
+          `<circle cx="${x}" cy="${y + 18}" r="8" fill="${H.grad(c, 'r')}"/>` +
+          `<g clip-path="${clip}"><path d="M${x - 9},${y + 18} q9,4 18,0" stroke="${band}" stroke-width="2.6" fill="none"/>` +
+          `<path d="M${x - 9},${y + 22.5} q9,4 18,0" stroke="${band}" stroke-width="1.2" fill="none" stroke-dasharray="1.4 2"/></g>` +
+          `<circle cx="${x}" cy="${y + 18}" r="8" fill="none" stroke="${ink(c)}" stroke-width="1.4"/>` +
+          `<rect x="${x - 3.2}" y="${y + 7}" width="6.4" height="4.6" rx="1.2" fill="${H.grad(cap)}" stroke="${ink(cap)}" stroke-width="1"/>` +
+          `<circle cx="${x - 3}" cy="${y + 15}" r="1.9" fill="#fff" opacity=".9"/>`;
+      };
+      return one(cl) + mirror(one(cr));
+    },
+  });
+
+  /* =================================================================
+     MITTENS (slot mittens, cat mittens)
+     Drawn in the doll's hand space (like feet.js): wrist at (0,0),
+     fingers pointing down, body side = +x; the right one is mirrored.
+     ================================================================= */
+  // mitten outline with the thumb (same as feet.js), the thumb fold, and the cuff band
+  const MITT = 'M-15.5,-3 C-17.5,9 -18.5,22 -16.5,32 C-14.5,42 -6,47.5 1,47 C8.5,46.5 13.5,41 13.8,32.5 ' +
+    'C14,30 14,28.5 14.2,27.5 C16,30.5 19.5,32 22,30.5 C24.8,28.8 25,24 23.4,18.5 C21.6,12 18.5,6 16.4,-3 Z';
+  const MITT_FOLD = 'M14.2,27.5 C13.8,22 14.5,16 16.5,10';
+  /** Place local-space mitten markup on the left or right hand (same transform as the hand). */
+  const onHand = (side, m) => {
+    const [wx, wy] = G.armPoint(side, 1);
+    const tilt = side === 'L' ? 8.7 : -8.7, flip = side === 'L' ? '' : ' scale(-1,1)';
+    return `<g transform="translate(${n1(wx)},${n1(wy - 2)}) rotate(${tilt})${flip}">${m}</g>`;
+  };
+
+  /* -------------------------------------------------------------
+     Christmas mittens: red knitted mittens with a white snowflake and
+     a fluffy white fur cuff.
+     colors: [mitten, cuff, snowflake]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-mitten', {
+    slot: 'mittens',
+    thumb: [58, 404, 84, 90],
+    draw(it) {
+      const [c, cuffC = FUR, mot = '#ffffff'] = it.colors;
+      const clip = H.clip('c-' + it.id, MITT);
+      const m = `<path d="${MITT}" fill="${H.pat('knit', c, shade(c, -.28), 7)}"/>` +
+        `<g clip-path="${clip}">${flakeO(-1.5, 24, 10.5, mot, 2.2)}<circle cx="-1.5" cy="24" r="2" fill="${mot}"/></g>` +
+        H.line(MITT_FOLD, c, 1.6, .6) + outline(MITT, c, 'h') +
+        fur([[-14, -8], [14, -8]], 7.5, cuffC);
+      return onHand('L', m) + onHand('R', m);
+    },
+  });
+
+  /* =================================================================
+     SCARF: candy-cane stripes (slot scarf, cat scarf)
+     ================================================================= */
+  // wrap round the neck (same shapes as the knitted scarves in feet.js): two rolls
+  const WRAP = 'M171,250 C170,238 178,232 186,233 Q200,242 214,233 C222,232 230,238 229,250 C229,266 216,276 200,276 C184,276 171,266 171,250 Z';
+  const WRAP2 = 'M168,262 C170,256 178,258 188,264 Q200,270 212,264 C222,258 230,256 232,262 C233,276 218,288 200,288 C182,288 167,276 168,262 Z';
+  /** One hanging scarf tail from the knot (x0,y0) down to the end (x1,y1), width w, with a soft wave. */
+  const tailD = (x0, y0, x1, y1, w) => {
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    return `M${x0 - w / 2},${y0} Q${mx - w / 2 - 4},${my} ${x1 - w / 2},${y1} L${x1 + w / 2},${y1 + 3} Q${mx + w / 2 - 4},${my} ${x0 + w / 2},${y0} Z`;
+  };
+
+  /* -------------------------------------------------------------
+     Candy-cane scarf: wound twice round the neck, two tails with
+     diagonal red-and-white stripes, soft knit ribs and a fringe.
+     colors: [stripe 1, stripe 2]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-candyscarf', {
+    slot: 'scarf',
+    thumb: [134, 214, 132, 222],
+    draw(it) {
+      const [c1, c2 = '#ffffff'] = it.colors;
+      const fill = candy(c2, c1, 18);
+      const T1 = [184, 268, 176, 396, 24], T2 = [202, 270, 210, 362, 22];
+      // a scarf part (tail or roll) with the stripes, soft ribs and the outline
+      const part = (d, k) => `<path d="${d}" fill="${fill}"/>` +
+        `<g clip-path="${H.clip('c-' + it.id + '-' + k, d)}"><path d="${Array.from({ length: 30 }, (_, i) => `M${150 + i * 4},220v190`).join('')}" stroke="${ink(c1)}" stroke-width=".8" opacity=".18"/></g>` +
+        outline(d, c1, 'h');
+      // fringe at the end of a tail (x1, y1 = end, w = width)
+      const fringe = ([, , x1, y1, w]) => {
+        let d = '';
+        for (let i = 0; i <= 6; i++) { const x = x1 - w / 2 + 2 + i * (w - 4) / 6, y = y1 + 1 + i * 3 / 6; d += `M${n1(x)},${n1(y)}q${i % 2 ? 1 : -1},6 0,12`; }
+        return `<path d="${d}" fill="none" stroke="${ink(c1)}" stroke-width="3.6" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c1}" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3"/>` +
+          `<path d="${d}" fill="none" stroke="${c2}" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3" stroke-dashoffset="3"/>`;
+      };
+      const knot = 'M178,262 C180,254 196,252 200,262 C202,272 196,280 188,280 C180,280 176,272 178,262 Z';
+      return part(tailD(...T2), 't2') + fringe(T2) + part(WRAP2, 'w2') + part(WRAP, 'w1') +
+        part(tailD(...T1), 't1') + fringe(T1) +
+        `<path d="${knot}" fill="${candy(shade(c2, -.1), shade(c1, -.12), 14)}"/>` + outline(knot, c1, 'r') + H.line('M184,262 q2,8 0,14 M192,261 q2,9 -1,16', c1, 1.4, .5);
+    },
+  });
+
+  /* =================================================================
+     THINGS TO HOLD (slot hold, cat hold): right hand, backZ 40 trick
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Candy cane (jólastafur): a striped stick held in the fist with the
+     hook at the top, and a little green bow with holly.
+     colors: [stripe, base]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-candycane', {
+    slot: 'hold',
+    backZ: 40,
+    thumb: [212, 384, 170, 178],
+    draw(it) {
+      const [c1, c2 = '#ffffff'] = it.colors;
+      const d = 'M304,552 V412 A15,15 0 0 0 274,412 V426';
+      const g = `<path d="${d}" fill="none" stroke="${ink(c1)}" stroke-width="13.6" stroke-linecap="round"/>` +
+        `<path d="${d}" fill="none" stroke="${candy(c2, c1, 14)}" stroke-width="11" stroke-linecap="round"/>` +
+        `<path d="M300,548 V412 A11,11 0 0 0 286,401" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".6"/>` +
+        holly(304, 494, .7, 0) + bow(304, 494, .8, '#3f9a4a');
+      return held(g);
+    },
+  });
+
+  /* -------------------------------------------------------------
+     Christmas present (jólapakki): a box with a patterned paper, a lid,
+     a ribbon round it and a bow; she carries it by the ribbon loop.
+     colors: [paper, ribbon, paper pattern colour]; it.pattern = paper pattern
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-present', {
+    slot: 'hold',
+    backZ: 40,
+    thumb: [244, 428, 116, 140],
+    draw(it) {
+      const [paper, ribbon = '#f2c34d', pc = '#ffffff'] = it.colors;
+      const pfill = it.pattern ? H.pat(it.pattern, paper, pc, 18) : H.grad(paper);
+      const box = 'M272,512 h62 v46 q0,4 -4,4 h-54 q-4,0 -4,-4 Z', lid = 'M266,500 h74 q3,0 3,3 v11 q0,3 -3,3 h-74 q-3,0 -3,-3 v-11 q0,-3 3,-3 Z';
+      const g = cord('M295,502 C286,474 294,452 303,451 C312,452 319,474 311,502', ribbon, 3.2) +
+        `<path d="${box}" fill="${pfill}"/>` + `<rect x="296" y="512" width="14" height="50" fill="${H.grad(ribbon, 'h')}"/>` + outline(box, paper) +
+        `<path d="${lid}" fill="${pfill}"/>` + `<rect x="295" y="500" width="16" height="17" fill="${H.grad(ribbon, 'h')}"/>` + outline(lid, paper) +
+        gloss('M276,518 V552', 3, .4) + bow(303, 500, 1.15, ribbon);
+      return held(g);
+    },
+  });
+
+  /* -------------------------------------------------------------
+     Christmas lantern (jólaljósker): a little lantern with a roof, a
+     glass window and a candle inside whose flame glows warmly; she
+     carries it by the wire handle.
+     colors: [frame, metal handle, glow]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-lantern', {
+    slot: 'hold',
+    backZ: 40,
+    thumb: [248, 428, 108, 140],
+    draw(it) {
+      const [frame, metal = '#f2c34d', glow = '#ffd76a'] = it.colors;
+      const gid = 'xm-glow-' + idOf(glow);
+      const halo = H.def(gid, `<radialGradient id="${gid}"><stop offset="0" stop-color="${glow}" stop-opacity=".75"/><stop offset=".55" stop-color="${glow}" stop-opacity=".25"/><stop offset="1" stop-color="${glow}" stop-opacity="0"/></radialGradient>`);
+      const roof = 'M284,500 Q292,488 302,482 Q312,488 320,500 Z';
+      const flame = 'M302,507 C307,514 308,521 302,524 C296,521 297,514 302,507 Z';
+      const g = `<circle cx="302" cy="524" r="36" fill="${halo}"/>` +
+        cord('M290,498 C289,456 315,456 314,498', metal, 2.4) +
+        // glass window with the glow and the candle inside
+        `<rect x="286" y="504" width="32" height="44" rx="3" fill="#fff6d6"/>` +
+        `<circle cx="302" cy="520" r="16" fill="${halo}"/>` +
+        `<rect x="297" y="525" width="10" height="21" rx="2" fill="${H.grad('#fbf3e4')}" stroke="${ink('#fbf3e4')}" stroke-width="1"/>` +
+        `<path d="M302,525 v-2" stroke="#5a4048" stroke-width="1.2"/>` +
+        `<path d="${flame}" fill="${H.grad('#f7a33a', 'r')}" stroke="#d9822a" stroke-width=".8"/>` +
+        `<path d="M302,513 C304,517 304,520 302,521 C300,520 300,517 302,513 Z" fill="#fff7c2"/>` +
+        `<path d="M290,508 V538" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>` +
+        // frame: side posts, roof with a knob, top rim and base
+        `<rect x="284" y="503" width="36" height="46" rx="3" fill="none" stroke="${ink(frame)}" stroke-width="5.6"/>` +
+        `<rect x="284" y="503" width="36" height="46" rx="3" fill="none" stroke="${frame}" stroke-width="3.2"/>` +
+        `<path d="${roof}" fill="${H.grad(frame)}"/>` + outline(roof, frame, 'v', 1.8) +
+        `<circle cx="302" cy="481" r="3.4" fill="${H.grad(metal, 'r')}" stroke="${ink(metal)}" stroke-width="1.2"/>` +
+        `<rect x="280" y="498" width="44" height="7" rx="3" fill="${H.grad(frame)}" stroke="${ink(frame)}" stroke-width="1.6"/>` +
+        `<rect x="280" y="547" width="44" height="9" rx="3" fill="${H.grad(frame)}" stroke="${ink(frame)}" stroke-width="1.6"/>` +
+        H.heart(302, 552, 3, metal);
+      return held(g);
+    },
+  });
+
+  /* =================================================================
+     PYJAMAS (slot suit, cat pyjamas)
+     ================================================================= */
+
+  /* -------------------------------------------------------------
+     Christmas pyjamas (jólanáttföt): long-sleeved top with a snowflake
+     pattern and a big motif on a round patch, tartan trousers, ribbed
+     cuffs and neckband.
+     it.motif = 'reindeer' | 'tree'
+     colors: [top, snowflakes, trousers, trouser band, cuffs]
+     ------------------------------------------------------------- */
+  DOLL.shape('xm-pyjamas', {
+    slot: 'suit', occupies: ['suit', 'top', 'bottom'],
+    thumb: [60, 236, 280, 480],
+    draw(it) {
+      const [c, flakeC = '#ffffff', tr, tr2, cuffC = '#ffffff'] = it.colors;
+      const pants = G.pantsPath({ top: 400, bottom: 700, pad: 5, flare: 4 });
+      const pclip = H.clip('c-' + it.id + '-p', pants);
+      const top = G.shirtPath({ sleeve: 1, pad: 6, sleevePad: 4, sleeveFlare: 2, bottom: 462, flare: 6, neck: 'round' });
+      const tclip = H.clip('c-' + it.id + '-t', top);
+      const motif = it.motif === 'tree' ? xmasTree(200, 352, .62) : reindeerFace(200, 354, .92);
+      return `<path d="${pants}" fill="${tartan(tr, tr2, '#ffffff', 30)}"/>` +
+        `<g clip-path="${pclip}"><rect x="0" y="688" width="400" height="16" fill="${H.grad(cuffC)}"/></g>` +
+        H.line('M190,476 l-8,10 M210,476 l8,10 M160,660 q10,6 22,0 M218,660 q10,6 22,0', tr, 1.6, .4) + outline(pants, tr, 'h') +
+        `<path d="${top}" fill="${H.pat('snow', c, flakeC, 26)}"/>` +
+        `<g clip-path="${tclip}"><rect x="0" y="448" width="400" height="18" fill="${H.grad(cuffC)}"/>` +
+        `<path d="${G.armPath('L', .92, 1.04, 6)}${G.armPath('R', .92, 1.04, 6)}" fill="${H.grad(cuffC)}"/></g>` +
+        H.line('M152,322 q8,14 4,30 M248,322 q-8,14 -4,30', c, 1.6, .4) + outline(top, c) +
+        `<path d="M183,251 Q200,271 217,251" fill="none" stroke="${ink(cuffC)}" stroke-width="9.6" stroke-linecap="round"/>` +
+        `<path d="M183,251 Q200,271 217,251" fill="none" stroke="${cuffC}" stroke-width="7" stroke-linecap="round"/>` +
+        // round patch for the motif, with a stitched edge
+        `<circle cx="200" cy="356" r="36" fill="${H.grad('#fbf6ee')}" stroke="${ink(c)}" stroke-width="2"/>` +
+        `<circle cx="200" cy="356" r="31" fill="none" stroke="${c}" stroke-width="1.4" stroke-dasharray="3 3"/>` + motif;
+    },
+  });
+
+  /* =================================================================
+     CATALOG
+     ================================================================= */
+  DOLL.add([
+    // --- hats ---
+    { id: 'hat-xmas-santa-red', shape: 'xm-santahat', cat: 'hat', name: { is: 'Rauð jólasveinahúfa', en: 'Red Santa hat' }, colors: ['#d8343c', FUR, FUR] },
+    { id: 'hat-xmas-santa-green', shape: 'xm-santahat', cat: 'hat', name: { is: 'Græn jólasveinahúfa', en: 'Green Santa hat' }, colors: ['#2f8a4a', FUR, FUR] },
+    { id: 'hat-xmas-elf', shape: 'xm-elfhat', cat: 'hat', name: { is: 'Álfahúfa', en: 'Elf hat' }, colors: ['#3a9a52', '#e0393e', '#e0393e', '#f2c34d'] },
+
+    // --- reindeer antlers ---
+    { id: 'band-xmas-antlers', shape: 'xm-antlers', cat: 'hairband', deco: 'holly', ears: true, name: { is: 'Hreindýrahorn', en: 'Reindeer antlers' }, colors: ['#b98552', '#7a4e30', '#c08a5a', '#e0313c'] },
+    { id: 'band-xmas-antlers-gold', shape: 'xm-antlers', cat: 'hairband', deco: 'bells', name: { is: 'Gyllt hreindýrahorn', en: 'Golden antlers' }, colors: ['#f0c24e', '#d8343c', '#a8754a', '#d8343c'] },
+
+    // --- Christmas sweaters ---
+    { id: 'sweater-xmas-reindeer', shape: 'xm-jolapeysa', cat: 'sweater', motif: 'reindeer', band: 'flake', name: { is: 'Jólapeysa með hreindýri', en: 'Reindeer Christmas sweater' }, colors: ['#d23a40', '#2f7a46', '#ffffff', '#ffffff'] },
+    { id: 'sweater-xmas-snow', shape: 'xm-jolapeysa', cat: 'sweater', motif: 'snow', band: 'zig', name: { is: 'Jólapeysa með snjókornum', en: 'Snowflake Christmas sweater' }, colors: ['#3a63b8', '#ffffff', '#d23a40', '#ffffff', '#f6d04d'] },
+    { id: 'sweater-xmas-tree', shape: 'xm-jolapeysa', cat: 'sweater', motif: 'tree', band: 'heart', name: { is: 'Jólapeysa með jólatré', en: 'Christmas tree sweater' }, colors: ['#f3e9d6', '#d23a40', '#ffffff', '#ffffff'] },
+    { id: 'sweater-xmas-fawn', shape: 'xm-jolapeysa', cat: 'sweater', motif: 'fawn', name: { is: 'Brún hreindýrapeysa', en: 'Brown reindeer sweater' }, colors: ['#a8754a', '#a8754a', '#ffffff', '#ecd3ae', '#d8343c'] },
+
+    // --- Christmas dresses ---
+    { id: 'frock-xmas-velvet', shape: 'xm-frock', cat: 'frock', style: 'velvet', name: { is: 'Rauður flauelskjóll', en: 'Red velvet Christmas dress' }, colors: ['#c8263a', FUR, '#f2c34d'] },
+    { id: 'frock-xmas-tartan', shape: 'xm-frock', cat: 'frock', style: 'tartan', name: { is: 'Köflóttur jólakjóll', en: 'Tartan Christmas dress' }, colors: ['#2f7a46', '#1f5634', '#e0393e', '#d23a40'] },
+
+    // --- coat, tunic, trousers ---
+    { id: 'jacket-xmas-santa', shape: 'xm-santacoat', cat: 'jacket', name: { is: 'Jólasveinajakki', en: 'Santa coat' }, colors: ['#d8343c', FUR, '#2e2a33', '#f2c34d'] },
+    { id: 'top-xmas-elf', shape: 'xm-elftunic', cat: 'top', name: { is: 'Álfakyrtill', en: 'Elf tunic' }, colors: ['#3a9a52', '#e0393e', '#5a3a2a', '#f2c34d'] },
+    { id: 'pants-xmas-santa', shape: 'xm-pants', cat: 'pants', name: { is: 'Jólasveinabuxur', en: 'Santa trousers' }, colors: ['#d8343c', FUR] },
+    { id: 'pants-xmas-reindeer', shape: 'xm-pants', cat: 'pants', name: { is: 'Brúnar hreindýrabuxur', en: 'Brown reindeer trousers' }, colors: ['#8a5a38', '#ecd3ae'] },
+    { id: 'leggings-xmas-stripes', shape: 'leggings', cat: 'pants', name: { is: 'Röndóttar álfabuxur', en: 'Striped elf leggings' }, colors: ['#e0393e', '#ffffff', '#c92f36'], pattern: 'hstripes', patternSize: 22 },
+
+    // --- shoes and boots ---
+    { id: 'boots-xmas-black', shape: 'xm-boots', cat: 'boots', name: { is: 'Svört jólasveinastígvél', en: 'Black Santa boots' }, colors: ['#2e2a33', FUR, '#1c1a20'] },
+    { id: 'boots-xmas-brown', shape: 'xm-boots', cat: 'boots', name: { is: 'Brún hreindýrastígvél', en: 'Brown reindeer boots' }, colors: ['#6e4a32', '#ecd3ae', '#3e2a20'] },
+    { id: 'shoes-xmas-elf', shape: 'xm-elfshoes', cat: 'shoes', name: { is: 'Álfaskór', en: 'Elf shoes' }, colors: ['#3a9a52', '#e0393e', '#f2c34d'] },
+
+    // --- face, necklace, earrings ---
+    { id: 'face-xmas-nose', shape: 'xm-nose', cat: 'face', name: { is: 'Rautt hreindýranef', en: 'Red reindeer nose' }, colors: ['#e2363e'] },
+    { id: 'neck-xmas-lights', shape: 'xm-lights', cat: 'necklace', name: { is: 'Jólaljósahálsmen', en: 'Christmas lights necklace' }, colors: ['#2f5a3a', '#ef4a4f', '#f6c63d', '#4cbf6a', '#4aa8e8', '#f27ab6'] },
+    { id: 'ear-xmas-bauble-red', shape: 'xm-bauble', cat: 'earrings', name: { is: 'Rauðir jólakúlueyrnalokkar', en: 'Red bauble earrings' }, colors: ['#e0313c', '#e0313c', '#f2c34d', '#ffffff'] },
+    { id: 'ear-xmas-bauble-mix', shape: 'xm-bauble', cat: 'earrings', name: { is: 'Grænir og rauðir jólakúlueyrnalokkar', en: 'Green and red bauble earrings' }, colors: ['#2f9a52', '#e0313c', '#f2c34d', '#ffffff'] },
+
+    // --- mittens, scarf ---
+    { id: 'mittens-xmas-red', shape: 'xm-mitten', cat: 'mittens', name: { is: 'Rauðir jólavettlingar', en: 'Red Christmas mittens' }, colors: ['#d8343c', FUR, '#ffffff'] },
+    { id: 'scarf-xmas-candy', shape: 'xm-candyscarf', cat: 'scarf', name: { is: 'Röndóttur jólatrefill', en: 'Candy-cane scarf' }, colors: ['#e0313c', '#ffffff'] },
+
+    // --- things to hold ---
+    { id: 'hold-xmas-candycane', shape: 'xm-candycane', cat: 'hold', name: { is: 'Jólastafur', en: 'Candy cane' }, colors: ['#e0313c', '#ffffff'] },
+    { id: 'hold-xmas-present', shape: 'xm-present', cat: 'hold', pattern: 'stars', name: { is: 'Jólapakki', en: 'Christmas present' }, colors: ['#2f8a4a', '#e0313c', '#f6d04d'] },
+    { id: 'hold-xmas-lantern', shape: 'xm-lantern', cat: 'hold', name: { is: 'Jólaljósker', en: 'Christmas lantern' }, colors: ['#c8323a', '#f2c34d', '#ffd76a'] },
+
+    // --- pyjamas ---
+    { id: 'pj-xmas-reindeer', shape: 'xm-pyjamas', cat: 'pyjamas', motif: 'reindeer', name: { is: 'Jólanáttföt með hreindýri', en: 'Reindeer Christmas pyjamas' }, colors: ['#d8434a', '#ffffff', '#2f7a46', '#1f5634', '#ffffff'] },
+    { id: 'pj-xmas-tree', shape: 'xm-pyjamas', cat: 'pyjamas', motif: 'tree', name: { is: 'Jólanáttföt með jólatré', en: 'Christmas tree pyjamas' }, colors: ['#7fb6e6', '#ffffff', '#d8434a', '#a8262e', '#ffffff'] },
+  ]);
+
+  /* Finished Christmas costume looks (first item = the tile icon). */
+  DOLL.look([
+    { id: 'look-xmas-santa', name: { is: 'Jólasveinn', en: 'Santa' }, items: ['hat-xmas-santa-red', 'jacket-xmas-santa', 'pants-xmas-santa', 'boots-xmas-black', 'hold-xmas-present'] },
+    { id: 'look-xmas-elf', name: { is: 'Jólaálfur', en: 'Christmas elf' }, items: ['hat-xmas-elf', 'top-xmas-elf', 'leggings-xmas-stripes', 'shoes-xmas-elf', 'hold-xmas-lantern'] },
+    { id: 'look-xmas-reindeer', name: { is: 'Hreindýr', en: 'Reindeer' }, items: ['band-xmas-antlers', 'face-xmas-nose', 'sweater-xmas-fawn', 'pants-xmas-reindeer', 'boots-xmas-brown'] },
+    { id: 'look-xmas-party', name: { is: 'Jólaball', en: 'Christmas party' }, items: ['frock-xmas-velvet', 'ear-xmas-bauble-red', 'neck-xmas-lights', 'shoes-glitter-gold', 'hold-xmas-candycane'] },
+  ]);
+})();
+
+</script>
+<script>
 FJ.loading('scenes.js');
 /* =====================================================================
    Fjársjóðskistan – Icelandic scenes and creatures
@@ -12885,6 +13945,252 @@ FJ.loading('scenes.js');
     </svg>`;
   }
 
+  /* ---------------- Scene 9: Jól, a cosy Icelandic Christmas evening ----------------
+     A snowy evening in a little town: deep blue sky with stars and soft northern lights,
+     snowy mountains, little houses with warm windows (some with coloured lights along the
+     roof), a little white church, a big decorated Christmas tree with presents under it
+     (x ≈ 740–1070, so it shows on a portrait screen too), a bigger red house with candle
+     arches (aðventuljós) in its windows, two street lamps with a string of coloured lights,
+     a snowman and a sled. No text and nothing scary.
+     Moving parts: stars, tree lights and roof lights (twinkle), the star on the tree, the
+     window light, candles and lamps (glow), northern lights (aurora), chimney smoke (smoke),
+     the snowman's waving arm (sway). Falling snow comes from the app (snow: true).
+     The snow in front starts at about y 700–725; scene ground 76 keeps the animals on it. */
+  function jol() {
+    const r = rng(1224);
+    const LIGHTS = ['#ff6b6b', '#ffd84d', '#6fc3ff', '#ff9be0', '#9cf08a'];   // colours of the little light bulbs
+    // stars in three groups that twinkle in turn
+    const stars = [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${-g * 1.2}s">` +
+      Array.from({ length: 22 }, () => `<circle cx="${Math.round(r() * 1600)}" cy="${Math.round(r() * 470)}" r="${(1 + r() * 2).toFixed(1)}" fill="#fff"/>`).join('') + '</g>').join('');
+    // one soft band of northern lights along path d (same idea as the night scene, a little fainter)
+    const aurora = (d, a, b, cls, delay) => `<g class="${cls}" style="animation-delay:${delay}s"><path d="${d}" fill="none" stroke="url(#${a})" stroke-width="80" stroke-linecap="round" opacity=".4"/><path d="${d}" fill="none" stroke="url(#${b})" stroke-width="26" stroke-linecap="round" opacity=".45"/></g>`;
+    // one coloured light bulb at x,y: a soft halo with a bright little bulb and a white shine (s = size)
+    const bulb = (x, y, c, s = 1) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(9 * s).toFixed(1)}" fill="${c}" opacity=".3"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(4.2 * s).toFixed(1)}" fill="${c}"/><circle cx="${(x - 1.2 * s).toFixed(1)}" cy="${(y - 1.3 * s).toFixed(1)}" r="${(1.4 * s).toFixed(1)}" fill="#fff" opacity=".8"/>`;
+    // share a list of bulbs out into three groups that twinkle at different times
+    const twinkleGroups = list => [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${(-g * 1.07).toFixed(2)}s">` + list.filter((_, i) => i % 3 === g).join('') + '</g>').join('');
+
+    /** Candle arch (aðventuljós) standing in a window: a stepped wooden frame with seven little
+        electric candles, the middle one highest. cx = middle, by = bottom, w = width. */
+    const candleArch = (cx, by, w) => {
+      const st = w / 7, step = w * .07;   // width and height of one step
+      let frame = `M${(cx - w / 2).toFixed(1)},${by.toFixed(1)}`, candles = '', flames = '';
+      for (let i = -3; i <= 3; i++) {
+        const x0 = cx + (i - .5) * st, y = by - (4 - Math.abs(i)) * step, top = y - w * .16;
+        frame += ` L${x0.toFixed(1)},${y.toFixed(1)} L${(x0 + st).toFixed(1)},${y.toFixed(1)}`;
+        candles += `<rect x="${(cx + i * st - st * .18).toFixed(1)}" y="${top.toFixed(1)}" width="${(st * .36).toFixed(1)}" height="${(w * .16).toFixed(1)}" fill="#fffaf0"/>`;
+        flames += `<ellipse cx="${(cx + i * st).toFixed(1)}" cy="${(top - st * .3).toFixed(1)}" rx="${(st * .24).toFixed(1)}" ry="${(st * .36).toFixed(1)}" fill="#ff9f1a"/>`;
+      }
+      frame += ` L${(cx + w / 2).toFixed(1)},${by.toFixed(1)}Z`;
+      return `<path d="${frame}" fill="#7a4a2e" stroke="#4e2c1a" stroke-width="1"/>${candles}<g class="glow">${flames}</g>`;
+    };
+
+    /** A house from the town helper made cosy for Christmas: snow on the roof and chimney, warm
+        yellow windows with light spilling out, and as options: o.lights = coloured lights along the
+        roof edges, o.arch = a candle arch in each front window, o.smoke / o.delay = chimney smoke. */
+    const cosy = (x, base, w, h, wall, roof, o = {}) => {
+      const top = base - h, peak = top - w * .48, ww = w * .24, wh = h * .3, wy = top + h * .2;
+      let s = house(x, base, w, h, wall, roof, o.smoke, o.delay || 0);
+      // snow on the chimney top and lying along both roof slopes
+      if (o.smoke) s += `<rect x="${(x + w * .64).toFixed(1)}" y="${(peak + w * .1).toFixed(1)}" width="${(w * .16).toFixed(1)}" height="${(w * .05).toFixed(1)}" rx="3" fill="#eef4fc"/>`;
+      s += `<path d="M${x - 7},${top + 2} L${x + w / 2},${(peak - 2).toFixed(1)} L${x + w + 7},${top + 2}" fill="none" stroke="#eef4fc" stroke-width="${Math.max(5, w * .055).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>`;
+      // the two front windows: warm light around them, then the lit glass (a candle arch or a window cross)
+      [x + w * .14, x + w * .62].forEach((wx, i) => {
+        s += `<circle class="glow" style="animation-delay:${(-i * 1.3 + (o.delay || 0)).toFixed(1)}s" cx="${(wx + ww / 2).toFixed(1)}" cy="${(wy + wh / 2).toFixed(1)}" r="${(ww * 1.25).toFixed(1)}" fill="url(#j-glow)"/>` +
+          `<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="${ww.toFixed(1)}" height="${wh.toFixed(1)}" fill="url(#j-win)" stroke="#fff" stroke-width="3"/>`;
+        s += o.arch ? candleArch(wx + ww / 2, wy + wh - 2, ww * .86)
+          : `<path d="M${(wx + ww / 2).toFixed(1)},${wy.toFixed(1)} V${(wy + wh).toFixed(1)} M${wx.toFixed(1)},${(wy + wh / 2).toFixed(1)} H${(wx + ww).toFixed(1)}" stroke="#fff" stroke-width="2"/>`;
+      });
+      // the little attic window glows too
+      s += `<circle cx="${x + w / 2}" cy="${(top - w * .17).toFixed(1)}" r="${(w * .07).toFixed(1)}" fill="#ffd27a" stroke="#fff" stroke-width="2"/>`;
+      if (o.lights) {
+        // coloured bulbs just under the snowy roof edge, from the left eave up to the peak and down again
+        const n = Math.max(4, Math.round(w / 18)), list = [], k = w > 120 ? .85 : .7;
+        for (let j = 0; j <= 2 * n; j++) {
+          const t = j / (2 * n), px = x - 5 + (w + 10) * t, py = top + 9 - (1 - Math.abs(t * 2 - 1)) * (top - peak - 2);
+          list.push(bulb(px, py, LIGHTS[j % LIGHTS.length], k));
+        }
+        s += twinkleGroups(list);
+      }
+      return s;
+    };
+
+    /** Little white Icelandic church with a red roof, a pointy red spire and warm arched windows.
+        x = left edge of the hall, base = ground line. */
+    const church = (x, base) => `<path d="M${x},${base} V${base - 46} H${x + 70} V${base}Z" fill="#f4f1ea" stroke="#a9a49c" stroke-width="2.5"/>` +
+      `<path d="M${x - 5},${base - 44} L${x + 35},${base - 74} L${x + 75},${base - 44}Z" fill="#c4473f" stroke="#8a2f2a" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M${x - 7},${base - 44} L${x + 35},${base - 76} L${x + 77},${base - 44}" fill="none" stroke="#eef4fc" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<path d="M${x - 24},${base} V${base - 70} H${x + 2} V${base}Z" fill="#f4f1ea" stroke="#a9a49c" stroke-width="2.5"/>` +
+      `<path d="M${x - 28},${base - 68} L${x - 11},${base - 122} L${x + 6},${base - 68}Z" fill="#c4473f" stroke="#8a2f2a" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M${x - 11},${base - 122} V${base - 136} M${x - 17},${base - 130} H${x - 5}" stroke="#d8d2c6" stroke-width="3" stroke-linecap="round"/>` +
+      `<circle class="glow" cx="${x + 35}" cy="${base - 24}" r="40" fill="url(#j-glow)"/>` +
+      [x + 16, x + 46].map(wx => `<path d="M${wx},${base - 12} V${base - 30} Q${wx + 4.5},${base - 37} ${wx + 9},${base - 30} V${base - 12}Z" fill="url(#j-win)" stroke="#fff" stroke-width="2"/>`).join('') +
+      `<path d="M${x - 17},${base} V${base - 22} Q${x - 11},${base - 30} ${x - 5},${base - 22} V${base}Z" fill="#8a5a3c"/>` +
+      `<path d="M${x - 15},${base - 50} V${base - 58} Q${x - 11},${base - 63} ${x - 7},${base - 58} V${base - 50}Z" fill="#ffd27a" stroke="#fff" stroke-width="1.5"/>`;
+
+    /** Old-style street lamp standing on the snow at x, base, with a warm glowing lantern on top. */
+    const lamp = (x, base) => `<circle class="glow" cx="${x}" cy="${base - 168}" r="50" fill="url(#j-glow)"/>` +
+      `<path d="M${x},${base} V${base - 152}" stroke="#2c3a52" stroke-width="7"/><path d="M${x - 11},${base} h22" stroke="#2c3a52" stroke-width="9" stroke-linecap="round"/>` +
+      `<path d="M${x - 12},${base - 152} h24 l5,-30 h-34Z" fill="#ffe08a" stroke="#2c3a52" stroke-width="3" stroke-linejoin="round"/>` +
+      `<path d="M${x - 20},${base - 182} h40 l-20,-14Z" fill="#2c3a52" stroke="#2c3a52" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M${x - 19},${base - 184} L${x},${base - 197} L${x + 19},${base - 184}" stroke="#eef4fc" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // a string of coloured lights hanging between the two lamps (a gentle sag in the middle)
+    const L1 = 46, L2 = 262, LB = 836, LY = LB - 150;
+    let stringLights = `<path d="M${L1},${LY} Q${(L1 + L2) / 2},${LY + 70} ${L2},${LY}" stroke="#2c3a52" stroke-width="2" fill="none"/>`;
+    const strBulbs = [];
+    for (let j = 1; j < 12; j++) {
+      const t = j / 12, bx = (1 - t) * (1 - t) * L1 + 2 * t * (1 - t) * (L1 + L2) / 2 + t * t * L2, by = LY + 2 * t * (1 - t) * 70;
+      strBulbs.push(bulb(bx, by + 5, LIGHTS[j % LIGHTS.length], .9));
+    }
+    stringLights += twinkleGroups(strBulbs);
+
+    /* The Christmas tree: four layers of branches with soft wavy edges, a gold bead garland,
+       baubles, twinkling coloured lights and a glowing star on top. TX = middle, TB = foot. */
+    const TX = 905, TB = 800;
+    const tiers = [[560, 790, 165], [468, 662, 132], [384, 562, 100], [306, 458, 70]];   // [top, bottom, half width]
+    let tree = `<ellipse cx="${TX}" cy="${TB + 22}" rx="210" ry="24" fill="#9fb6d6" opacity=".5"/>` +
+      `<rect x="${TX - 17}" y="${TB - 30}" width="34" height="44" fill="#7a4e2c" stroke="#55331c" stroke-width="2.5"/>`;
+    const lights = [], baubles = [];
+    tiers.forEach(([top, bot, hw], ti) => {
+      // branch layer: a triangle with a wavy bottom edge (little bumps going right to left)
+      const n = Math.round(hw / 24) * 2, bw = 2 * hw / n;
+      let d = `M${TX},${top} L${TX + hw},${bot}`, edge = `M${TX + hw},${bot}`;
+      for (let i = 0; i < n; i++) {
+        const xa = TX + hw - i * bw, part = ` Q${(xa - bw / 2).toFixed(1)},${bot + 14} ${(xa - bw).toFixed(1)},${bot}`;
+        d += part; edge += part;
+      }
+      tree += `<path d="${d}Z" fill="url(#j-tree)" stroke="#154a30" stroke-width="2.5" stroke-linejoin="round"/>` +
+        `<path d="M${TX},${top + 8} L${TX - hw + 10},${bot - 4}" stroke="#5fbf7f" stroke-width="4" opacity=".45" stroke-linecap="round"/>` +
+        `<path d="${edge}" stroke="#eef4fc" stroke-width="3.5" fill="none" opacity=".55" transform="translate(0,-4)"/>`;
+      // snow resting on the two branch tips
+      tree += `<ellipse cx="${TX - hw + 12}" cy="${bot - 4}" rx="16" ry="6" fill="#eef4fc"/><ellipse cx="${TX + hw - 12}" cy="${bot - 4}" rx="16" ry="6" fill="#eef4fc"/>`;
+      // gold bead garland swinging across the layer
+      const H = bot - top, ya = top + H * .5, yb = top + H * .78;
+      tree += `<path d="M${TX - hw * .48},${ya} Q${TX},${top + H * .92} ${TX + hw * .76},${yb}" stroke="#b8862a" stroke-width="1.5" fill="none"/>` +
+        `<path d="M${TX - hw * .48},${ya} Q${TX},${top + H * .92} ${TX + hw * .76},${yb}" stroke="#f6d26a" stroke-width="6" stroke-dasharray="0.1 10" stroke-linecap="round" fill="none"/>`;
+      // lights and baubles spread over the layer (only inside the triangle)
+      const spots = [8, 7, 6, 4][ti];
+      for (let i = 0; i < spots; i++) {
+        const f = .3 + r() * .62, y = top + f * H, x = TX + (r() * 2 - 1) * hw * f * .82;
+        lights.push(bulb(x, y, LIGHTS[(i + ti) % LIGHTS.length], 1.3));
+      }
+      for (let i = 0; i < (ti < 3 ? 3 : 1); i++) {
+        const f = .45 + r() * .45, y = top + f * H, x = TX + (r() * 2 - 1) * hw * f * .75, c = ['#e2564c', '#f6c443', '#5aa9ec', '#f48cc0'][(i + ti) % 4];
+        baubles.push(`<path d="M${x.toFixed(1)},${(y - 11).toFixed(1)} V${(y - 16).toFixed(1)}" stroke="#d8c06a" stroke-width="3"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="10" fill="${c}" stroke="${sink(c)}" stroke-width="2"/><circle cx="${(x - 3.5).toFixed(1)}" cy="${(y - 3.5).toFixed(1)}" r="3" fill="#fff" opacity=".75"/>`);
+      }
+    });
+    // five-pointed star centred at cx,cy with outer radius ro, as a list of polygon corner points
+    const starPts = (cx, cy, ro) => Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? ro * .45 : ro;
+      return `${(cx + rr * Math.cos(a)).toFixed(1)},${(cy + rr * Math.sin(a)).toFixed(1)}`; }).join(' ');
+    tree += baubles.join('') + twinkleGroups(lights) +
+      `<circle class="glow" cx="${TX}" cy="290" r="78" fill="url(#j-starglow)"/>` +
+      `<polygon points="${starPts(TX, 290, 32)}" fill="#ffd84d" stroke="#e09a1a" stroke-width="3" stroke-linejoin="round"/>` +
+      `<polygon points="${starPts(TX - 3, 287, 14)}" fill="#fff4b8" opacity=".85"/>`;
+
+    /** A wrapped present: box, lid, ribbon both ways and a bow on top. x = left, y = bottom, w × h = box size. */
+    const present = (x, y, w, h, box, rib) => { const t = y - h, m = x + w / 2;
+      return `<rect x="${x}" y="${t}" width="${w}" height="${h}" rx="3" fill="${box}" stroke="${sink(box)}" stroke-width="2"/>` +
+        `<rect x="${x - 3}" y="${t - 2}" width="${w + 6}" height="${(h * .24).toFixed(1)}" rx="3" fill="${box}" stroke="${sink(box)}" stroke-width="2"/>` +
+        `<rect x="${m - 4}" y="${t - 2}" width="8" height="${h + 2}" fill="${rib}"/>` +
+        `<path d="M${m},${t - 2} q-18,-16 -20,-2 q2,10 20,2 q18,-16 20,-2 q-2,10 -20,2Z" fill="${rib}" stroke="${sink(rib)}" stroke-width="1.5"/><circle cx="${m}" cy="${t - 2}" r="4" fill="${rib}" stroke="${sink(rib)}" stroke-width="1.5"/>`; };
+    const presents = present(770, 830, 62, 46, '#e2564c', '#f6d26a') + present(1012, 826, 44, 36, '#7fcf8a', '#f48cc0') +
+      present(842, 838, 48, 56, '#5aa9ec', '#fbfaf6') + present(940, 842, 72, 40, '#f6c443', '#e2564c') + present(898, 846, 40, 28, '#b59be6', '#f6d26a');
+
+    /** Friendly snowman with a green scarf, a red knitted hat and a stick arm that waves a little.
+        x = middle, y = where he stands on the snow. */
+    const snowman = (x, y) => `<g transform="translate(${x},${y})">
+      <ellipse cx="0" cy="0" rx="70" ry="12" fill="#9fb6d6" opacity=".5"/>
+      <path d="M-30,-128 L-80,-108 M-66,-114 l-10,-14 M-70,-112 l-14,4" stroke="#6a4630" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <g class="sway" style="transform-origin:30px -128px;animation-duration:1.8s"><path d="M30,-128 L78,-164 M64,-154 l2,-17 M70,-158 l15,0" stroke="#6a4630" stroke-width="5" fill="none" stroke-linecap="round"/></g>
+      <circle cx="0" cy="-50" r="52" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      <circle cx="0" cy="-126" r="38" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      <circle cx="0" cy="-184" r="29" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      ${[-128, -108, -66, -42].map(b => `<circle cx="0" cy="${b}" r="4.5" fill="#3a3f55"/>`).join('')}
+      <path d="M-32,-158 Q0,-146 32,-158 L33,-147 Q0,-134 -33,-147Z" fill="#2f9a5e" stroke="#1f6a40" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12,-146 L24,-108 L10,-106 L2,-144Z" fill="#2f9a5e" stroke="#1f6a40" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12,-112 l-1,8 M17,-113 l1,8 M22,-113 l2,7" stroke="#1f6a40" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="-10" cy="-190" r="4" fill="#2a2f45"/><circle cx="10" cy="-190" r="4" fill="#2a2f45"/><circle cx="-8.6" cy="-191.6" r="1.4" fill="#fff"/><circle cx="11.4" cy="-191.6" r="1.4" fill="#fff"/>
+      <path d="M0,-182 L24,-177 L0,-173Z" fill="#f6922a" stroke="#c96a14" stroke-width="1.5" stroke-linejoin="round"/>
+      <ellipse cx="-17" cy="-176" rx="5.5" ry="3.5" fill="#f6a6bf" opacity=".7"/><ellipse cx="17" cy="-176" rx="5.5" ry="3.5" fill="#f6a6bf" opacity=".7"/>
+      ${[-9, -3.5, 3.5, 9].map((dx, i) => `<circle cx="${dx}" cy="${-167 + (i === 0 || i === 3 ? -2 : 0)}" r="2" fill="#2a2f45"/>`).join('')}
+      <path d="M-27,-203 Q-24,-236 0,-238 Q24,-236 27,-203Z" fill="#e2564c" stroke="#a83a33" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="-30" y="-208" width="60" height="12" rx="6" fill="#fbfaf6" stroke="#c9c4ba" stroke-width="1.5"/>
+      <circle cx="0" cy="-240" r="9" fill="#fbfaf6" stroke="#c9c4ba" stroke-width="1.5"/></g>`;
+
+    /** Wooden sled with red runners lying in the snow, with a little present on it. x = middle, y = bottom. */
+    const sled = (x, y) => `<g transform="translate(${x},${y})"><ellipse cx="0" cy="2" rx="86" ry="10" fill="#9fb6d6" opacity=".5"/>
+      <path d="M-50,0 V-20 M-10,0 V-20 M30,0 V-20" stroke="#c4473f" stroke-width="6"/>
+      <path d="M-72,0 H58 Q84,0 84,-24" stroke="#c4473f" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <rect x="-78" y="-30" width="150" height="13" rx="5" fill="#c48a52" stroke="#8a5a34" stroke-width="2"/>
+      <path d="M-40,-30 v13 M0,-30 v13 M40,-30 v13" stroke="#8a5a34" stroke-width="1.5" opacity=".6"/>
+      <path d="M-62,-31 h108" stroke="#eef4fc" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+      <path d="M82,-22 q24,18 54,14" stroke="#e6c66a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      ${present(-34, -30, 40, 30, '#5aa9ec', '#f6d26a')}</g>`;
+
+    // the big red house on the right, standing in the front snow, with a drift on both sides of the door
+    const bigHouse = cosy(1296, 800, 224, 140, '#c9554e', '#3f4f72', { smoke: true, delay: -1, lights: true, arch: true }) +
+      `<path d="M1278,816 V800 Q1310,782 1352,790 Q1368,794 1380,800 Q1400,808 1418,800 Q1446,786 1500,786 Q1530,788 1540,800 V816Z" fill="url(#j-snow)"/>` +
+      `<path d="M1278,800 Q1310,782 1352,790 Q1368,794 1380,800 M1418,800 Q1446,786 1500,786 Q1530,788 1540,800" stroke="#f4f8fd" stroke-width="4" fill="none" stroke-linecap="round"/>` +
+      // a green Christmas wreath with a red bow on the front door
+      `<circle cx="1408" cy="762" r="12" fill="none" stroke="#2f8a52" stroke-width="7"/><circle cx="1408" cy="762" r="12" fill="none" stroke="#5fbf7f" stroke-width="2.5" stroke-dasharray="3 5"/>` +
+      `<path d="M1408,773 l-8,-4 v8z M1408,773 l8,-4 v8z" fill="#e2564c" stroke="#a83a33" stroke-width="1.2" stroke-linejoin="round"/>` +
+      [[1400, 754], [1416, 756], [1399, 768], [1418, 767]].map(([bx, by]) => `<circle cx="${bx}" cy="${by}" r="2.2" fill="#e2564c"/>`).join('');
+    // little footprints in the snow leading up to the red house's door
+    let steps = '';
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8, fx = 1300 + 100 * t + (i % 2 ? 9 : -9), fy = 990 - 172 * t;
+      steps += `<ellipse cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" rx="${(7 - 3 * t).toFixed(1)}" ry="${(4 - 2 * t).toFixed(1)}" fill="#a9bfdd" opacity=".7"/>`;
+    }
+    // glints on the snow: tiny four-pointed sparkles that twinkle
+    const glints = [];
+    for (let i = 0; i < 24; i++) {
+      const gx = Math.round(r() * 1600), gy = Math.round(760 + r() * 230), s = 3 + r() * 3;
+      glints.push(`<path d="M${gx},${(gy - s).toFixed(1)} L${(gx + s * .3).toFixed(1)},${gy} L${gx},${(gy + s).toFixed(1)} L${(gx - s * .3).toFixed(1)},${gy}Z M${(gx - s).toFixed(1)},${gy} L${gx},${(gy - s * .3).toFixed(1)} L${(gx + s).toFixed(1)},${gy} L${gx},${(gy + s * .3).toFixed(1)}Z" fill="#fff"/>`);
+    }
+
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="j-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1a3d"/><stop offset=".55" stop-color="#1f3f78"/><stop offset=".75" stop-color="#3a62a0"/></linearGradient>
+      <linearGradient id="j-au-g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4dffb0" stop-opacity="0"/><stop offset=".3" stop-color="#4dffb0"/><stop offset=".7" stop-color="#6bf0d8"/><stop offset="1" stop-color="#6bf0d8" stop-opacity="0"/></linearGradient>
+      <linearGradient id="j-au-p" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8bd8" stop-opacity="0"/><stop offset=".5" stop-color="#d79bff"/><stop offset="1" stop-color="#ff8bd8" stop-opacity="0"/></linearGradient>
+      <linearGradient id="j-snow" gradientUnits="userSpaceOnUse" x1="0" y1="690" x2="0" y2="1000"><stop offset="0" stop-color="#e8f0fb"/><stop offset="1" stop-color="#bcd0ea"/></linearGradient>
+      <linearGradient id="j-snow2" gradientUnits="userSpaceOnUse" x1="0" y1="620" x2="0" y2="720"><stop offset="0" stop-color="#c4d4ec"/><stop offset="1" stop-color="#a3b9d9"/></linearGradient>
+      <linearGradient id="j-tree" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3d9a5e"/><stop offset=".55" stop-color="#25734a"/><stop offset="1" stop-color="#175536"/></linearGradient>
+      <linearGradient id="j-win" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeaa8"/><stop offset="1" stop-color="#f7b24a"/></linearGradient>
+      <radialGradient id="j-glow"><stop offset="0" stop-color="#ffd36b" stop-opacity=".75"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+      <radialGradient id="j-starglow"><stop offset="0" stop-color="#fff2a8" stop-opacity=".9"/><stop offset=".4" stop-color="#ffd84d" stop-opacity=".35"/><stop offset="1" stop-color="#ffd84d" stop-opacity="0"/></radialGradient>
+      <radialGradient id="j-ball" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef4fc"/><stop offset="1" stop-color="#c3d3ea"/></radialGradient>
+      <radialGradient id="j-moon"><stop offset="0" stop-color="#fffbe6" stop-opacity=".6"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/></radialGradient></defs>
+      <rect width="1600" height="1000" fill="url(#j-sky)"/>${stars}
+      ${aurora('M-100,300 C200,170 520,330 820,210 S1300,150 1700,280', 'j-au-g', 'j-au-p', 'aurora', 0)}
+      ${aurora('M-100,190 C300,80 620,240 920,130 S1400,70 1700,170', 'j-au-g', 'j-au-g', 'aurora slow', -5)}
+      <circle cx="1440" cy="130" r="110" fill="url(#j-moon)"/><circle cx="1440" cy="130" r="42" fill="#fffbe6"/><circle cx="1458" cy="121" r="36" fill="#1a3463" opacity=".1"/>
+      ${rainbow(900, 660, 430)}
+      <!-- snowy mountains far away -->
+      <path d="M0,600 L180,486 L330,556 L520,462 L700,566 L880,490 L1060,572 L1250,480 L1430,556 L1600,500 L1600,720 L0,720Z" fill="#2b4676"/>
+      <path d="M520,462 L478,498 L518,492 L556,504Z M880,490 L842,522 L880,517 L914,528Z M1250,480 L1210,514 L1250,509 L1288,520Z M180,486 L146,514 L182,510 L212,518Z" fill="#cfdcf0"/>
+      <!-- the hill behind the town -->
+      <path d="M0,690 Q200,632 460,660 Q760,690 1000,652 Q1300,612 1600,640 V1000 H0Z" fill="url(#j-snow2)"/>
+      <!-- the little town on the hill -->
+      ${cosy(30, 718, 88, 60, '#c9605a', '#4d5f86', { smoke: true, delay: 0 })}
+      ${cosy(140, 716, 66, 48, '#e6c66a', '#7a4a5a')}
+      ${cosy(226, 720, 92, 62, '#6f9fd0', '#a8433c', { smoke: true, delay: -2.2, lights: true })}
+      ${cosy(452, 722, 80, 56, '#7fbf96', '#4d5f86', { smoke: true, delay: -1.2, lights: true })}
+      ${cosy(546, 722, 60, 44, '#f2ede2', '#a8433c')}
+      ${church(650, 726)}
+      ${cosy(1104, 714, 78, 54, '#e6c66a', '#4d5f86', { smoke: true, delay: -3 })}
+      ${cosy(1196, 710, 62, 46, '#7fbf96', '#a8433c', { lights: true })}
+      ${cosy(1530, 712, 84, 58, '#6f9fd0', '#7a4a5a', { smoke: true, delay: -.6 })}
+      <!-- the snow in front, where she and the animals stand -->
+      <path d="M0,712 Q260,690 520,706 Q800,724 1080,704 Q1340,688 1600,700 L1600,1000 L0,1000Z" fill="url(#j-snow)"/>
+      <path d="M0,712 Q260,690 520,706 Q800,724 1080,704 Q1340,688 1600,700" fill="none" stroke="#f4f8fd" stroke-width="5" stroke-linecap="round"/>
+      ${lamp(L1, LB)}${lamp(L2, LB)}${stringLights}
+      ${tree}${presents}
+      ${bigHouse}${steps}
+      ${snowman(560, 900)}
+      ${sled(1215, 935)}
+      ${twinkleGroups(glints)}
+    </svg>`;
+  }
+
   /* =====================================================================
      Creatures: each returns a standalone SVG whose feet (or rock) sit on
      the bottom edge of its viewBox; the app places them by bottom-centre.
@@ -13050,7 +14356,9 @@ FJ.loading('scenes.js');
    * two feet with paw pads. Options:
    *   p id prefix, fur [light, base, dark], belly, muzzle, nose, earIn (inner ear),
    *   ears 'round' | 'cat' | 'bunny' | 'floppy' (earColor), mane [colours] (lion), spikes [light, dark] (hedgehog),
-   *   tail 'lion' | 'cat' | 'puff' | 'curl', whiskers, stripes, stitch (teddy seams), bow colour.
+   *   tail 'lion' | 'cat' | 'puff' | 'curl', whiskers, stripes, stitch (teddy seams), bow colour,
+   *   wear { headBack, head, body }: clothes she put on the friend (markup from the app, see PLUSH_WEAR):
+   *   headBack behind the head (hat brims), head on top of the head (nods with it), body on the tummy.
    */
   function plush(o) {
     const p = o.p, [fl, fb, fd] = o.fur, line = o.line || cink(fd, .5);
@@ -13095,23 +14403,41 @@ FJ.loading('scenes.js');
     const stitch = o.stitch ? `<path d="M60,74V116" stroke="${cink(o.belly, .3)}" stroke-width="1.4" stroke-dasharray="3 3" fill="none"/>` : '';
     const bow = o.bow ? shape('M60,70l-11,-7v14z M60,70l11,-7v14z', o.bow, cink(o.bow, .5), 1.8) + `<circle cx="60" cy="70" r="3.4" fill="${o.bow}" stroke="${cink(o.bow, .5)}" stroke-width="1.6"/>` : '';
     const vb = o.ears === 'bunny' ? '0 -26 120 156' : '0 0 120 130';
+    const wear = o.wear || {};
     return svgOf(vb, p, defs,
       oval(60, 126, 42, 5, `url(#${p}-sh)`) + back +
       // body, belly, arms and feet
       shape('M60,60C84,60 96,82 96,100C96,118 82,124 60,124C38,124 24,118 24,100C24,82 36,60 60,60Z', fur, line, 2.2) +
       oval(60, 100, 20, 17, `url(#${p}-belly)`) + stitch +
-      shape(arm, fur, line, 2) + shape(mirror(arm), fur, line, 2) + armStripes + feet +
+      shape(arm, fur, line, 2) + shape(mirror(arm), fur, line, 2) + armStripes + feet + (wear.body || '') +
       // head (nods from the neck)
-      `<g class="head" style="transform-origin:60px 70px">` + ears +
+      `<g class="head" style="transform-origin:60px 70px">` + (wear.headBack || '') + ears +
         shape('M60,19C80,19 91,32 91,47C91,62 78,72 60,72C42,72 29,62 29,47C29,32 40,19 60,19Z', fur, line, 2.2) + front +
         oval(52, 30, 10, 6, `url(#${p}-glow)`, .5) + headStripes +
         oval(60, 57, 13, 9.5, o.muzzle) +
         bigEye(p, 48, 43, 4.4, 5.2) + bigEye(p, 72, 43, 4.4, 5.2) +
         shape('M55,51.5q5,-3 10,0q-1,4 -5,5q-4,-1 -5,-5Z', o.nose, cink(o.nose, .45), 1.2) +
         stroke('M60,56.5v2.5M55.5,59.5q4.5,3.5 9,0', cink(o.muzzle, .6), 1.5) + whiskers +
-        oval(40, 54, 6, 4, `url(#${p}-blush)`) + oval(80, 54, 6, 4, `url(#${p}-blush)`) +
+        oval(40, 54, 6, 4, `url(#${p}-blush)`) + oval(80, 54, 6, 4, `url(#${p}-blush)`) + (wear.head || '') +
       `</g>` + bow);
   }
+
+  /**
+   * How the doll's clothes fit on a sitting plush friend (the lion). The clothes are drawn in the
+   * doll's coordinates; each transform moves and shrinks them onto the plush (viewBox 120×130):
+   *   hat / hairband: the top of the doll's head (y 75, brow ≈ 125) onto the plush head top (y 19, brow ≈ 36);
+   *     squashed a bit vertically because the plush head is rounder and shorter than hers
+   *   glasses: the doll's eyes (172 and 228, y 163) onto the plush eyes (48 and 72, y 43)
+   *   necklace / scarf: the doll's neck and shoulders (x 118–282, y 250) onto the plush neck and tummy (x 24–96, y 70)
+   * layer: where it goes in plush() (o.wear): 'head' moves with the nodding head, 'body' stays on the tummy.
+   */
+  const PLUSH_WEAR = {
+    hat: { layer: 'head', t: 'translate(-26,-6.5) scale(.43,.34)' },
+    hairband: { layer: 'head', t: 'translate(-26,-6.5) scale(.43,.34)' },
+    glasses: { layer: 'head', t: 'translate(-25.7,-26.9) scale(.4286)' },
+    necklace: { layer: 'body', t: 'translate(-28,-40) scale(.44)' },
+    scarf: { layer: 'body', t: 'translate(-28,-40) scale(.44)' },
+  };
 
   const C = {
     /** Atlantic puffin, upright, side view facing right: black back and cap, white face disc with a grey cheek, big striped beak, orange feet. */
@@ -13387,8 +14713,8 @@ FJ.loading('scenes.js');
   /* ---- Reward friends (they come out of the heart jar, one per full jar) ---- */
   Object.assign(C, {
     /** Lion teddy: golden plush with a big orange mane, tufted tail and a stitched belly. */
-    lion: () => plush({ p: 'cr-lion', fur: ['#ffe9a8', '#f4c35a', '#d18f2c'], belly: '#fff3d0', muzzle: '#fff4dc', nose: '#9a5a3a',
-      ears: 'round', earIn: '#f7d48a', mane: ['#ffb45a', '#ee8a2e', '#c4621c'], tail: 'lion', stitch: true }),
+    lion: (wear) => plush({ p: 'cr-lion', fur: ['#ffe9a8', '#f4c35a', '#d18f2c'], belly: '#fff3d0', muzzle: '#fff4dc', nose: '#9a5a3a',
+      ears: 'round', earIn: '#f7d48a', mane: ['#ffb45a', '#ee8a2e', '#c4621c'], tail: 'lion', stitch: true, wear }),
     /** Baby unicorn, pink with a lilac and blue mane. */
     foalpink: () => pony({ p: 'cr-foalpink', coat: ['#fff3f9', '#ffd8ec', '#e9a9c8'], line: '#c48aa8', muzzle: '#ffe8f2',
       mane: ['#c9a8ff', '#a9dcff', '#ffffff', '#d9c4ff'], maneLine: '#9a86c8', hoof: ['#fff3b0', '#e0b84a'], unicorn: true }),
@@ -13417,7 +14743,8 @@ FJ.loading('scenes.js');
    * Keys are stored in her save: never rename. Add new friends at the end.
    */
   const FRIENDS = [
-    { k: 'lion', is: 'Ljónabangsi', h: 9, voice: 'soft' },
+    // dress: she can put hats, hairbands, glasses, necklaces and scarves on this friend (fit: PLUSH_WEAR)
+    { k: 'lion', is: 'Ljónabangsi', h: 9, voice: 'soft', dress: true },
     { k: 'foalpink', is: 'Bleikur einhyrningur', h: 11, voice: 'sparkle' },
     { k: 'kitten', is: 'Kisa', h: 8.5, voice: 'mew' },
     { k: 'bunny', is: 'Kanína', h: 10, voice: 'soft' },
@@ -13457,11 +14784,18 @@ FJ.loading('scenes.js');
     pool: { name: 'Sundlaug', svg: pool, wind: 2.4, ground: 80, creatures: [
       { k: 'seal', x: 64, y: 84, h: 11 }, { k: 'puffin', x: 50, y: 96, h: 10 }, { k: 'unicorn', x: 86, y: 88, h: 16, flip: true },
       { k: 'elf', x: 75, y: 92, h: 10, peek: true }] },
+    // Christmas evening in the snow: animals stand on the snow in front of the town (ground 76),
+    // the little elf carries his lantern like in the night scene
+    jol: { name: 'Jól', svg: jol, wind: 4, snow: true, ground: 76, creatures: [
+      { k: 'fox', x: 57, y: 92, h: 10 }, { k: 'unicorn', x: 84, y: 90, h: 16, flip: true },
+      { k: 'elf', x: 70, y: 84, h: 10, lantern: true }, { k: 'sheep', x: 66, y: 97, h: 11, flip: true },
+      { k: 'puffin', x: 48, y: 97, h: 10 }] },
   };
 
   root.SCENES = SCENES;
   root.CREATURES = C;
   root.FRIENDS = FRIENDS;
+  root.PLUSH_WEAR = PLUSH_WEAR;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -13526,12 +14860,17 @@ FJ.loading('app.js');
       version: VERSION,
       scene: 'meadow',
       hair: 'loose',
+      hairColor: '',            // hair colour dot she picked (DOLL.hairColors key); '' = each style's own colours
       worn: {},                 // slot → item id
+      friendWorn: {},           // what her friends wear: { lion: { hat: itemId, glasses: itemId, ... } }
       loose: [],                // [{ id, x, y }] pieces lying in the scene, x/y in % of the stage
-      outfits: [],              // [{ id, createdAt, hair, worn, scene }]
+      outfits: [],              // [{ id, createdAt, hair, hairColor, worn, scene }]
+      lastBackup: '',           // when parents last saved a backup file (ISO time), for the reminder in the menu
+      backupOutfits: 0,         // how many saved outfits there were then
       settings: { sound: true, calm: false, rewards: true },
       cat: 'top',               // open chest tab
-      // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order), hairstyles already tried
+      // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order),
+      // hairstyles and hair colours already tried (colours as 'c:copper')
       rewards: { hearts: 0, friends: [], hairSeen: [] },
     };
   }
@@ -13540,7 +14879,8 @@ FJ.loading('app.js');
   /** Keep only well-formed outfits (from storage or from an imported backup file). */
   function cleanOutfits(list) {
     return (Array.isArray(list) ? list : []).filter(o => isObj(o) && typeof o.id === 'string' && isObj(o.worn))
-      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose', worn: Object.assign({}, o.worn), scene: o.scene }));
+      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose',
+        hairColor: typeof o.hairColor === 'string' ? o.hairColor : '', worn: Object.assign({}, o.worn), scene: o.scene }));
   }
   /**
    * Turn whatever was stored into a valid current-version state.
@@ -13553,7 +14893,14 @@ FJ.loading('app.js');
     if (!isObj(d)) return s;
     if (typeof d.scene === 'string') s.scene = d.scene;
     if (typeof d.hair === 'string') s.hair = d.hair;
+    if (typeof d.hairColor === 'string') s.hairColor = d.hairColor;
     if (typeof d.cat === 'string') s.cat = d.cat;
+    if (typeof d.lastBackup === 'string') s.lastBackup = d.lastBackup;
+    if (Number.isFinite(d.backupOutfits)) s.backupOutfits = d.backupOutfits;
+    // friends' clothes: keep only { friend: { slot: itemId } } with text ids
+    if (isObj(d.friendWorn)) for (const k in d.friendWorn) if (isObj(d.friendWorn[k])) {
+      s.friendWorn[k] = Object.fromEntries(Object.entries(d.friendWorn[k]).filter(([, id]) => typeof id === 'string'));
+    }
     if (isObj(d.worn)) s.worn = Object.assign({}, d.worn);
     if (Array.isArray(d.loose)) s.loose = d.loose.filter(p => isObj(p) && typeof p.id === 'string');
     s.outfits = cleanOutfits(d.outfits).slice(0, MAX_OUTFITS);
@@ -13574,8 +14921,22 @@ FJ.loading('app.js');
   for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) { report('FJ-S06', 'worn ' + state.worn[s]); delete state.worn[s]; }
   for (const p of state.loose) if (!DOLL.byId[p.id]) report('FJ-S06', 'loose ' + p.id);
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
-  if (!DOLL.hairstyles.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (!DOLL.hairKeys.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (state.hairColor && !DOLL.hairColors.some(c => c.k === state.hairColor)) { report('FJ-S06', 'hair colour ' + state.hairColor); state.hairColor = ''; }
+  [state.hair, state.hairColor] = hairOf(state.hair, state.hairColor);
+  for (const k in state.friendWorn) for (const slot in state.friendWorn[k]) {
+    if (!DOLL.byId[state.friendWorn[k][slot]]) { report('FJ-S06', k + ' wears ' + state.friendWorn[k][slot]); delete state.friendWorn[k][slot]; }
+  }
   if (!SCENES[state.scene]) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
+
+  /**
+   * The hairstyle and colour to wear for a stored [style, colour]. Old keys that were "a style in a colour"
+   * (like redbraids) become that style with that colour, so the chest shows them as chosen. Other styles keep the colour.
+   */
+  function hairOf(hair, color) {
+    const old = DOLL.legacyHair[hair];
+    return old ? [old[0], old[1]] : [hair, color || ''];
+  }
 
   /* Zoom guard: the game should never be zoomed. If the page is zoomed in anyway
      (a pinch in some corner, or a browser setting that forces zoom), rewriting the
@@ -13671,7 +15032,7 @@ FJ.loading('app.js');
   let mood = 'smile', moodTimer = 0;
   /** Redraw the doll from state. */
   function renderDoll() {
-    const markup = DOLL.renderDoll({ hair: state.hair, worn: state.worn, mood });
+    const markup = DOLL.renderDoll({ hair: state.hair, hairColor: state.hairColor, worn: state.worn, mood });
     dollEl.innerHTML = `<svg viewBox="0 0 400 780" xmlns="http://www.w3.org/2000/svg" aria-label="Dúkkan"><g id="dollBody">${markup}</g></svg>`;
     syncDefs();
     markWornTiles();
@@ -13804,7 +15165,8 @@ FJ.loading('app.js');
   /** Small picture of a whole look: the doll from head to knees wearing it. */
   const lookThumb = l => {
     const worn = {}; for (const id of l.items) worn[DOLL.slotOf(DOLL.byId[id])] = id;
-    return `<svg viewBox="40 0 320 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DOLL.renderDoll({ hair: l.hair || state.hair, worn })}</svg>`;
+    const [hair, hairColor] = l.hair ? hairOf(l.hair, state.hairColor) : [state.hair, state.hairColor];
+    return `<svg viewBox="40 0 320 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DOLL.renderDoll({ hair, hairColor, worn })}</svg>`;
   };
   /** Put a whole costume on: everything she wears goes back to the chest first, then every piece of the look. */
   function applyLook(l, fromRect) {
@@ -13816,13 +15178,13 @@ FJ.loading('app.js');
       worn[DOLL.slotOf(it)] = id;
     }
     state.worn = worn;
-    if (l.hair && HAIR_OK(l.hair)) state.hair = l.hair;
+    if (l.hair && HAIR_OK(l.hair)) [state.hair, state.hairColor] = hairOf(l.hair, state.hairColor);
     // happy() redraws the doll, which also moves the gold borders; the list itself is NOT rebuilt,
     // so it stays where she has scrolled to
     Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
   }
-  /** Is h a hairstyle that exists? */
-  const HAIR_OK = h => DOLL.hairstyles.includes(h);
+  /** Is h a hairstyle that exists (also the old keys)? */
+  const HAIR_OK = h => DOLL.hairKeys.includes(h);
   /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
   const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
     if (!e.isIntersecting || !e.target._draw) return;
@@ -13839,7 +15201,7 @@ FJ.loading('app.js');
       const b = document.createElement('button');
       b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-label', c.is); b.dataset.cat = c.id;
       b.setAttribute('aria-selected', String(c.id === state.cat));
-      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair)
+      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair, state.hairColor)
         : c.id === 'costume' ? DOLL.renderThumb(DOLL.byId[(looks().find(l => l.id === 'look-fire-red') || looks()[0]).items[0]])   // the firefighter helmet says "costumes"
         : DOLL.renderThumb(itemsIn(c.id)[0]);
       b.addEventListener('click', () => { state.cat = c.id; Sound.tone(880, .08, 'sine', .03); renderTabs(); renderGrid(); persist(); });
@@ -13853,9 +15215,11 @@ FJ.loading('app.js');
   function renderGrid() {
     gridEl.innerHTML = ''; gridEl.scrollTop = 0;
     if (state.cat === 'hair') {
+      gridEl.appendChild(hairColorRow());
       for (const h of DOLL.hairstyles) {
         const t = document.createElement('button'); t.className = 'tile' + (state.hair === h ? ' worn' : ''); t.setAttribute('aria-label', h);
-        t.innerHTML = DOLL.renderHairThumb(h);
+        t.dataset.hair = h;
+        t.innerHTML = DOLL.renderHairThumb(h, state.hairColor);
         t.addEventListener('click', () => {
           const first = !state.rewards.hairSeen.includes(h), from = t.getBoundingClientRect();
           state.hair = h; Sound.snap(); happy(); renderTabs(); persist();
@@ -13880,6 +15244,29 @@ FJ.loading('app.js');
       }
     }
     syncDefs(); markWornTiles();
+  }
+  /**
+   * The row of hair colour dots above the hairstyles. Tapping a dot colours her hair (and every style tile);
+   * tapping the chosen dot again goes back to each style's own colours. The first try of each colour earns a heart.
+   */
+  function hairColorRow() {
+    const row = document.createElement('div'); row.className = 'hair-colors';
+    for (const c of DOLL.hairColors) {
+      const b = document.createElement('button'); b.className = 'hair-dot' + (state.hairColor === c.k ? ' on' : '');
+      b.setAttribute('aria-label', c.is); b.dataset.color = c.k;
+      b.innerHTML = DOLL.renderHairSwatch(c.k);
+      b.addEventListener('click', () => {
+        state.hairColor = state.hairColor === c.k ? '' : c.k;
+        const seen = 'c:' + c.k, first = state.hairColor && !state.rewards.hairSeen.includes(seen);
+        row.querySelectorAll('.hair-dot').forEach(x => x.classList.toggle('on', x.dataset.color === state.hairColor));
+        // redraw the style pictures in the new colour, in place (the list keeps its scroll)
+        gridEl.querySelectorAll('.tile[data-hair]').forEach(t => { t.innerHTML = DOLL.renderHairThumb(t.dataset.hair, state.hairColor); });
+        Sound.sparkle(); happy(); renderTabs(); syncDefs(); persist();
+        if (first) { state.rewards.hairSeen.push(seen); giveHeart(b.getBoundingClientRect()); }
+      });
+      row.appendChild(b);
+    }
+    return row;
   }
   /** Gold border on tiles the doll is wearing. */
   function markWornTiles() {
@@ -13927,6 +15314,7 @@ FJ.loading('app.js');
       const g = document.createElement('div'); g.className = 'ghost dragging'; g.innerHTML = DOLL.renderThumb(DOLL.byId[drag.id]);
       document.body.appendChild(g); drag.ghost = g; syncDefs();
       if (drag.origin === 'doll') { unequip(drag.id); Sound.off(); }
+      if (drag.origin === 'friend') { undressFriend(drag.friend, drag.id); Sound.off(); }
       if (drag.origin === 'loose') { drag.el.remove(); state.loose = state.loose.filter(p => p !== drag.loosePiece); }
     }
     e.preventDefault();
@@ -13941,7 +15329,9 @@ FJ.loading('app.js');
     if (!d.moved) return onTap(d);
     d.ghost.remove();
     const ghostRect = { left: x - 40, right: x + 40, top: y - 40, bottom: y + 40, width: 80, height: 80 };
-    if (overDoll(x, y, d.origin === 'doll')) { equip(d.id); renderDoll(); }
+    const friend = friendAt(x, y);
+    if (friend && canWear(friend, d.id)) dressFriend(friend, d.id);                 // dressing the lion
+    else if (overDoll(x, y, d.origin === 'doll')) { equip(d.id); renderDoll(); }
     else if (overChest(x, y)) { flyThumb(d.id, ghostRect, chestRect(), 350); Sound.off(); chestEl.classList.remove('wiggle'); void chestEl.offsetWidth; chestEl.classList.add('wiggle'); persist(); }
     else dropLoose(d.id, x, y);
   }
@@ -13963,11 +15353,12 @@ FJ.loading('app.js');
     window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
     drag = null;
   }
-  /** Taps: chest piece → a helper carries it on; loose piece → hops on; worn piece → goes home. */
+  /** Taps: chest piece → a helper carries it on; loose piece → hops on; piece worn by her or a friend → goes home. */
   function onTap(d) {
     if (d.origin === 'tray') carry(d.id, d.el.getBoundingClientRect());
     else if (d.origin === 'loose') { const r = d.el.getBoundingClientRect(); d.el.remove(); state.loose = state.loose.filter(p => p !== d.loosePiece); flyThumb(d.id, r, dollRect(), 450).then(() => { equip(d.id); renderDoll(); }); }
     else if (d.origin === 'doll') { unequip(d.id); Sound.off(); flyThumb(d.id, dollRect(), chestRect(), 500); }
+    else if (d.origin === 'friend') { undressFriend(d.friend, d.id); Sound.off(); flyThumb(d.id, d.el.getBoundingClientRect(), chestRect(), 500); }
   }
 
   /* ---------------------------------------------------------------
@@ -14038,7 +15429,7 @@ FJ.loading('app.js');
     critterLayer.innerHTML = '';
     if (sc.layout) seatPassengers(sc, opts);
     (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
-      const pic = guard('FJ-D04', c.k, () => CREATURES[c.k](c.lantern), null);
+      const pic = guard('FJ-D04', c.k, () => (c.friend ? friendPic(c.k) : CREATURES[c.k](c.lantern)), null);
       if (pic === null) return;                               // an animal that can't be drawn is left out
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
@@ -14050,7 +15441,11 @@ FJ.loading('app.js');
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', c.k);
       el.innerHTML = `<div class="inner">${pic}</div>`;
       el.querySelectorAll('.tail,.head').forEach(n => n.style.animationDelay = (-i * .7) + 's');
-      el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
+      el.addEventListener('pointerdown', e => {
+        const piece = c.friend && e.target.closest('[data-item]');   // a piece the friend wears: drag it off
+        if (piece) { startDrag(e, piece.dataset.item, 'friend', el); if (drag) drag.friend = c.k; return; }
+        e.preventDefault(); creatureTap(c, el);
+      });
       critterLayer.appendChild(el);
     });
     spreadCreatures();
@@ -14089,7 +15484,7 @@ FJ.loading('app.js');
     const seat = (w, key, slot, of) => {
       const box = document.createElement('div'); box.className = 'seat-window';
       Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
-      const pic = guard('FJ-D04', key, () => CREATURES[key](), null);
+      const pic = guard('FJ-D04', key, () => (friendOf(key) ? friendPic(key) : CREATURES[key]()), null);
       if (pic === null) return;
       const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
       const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
@@ -14198,20 +15593,21 @@ FJ.loading('app.js');
   /* ---------------------------------------------------------------
      Saved outfits (she saves them herself with the heart)
      --------------------------------------------------------------- */
-  /** Text fingerprint of an outfit: hair plus the sorted item ids. */
-  function outfitKey(hair, worn) { return hair + '|' + Object.values(worn).sort().join(','); }
+  /** Text fingerprint of an outfit: hair (and colour, if one is picked) plus the sorted item ids. */
+  function outfitKey(hair, worn, color = '') { return hair + (color ? '~' + color : '') + '|' + Object.values(worn).sort().join(','); }
   /** The heart button: save what she wears (a new outfit earns a heart). */
   function saveOutfit() {
     if (!Object.keys(state.worn).length) { Sound.tone(330, .15); return; }
     // Same clothes and hair already saved? Move that one to the front instead of making a copy.
-    const sig = outfitKey(state.hair, state.worn);
-    const same = state.outfits.find(x => outfitKey(x.hair, x.worn) === sig);
-    const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, worn: Object.assign({}, state.worn), scene: state.scene };
+    const sig = outfitKey(state.hair, state.worn, state.hairColor);
+    const same = state.outfits.find(x => outfitKey(x.hair, x.worn, x.hairColor) === sig);
+    const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, hairColor: state.hairColor,
+      worn: Object.assign({}, state.worn), scene: state.scene };
     state.outfits = [o, ...state.outfits.filter(x => x !== o)].slice(0, MAX_OUTFITS);
     Sound.save(); sparkleAt(dollRect(), 14); happy(1600);
     if (!same) setTimeout(() => giveHeart(dollRect()), 350);   // a new outfit earns a heart for the jar
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
-    persist(); if (!galleryEl.hidden) renderGallery();
+    persist(); renderBackupDot(); if (!galleryEl.hidden) renderGallery();
   }
   /** The saved-outfits picture frame: tap one to wear it, long-press to delete. */
   function renderGallery() {
@@ -14221,7 +15617,7 @@ FJ.loading('app.js');
     }
     for (const o of state.outfits) {
       const card = document.createElement('div'); card.className = 'card'; card.setAttribute('role', 'button');
-      card.innerHTML = `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, worn: o.worn })}</svg><button class="del" aria-label="Eyða">✕</button>`;
+      card.innerHTML = `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, hairColor: o.hairColor, worn: o.worn })}</svg><button class="del" aria-label="Eyða">✕</button>`;
       let pressTimer = 0, long = false;
       card.addEventListener('pointerdown', () => { long = false; pressTimer = setTimeout(() => { long = true; card.classList.add('deleting'); }, 800); });
       card.addEventListener('pointerup', e => {
@@ -14229,7 +15625,7 @@ FJ.loading('app.js');
         if (e.target.closest('.del')) { state.outfits = state.outfits.filter(x => x !== o); Sound.off(); persist(); renderGallery(); return; }
         if (long) return;
         if (card.classList.contains('deleting')) { card.classList.remove('deleting'); return; }
-        state.hair = o.hair; state.worn = Object.fromEntries(Object.entries(o.worn).filter(([, id]) => DOLL.byId[id]));
+        [state.hair, state.hairColor] = hairOf(HAIR_OK(o.hair) ? o.hair : 'loose', o.hairColor); state.worn = Object.fromEntries(Object.entries(o.worn).filter(([, id]) => DOLL.byId[id]));
         Sound.sparkle(); happy(); sparkleAt(dollRect(), 10); persist(); galleryEl.hidden = true;
       });
       card.addEventListener('pointerleave', () => clearTimeout(pressTimer));
@@ -14279,6 +15675,52 @@ FJ.loading('app.js');
   const jarRect = () => jarBtn.getBoundingClientRect();
   /** Friend info by key. */
   const friendOf = k => FRIENDS.find(f => f.k === k);
+  /** Can friend k wear this item? (Friends with dress: true take hats, hairbands, glasses, necklaces and scarves.) */
+  const canWear = (k, id) => !!(friendOf(k) && friendOf(k).dress && DOLL.byId[id] && PLUSH_WEAR[DOLL.slotOf(DOLL.byId[id])]);
+  /**
+   * The friend's picture, wearing what she put on it. Each piece is drawn as on the doll and moved onto the
+   * plush by PLUSH_WEAR (scenes.js); hat brims go behind the head, the rest on top, in the doll's layer order.
+   */
+  function friendPic(k) {
+    const f = friendOf(k), worn = state.friendWorn[k] || {};
+    if (!f || !f.dress) return CREATURES[k]();
+    const wear = { headBack: '', head: '', body: '' };
+    for (const slot of Object.keys(worn).sort((a, b) => SLOTS[a].z - SLOTS[b].z)) {
+      const it = DOLL.byId[worn[slot]], fit = PLUSH_WEAR[slot];
+      if (!it || !fit) continue;
+      const out = DOLL.drawItem(it);
+      // one part of the piece, moved onto the plush; data-item lets her drag it off again
+      const g = m => (m ? `<g data-item="${it.id}" transform="${fit.t}">${m}</g>` : '');
+      if (fit.layer === 'head') { wear.headBack += g(out.back); wear.head += g(out.front); }
+      else wear.body += g(out.back) + g(out.front);
+    }
+    return CREATURES[k](wear);
+  }
+  /** Draw friend k again everywhere it shows (after she dressed or undressed it). */
+  function refreshFriend(k) {
+    critterLayer.querySelectorAll(`[data-friend="${k}"] .inner, [data-seat="${k}"] .inner`).forEach(n => { n.innerHTML = guard('FJ-D04', k, () => friendPic(k), ''); });
+    syncDefs();
+  }
+  /** Which dressable friend is at screen point x,y (or undefined)? */
+  function friendAt(x, y) {
+    const el = [...critterLayer.querySelectorAll('.creature[data-friend]')].find(e => !e.hidden && friendOf(e.dataset.friend)?.dress && inside(e.getBoundingClientRect(), x, y, 12));
+    return el && el.dataset.friend;
+  }
+  /** Put a piece on friend k (replacing what it wore in that slot); the friend hops and says thank you. */
+  function dressFriend(k, id) {
+    const w = state.friendWorn[k] = state.friendWorn[k] || {};
+    w[DOLL.slotOf(DOLL.byId[id])] = id;
+    refreshFriend(k); Sound.snap(); Sound.voice(friendOf(k).voice);
+    const el = critterLayer.querySelector(`[data-friend="${k}"]`);
+    if (el) { el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100); sparkleAt(el.getBoundingClientRect(), 6); }
+    persist();
+  }
+  /** Take a piece off friend k. */
+  function undressFriend(k, id) {
+    const w = state.friendWorn[k] || {};
+    for (const slot in w) if (w[slot] === id) delete w[slot];
+    refreshFriend(k); persist();
+  }
   /** Friends shown in this scene: the newest one always, plus one more that changes from scene to scene. */
   function friendsHere() {
     if (!state.settings.rewards) return [];
@@ -14329,7 +15771,7 @@ FJ.loading('app.js');
         const el = critterLayer.querySelector(`[data-friend="${friend}"]`);
         if (!el) return;
         el.classList.add('arriving');
-        flyMarkup(guard('FJ-D04', friend, () => CREATURES[friend](), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
+        flyMarkup(guard('FJ-D04', friend, () => friendPic(friend), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
           el.classList.remove('arriving'); Sound.arrive(); sparkleAt(el.getBoundingClientRect(), 14);
           el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100);
           happy(1600);
@@ -14348,7 +15790,7 @@ FJ.loading('app.js');
     friendsEl.innerHTML = '';
     for (const k of state.rewards.friends) {
       const f = friendOf(k); if (!f || !CREATURES[k]) continue;
-      const pic = guard('FJ-D04', k, () => CREATURES[k](), null); if (pic === null) continue;
+      const pic = guard('FJ-D04', k, () => friendPic(k), null); if (pic === null) continue;
       const card = document.createElement('button'); card.className = 'card friend-card'; card.setAttribute('aria-label', f.is);
       card.innerHTML = pic;
       card.addEventListener('click', () => { Sound.voice(f.voice); card.classList.remove('hop'); void card.offsetWidth; card.classList.add('hop'); });
@@ -14385,8 +15827,29 @@ FJ.loading('app.js');
     $('#storeMsg').textContent = Store.ok
       ? `Allt er vistað á þessu tæki (${state.outfits.length} vistuð föt). Taktu afrit af og til.`
       : 'Vafrinn leyfir ekki að vista. Fötin gleymast þegar leiknum er lokað.';
+    renderBackupNote();
     renderErrors();
   }
+
+  const MONTHS_IS = ['janúar', 'febrúar', 'mars', 'apríl', 'maí', 'júní', 'júlí', 'ágúst', 'september', 'október', 'nóvember', 'desember'];
+  /** A date in Icelandic, e.g. "1. september 2026" (written out here because not every browser knows Icelandic dates). */
+  const dateIs = d => `${d.getDate()}. ${MONTHS_IS[d.getMonth()]} ${d.getFullYear()}`;
+  /** Days since the last backup file (Infinity if there never was one). */
+  const daysSinceBackup = () => (state.lastBackup ? Math.floor((Date.now() - Date.parse(state.lastBackup)) / 864e5) : Infinity);
+  /** Is a backup due? Outfits exist that are not in a backup, and the last one is over 30 days old (or never). */
+  const backupDue = () => state.outfits.length > 0 && state.outfits.length !== state.backupOutfits && daysSinceBackup() > 30;
+  /** The line in the parent menu that says when the last backup was, and a gentle dot on the gear when one is due. */
+  function renderBackupNote() {
+    const el = $('#backupWhen'), days = daysSinceBackup(), since = state.outfits.length - state.backupOutfits;
+    el.textContent = !state.lastBackup ? 'Ekkert afrit hefur verið tekið enn.'
+      : `Síðasta afrit: ${dateIs(new Date(state.lastBackup))}` +
+        ` (${days === 0 ? 'í dag' : days === 1 ? 'í gær' : `fyrir ${days} dögum`})` + (since > 0 ? `, ${since} ný föt síðan.` : '.');
+    el.classList.toggle('due', backupDue());
+  }
+  /** The small dot on the gear button (only parents know it): shows when a backup is due. */
+  function renderBackupDot() { $('#btnGear').classList.toggle('remind', backupDue()); }
+  /** A backup file was saved: remember when, so the reminder goes away. */
+  function backupDone() { state.lastBackup = new Date().toISOString(); state.backupOutfits = state.outfits.length; flush(); renderBackupNote(); renderBackupDot(); }
 
   /** The error log in the parent menu: one line per problem, newest first (code, how often, when, what). */
   function renderErrors() {
@@ -14423,12 +15886,12 @@ FJ.loading('app.js');
     const data = JSON.stringify(Object.assign({ app: 'fjarsjodskistan', exportedAt: new Date().toISOString() }, state), null, 1);
     const file = new File([data], name, { type: 'application/json' });
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupNote('Afrit sent.'); return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupDone(); backupNote('Afrit sent.'); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; report('FJ-S05', 'share (now trying a download)', e); }
     try {
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      backupNote('Afrit vistað í niðurhal (Downloads).');
+      backupDone(); backupNote('Afrit vistað í niðurhal (Downloads).');
     } catch (e) { report('FJ-S05', 'download', e); backupNote('Ekki tókst að búa til afrit. Sjá villukóða.'); }
   });
   /*  Opening a backup ADDS its outfits to the ones already here (nothing is deleted).
@@ -14439,8 +15902,8 @@ FJ.loading('app.js');
     if (!f) return;
     let d = null, why = null; try { d = JSON.parse(await f.text()); } catch (err) { why = err; }
     if (!isObj(d) || !Array.isArray(d.outfits)) { report('FJ-S04', f.name, why); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
-    const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn)));
-    const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn)));
+    const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn, o.hairColor)));
+    const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn, o.hairColor)));
     state.outfits = state.outfits.concat(added)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, MAX_OUTFITS);
     flush(); renderMenu();
@@ -14461,7 +15924,7 @@ FJ.loading('app.js');
   });
   $('#menuReset').addEventListener('click', () => {
     const b = $('#menuReset');
-    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
+    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; state.friendWorn = {}; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
     else { b.dataset.armed = '1'; b.textContent = 'Ýttu aftur til að staðfesta'; }
   });
   (function longPress(btn) {
@@ -14499,7 +15962,7 @@ FJ.loading('app.js');
   sceneEl.addEventListener('pointerdown', () => { galleryEl.hidden = true; friendsEl.hidden = true; });
 
   /** Draw everything from state. */
-  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); renderJar(); stage.classList.toggle('calm', state.settings.calm); }
+  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); renderJar(); renderBackupDot(); stage.classList.toggle('calm', state.settings.calm); }
   renderAll();
   trayEl.hidden = true;
 })();

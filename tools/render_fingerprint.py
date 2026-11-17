@@ -14,13 +14,13 @@ root = pathlib.Path(__file__).resolve().parent.parent
 src = root / 'src'
 order = re.search(r"order\s*=\s*\[([^\]]*)\]", (root / 'tools' / 'build.py').read_text(encoding='utf-8')).group(1)
 garments = re.findall(r"'([^']+\.js)'", order)
-scripts = [src / 'core.js'] + [src / 'garments' / g for g in garments] + [src / 'scenes.js']
+scripts = [src / 'core.js'] + [src / 'garments' / g for g in garments if (src / 'garments' / g).exists()] + [src / 'scenes.js']
 html = '<!doctype html><meta charset=utf-8>' + ''.join('<script>' + p.read_text(encoding='utf-8') + '</script>' for p in scripts)
 
 JS = r'''() => {
   const out = {};
   for (const it of DOLL.items) { out['item:' + it.id] = DOLL.renderDoll({ hair: 'loose', worn: { [DOLL.slotOf(it)]: it.id } }) + DOLL.renderThumb(it); }
-  for (const h of DOLL.hairstyles) out['hair:' + h] = DOLL.renderHairThumb(h) + DOLL.renderDoll({ hair: h });
+  for (const h of DOLL.hairKeys || DOLL.hairstyles) out['hair:' + h] = DOLL.renderHairThumb(h) + DOLL.renderDoll({ hair: h });
   for (const l of DOLL.looks || []) out['look:' + l.id] = JSON.stringify(l);
   for (const k in SCENES) { try { out['scene:' + k] = SCENES[k].svg({}); } catch (e) { out['scene:' + k] = 'ERROR ' + e.message; } }
   for (const k in CREATURES) { try { out['creature:' + k] = typeof CREATURES[k] === 'function' ? String(CREATURES[k]()) : JSON.stringify(CREATURES[k]); } catch (e) { out['creature:' + k] = 'ERROR ' + e.message; } }

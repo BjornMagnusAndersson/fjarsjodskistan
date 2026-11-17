@@ -16,7 +16,7 @@ src = root / 'src'
 read = lambda p: p.read_text(encoding='utf-8')
 
 order = ['examples.js', 'heads.js', 'face.js', 'wrists.js', 'tops.js', 'dresses.js', 'bottoms.js', 'feet.js',
-         'swim.js', 'costumes_work.js', 'costumes_care.js', 'costumes_magic.js', 'tails.js']
+         'swim.js', 'costumes_work.js', 'costumes_care.js', 'costumes_magic.js', 'tails.js', 'christmas.js']
 garments = [src / 'garments' / n for n in order if (src / 'garments' / n).exists()]
 sources = [src / 'core.js', *garments, src / 'scenes.js', src / 'app.js']
 

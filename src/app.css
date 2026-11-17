@@ -69,6 +69,15 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   background: var(--parchment); box-shadow: inset 0 2px 8px rgba(90, 50, 20, .25); align-content: start; touch-action: pan-y; }
 .tile { aspect-ratio: 1; border-radius: 16px; background: #fff; border: 3px solid #ecdcbf; padding: 6px; cursor: grab; touch-action: pan-y; }
 .tile.worn { border-color: var(--gold); background: #fff8dc; }
+/* hair colour dots: one row across the whole grid, above the hairstyles */
+.hair-colors { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 2px 0 4px; }
+.hair-dot { width: 46px; height: 46px; padding: 2px; border-radius: 50%; border: 3px solid #ecdcbf; background: #fff; cursor: pointer; }
+.hair-dot svg { width: 100%; height: 100%; display: block; }
+.hair-dot.on { border-color: var(--gold); transform: scale(1.12); box-shadow: 0 0 0 3px #fff8dc; }
+/* backup reminder: a small soft dot on the gear (parents only), and the menu line in a warmer colour */
+#btnGear { position: relative; }
+#btnGear.remind::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #f2a65a; }
+.menu p#backupWhen.due { color: #b8481e; font-weight: 600; }
 .tile.look { aspect-ratio: 4 / 5; background: linear-gradient(#e6f4fb, #f4fbef); }
 
 /* buttons */

@@ -599,6 +599,252 @@
     </svg>`;
   }
 
+  /* ---------------- Scene 9: Jól, a cosy Icelandic Christmas evening ----------------
+     A snowy evening in a little town: deep blue sky with stars and soft northern lights,
+     snowy mountains, little houses with warm windows (some with coloured lights along the
+     roof), a little white church, a big decorated Christmas tree with presents under it
+     (x ≈ 740–1070, so it shows on a portrait screen too), a bigger red house with candle
+     arches (aðventuljós) in its windows, two street lamps with a string of coloured lights,
+     a snowman and a sled. No text and nothing scary.
+     Moving parts: stars, tree lights and roof lights (twinkle), the star on the tree, the
+     window light, candles and lamps (glow), northern lights (aurora), chimney smoke (smoke),
+     the snowman's waving arm (sway). Falling snow comes from the app (snow: true).
+     The snow in front starts at about y 700–725; scene ground 76 keeps the animals on it. */
+  function jol() {
+    const r = rng(1224);
+    const LIGHTS = ['#ff6b6b', '#ffd84d', '#6fc3ff', '#ff9be0', '#9cf08a'];   // colours of the little light bulbs
+    // stars in three groups that twinkle in turn
+    const stars = [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${-g * 1.2}s">` +
+      Array.from({ length: 22 }, () => `<circle cx="${Math.round(r() * 1600)}" cy="${Math.round(r() * 470)}" r="${(1 + r() * 2).toFixed(1)}" fill="#fff"/>`).join('') + '</g>').join('');
+    // one soft band of northern lights along path d (same idea as the night scene, a little fainter)
+    const aurora = (d, a, b, cls, delay) => `<g class="${cls}" style="animation-delay:${delay}s"><path d="${d}" fill="none" stroke="url(#${a})" stroke-width="80" stroke-linecap="round" opacity=".4"/><path d="${d}" fill="none" stroke="url(#${b})" stroke-width="26" stroke-linecap="round" opacity=".45"/></g>`;
+    // one coloured light bulb at x,y: a soft halo with a bright little bulb and a white shine (s = size)
+    const bulb = (x, y, c, s = 1) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(9 * s).toFixed(1)}" fill="${c}" opacity=".3"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(4.2 * s).toFixed(1)}" fill="${c}"/><circle cx="${(x - 1.2 * s).toFixed(1)}" cy="${(y - 1.3 * s).toFixed(1)}" r="${(1.4 * s).toFixed(1)}" fill="#fff" opacity=".8"/>`;
+    // share a list of bulbs out into three groups that twinkle at different times
+    const twinkleGroups = list => [0, 1, 2].map(g => `<g class="twinkle" style="animation-delay:${(-g * 1.07).toFixed(2)}s">` + list.filter((_, i) => i % 3 === g).join('') + '</g>').join('');
+
+    /** Candle arch (aðventuljós) standing in a window: a stepped wooden frame with seven little
+        electric candles, the middle one highest. cx = middle, by = bottom, w = width. */
+    const candleArch = (cx, by, w) => {
+      const st = w / 7, step = w * .07;   // width and height of one step
+      let frame = `M${(cx - w / 2).toFixed(1)},${by.toFixed(1)}`, candles = '', flames = '';
+      for (let i = -3; i <= 3; i++) {
+        const x0 = cx + (i - .5) * st, y = by - (4 - Math.abs(i)) * step, top = y - w * .16;
+        frame += ` L${x0.toFixed(1)},${y.toFixed(1)} L${(x0 + st).toFixed(1)},${y.toFixed(1)}`;
+        candles += `<rect x="${(cx + i * st - st * .18).toFixed(1)}" y="${top.toFixed(1)}" width="${(st * .36).toFixed(1)}" height="${(w * .16).toFixed(1)}" fill="#fffaf0"/>`;
+        flames += `<ellipse cx="${(cx + i * st).toFixed(1)}" cy="${(top - st * .3).toFixed(1)}" rx="${(st * .24).toFixed(1)}" ry="${(st * .36).toFixed(1)}" fill="#ff9f1a"/>`;
+      }
+      frame += ` L${(cx + w / 2).toFixed(1)},${by.toFixed(1)}Z`;
+      return `<path d="${frame}" fill="#7a4a2e" stroke="#4e2c1a" stroke-width="1"/>${candles}<g class="glow">${flames}</g>`;
+    };
+
+    /** A house from the town helper made cosy for Christmas: snow on the roof and chimney, warm
+        yellow windows with light spilling out, and as options: o.lights = coloured lights along the
+        roof edges, o.arch = a candle arch in each front window, o.smoke / o.delay = chimney smoke. */
+    const cosy = (x, base, w, h, wall, roof, o = {}) => {
+      const top = base - h, peak = top - w * .48, ww = w * .24, wh = h * .3, wy = top + h * .2;
+      let s = house(x, base, w, h, wall, roof, o.smoke, o.delay || 0);
+      // snow on the chimney top and lying along both roof slopes
+      if (o.smoke) s += `<rect x="${(x + w * .64).toFixed(1)}" y="${(peak + w * .1).toFixed(1)}" width="${(w * .16).toFixed(1)}" height="${(w * .05).toFixed(1)}" rx="3" fill="#eef4fc"/>`;
+      s += `<path d="M${x - 7},${top + 2} L${x + w / 2},${(peak - 2).toFixed(1)} L${x + w + 7},${top + 2}" fill="none" stroke="#eef4fc" stroke-width="${Math.max(5, w * .055).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>`;
+      // the two front windows: warm light around them, then the lit glass (a candle arch or a window cross)
+      [x + w * .14, x + w * .62].forEach((wx, i) => {
+        s += `<circle class="glow" style="animation-delay:${(-i * 1.3 + (o.delay || 0)).toFixed(1)}s" cx="${(wx + ww / 2).toFixed(1)}" cy="${(wy + wh / 2).toFixed(1)}" r="${(ww * 1.25).toFixed(1)}" fill="url(#j-glow)"/>` +
+          `<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="${ww.toFixed(1)}" height="${wh.toFixed(1)}" fill="url(#j-win)" stroke="#fff" stroke-width="3"/>`;
+        s += o.arch ? candleArch(wx + ww / 2, wy + wh - 2, ww * .86)
+          : `<path d="M${(wx + ww / 2).toFixed(1)},${wy.toFixed(1)} V${(wy + wh).toFixed(1)} M${wx.toFixed(1)},${(wy + wh / 2).toFixed(1)} H${(wx + ww).toFixed(1)}" stroke="#fff" stroke-width="2"/>`;
+      });
+      // the little attic window glows too
+      s += `<circle cx="${x + w / 2}" cy="${(top - w * .17).toFixed(1)}" r="${(w * .07).toFixed(1)}" fill="#ffd27a" stroke="#fff" stroke-width="2"/>`;
+      if (o.lights) {
+        // coloured bulbs just under the snowy roof edge, from the left eave up to the peak and down again
+        const n = Math.max(4, Math.round(w / 18)), list = [], k = w > 120 ? .85 : .7;
+        for (let j = 0; j <= 2 * n; j++) {
+          const t = j / (2 * n), px = x - 5 + (w + 10) * t, py = top + 9 - (1 - Math.abs(t * 2 - 1)) * (top - peak - 2);
+          list.push(bulb(px, py, LIGHTS[j % LIGHTS.length], k));
+        }
+        s += twinkleGroups(list);
+      }
+      return s;
+    };
+
+    /** Little white Icelandic church with a red roof, a pointy red spire and warm arched windows.
+        x = left edge of the hall, base = ground line. */
+    const church = (x, base) => `<path d="M${x},${base} V${base - 46} H${x + 70} V${base}Z" fill="#f4f1ea" stroke="#a9a49c" stroke-width="2.5"/>` +
+      `<path d="M${x - 5},${base - 44} L${x + 35},${base - 74} L${x + 75},${base - 44}Z" fill="#c4473f" stroke="#8a2f2a" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M${x - 7},${base - 44} L${x + 35},${base - 76} L${x + 77},${base - 44}" fill="none" stroke="#eef4fc" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<path d="M${x - 24},${base} V${base - 70} H${x + 2} V${base}Z" fill="#f4f1ea" stroke="#a9a49c" stroke-width="2.5"/>` +
+      `<path d="M${x - 28},${base - 68} L${x - 11},${base - 122} L${x + 6},${base - 68}Z" fill="#c4473f" stroke="#8a2f2a" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M${x - 11},${base - 122} V${base - 136} M${x - 17},${base - 130} H${x - 5}" stroke="#d8d2c6" stroke-width="3" stroke-linecap="round"/>` +
+      `<circle class="glow" cx="${x + 35}" cy="${base - 24}" r="40" fill="url(#j-glow)"/>` +
+      [x + 16, x + 46].map(wx => `<path d="M${wx},${base - 12} V${base - 30} Q${wx + 4.5},${base - 37} ${wx + 9},${base - 30} V${base - 12}Z" fill="url(#j-win)" stroke="#fff" stroke-width="2"/>`).join('') +
+      `<path d="M${x - 17},${base} V${base - 22} Q${x - 11},${base - 30} ${x - 5},${base - 22} V${base}Z" fill="#8a5a3c"/>` +
+      `<path d="M${x - 15},${base - 50} V${base - 58} Q${x - 11},${base - 63} ${x - 7},${base - 58} V${base - 50}Z" fill="#ffd27a" stroke="#fff" stroke-width="1.5"/>`;
+
+    /** Old-style street lamp standing on the snow at x, base, with a warm glowing lantern on top. */
+    const lamp = (x, base) => `<circle class="glow" cx="${x}" cy="${base - 168}" r="50" fill="url(#j-glow)"/>` +
+      `<path d="M${x},${base} V${base - 152}" stroke="#2c3a52" stroke-width="7"/><path d="M${x - 11},${base} h22" stroke="#2c3a52" stroke-width="9" stroke-linecap="round"/>` +
+      `<path d="M${x - 12},${base - 152} h24 l5,-30 h-34Z" fill="#ffe08a" stroke="#2c3a52" stroke-width="3" stroke-linejoin="round"/>` +
+      `<path d="M${x - 20},${base - 182} h40 l-20,-14Z" fill="#2c3a52" stroke="#2c3a52" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M${x - 19},${base - 184} L${x},${base - 197} L${x + 19},${base - 184}" stroke="#eef4fc" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // a string of coloured lights hanging between the two lamps (a gentle sag in the middle)
+    const L1 = 46, L2 = 262, LB = 836, LY = LB - 150;
+    let stringLights = `<path d="M${L1},${LY} Q${(L1 + L2) / 2},${LY + 70} ${L2},${LY}" stroke="#2c3a52" stroke-width="2" fill="none"/>`;
+    const strBulbs = [];
+    for (let j = 1; j < 12; j++) {
+      const t = j / 12, bx = (1 - t) * (1 - t) * L1 + 2 * t * (1 - t) * (L1 + L2) / 2 + t * t * L2, by = LY + 2 * t * (1 - t) * 70;
+      strBulbs.push(bulb(bx, by + 5, LIGHTS[j % LIGHTS.length], .9));
+    }
+    stringLights += twinkleGroups(strBulbs);
+
+    /* The Christmas tree: four layers of branches with soft wavy edges, a gold bead garland,
+       baubles, twinkling coloured lights and a glowing star on top. TX = middle, TB = foot. */
+    const TX = 905, TB = 800;
+    const tiers = [[560, 790, 165], [468, 662, 132], [384, 562, 100], [306, 458, 70]];   // [top, bottom, half width]
+    let tree = `<ellipse cx="${TX}" cy="${TB + 22}" rx="210" ry="24" fill="#9fb6d6" opacity=".5"/>` +
+      `<rect x="${TX - 17}" y="${TB - 30}" width="34" height="44" fill="#7a4e2c" stroke="#55331c" stroke-width="2.5"/>`;
+    const lights = [], baubles = [];
+    tiers.forEach(([top, bot, hw], ti) => {
+      // branch layer: a triangle with a wavy bottom edge (little bumps going right to left)
+      const n = Math.round(hw / 24) * 2, bw = 2 * hw / n;
+      let d = `M${TX},${top} L${TX + hw},${bot}`, edge = `M${TX + hw},${bot}`;
+      for (let i = 0; i < n; i++) {
+        const xa = TX + hw - i * bw, part = ` Q${(xa - bw / 2).toFixed(1)},${bot + 14} ${(xa - bw).toFixed(1)},${bot}`;
+        d += part; edge += part;
+      }
+      tree += `<path d="${d}Z" fill="url(#j-tree)" stroke="#154a30" stroke-width="2.5" stroke-linejoin="round"/>` +
+        `<path d="M${TX},${top + 8} L${TX - hw + 10},${bot - 4}" stroke="#5fbf7f" stroke-width="4" opacity=".45" stroke-linecap="round"/>` +
+        `<path d="${edge}" stroke="#eef4fc" stroke-width="3.5" fill="none" opacity=".55" transform="translate(0,-4)"/>`;
+      // snow resting on the two branch tips
+      tree += `<ellipse cx="${TX - hw + 12}" cy="${bot - 4}" rx="16" ry="6" fill="#eef4fc"/><ellipse cx="${TX + hw - 12}" cy="${bot - 4}" rx="16" ry="6" fill="#eef4fc"/>`;
+      // gold bead garland swinging across the layer
+      const H = bot - top, ya = top + H * .5, yb = top + H * .78;
+      tree += `<path d="M${TX - hw * .48},${ya} Q${TX},${top + H * .92} ${TX + hw * .76},${yb}" stroke="#b8862a" stroke-width="1.5" fill="none"/>` +
+        `<path d="M${TX - hw * .48},${ya} Q${TX},${top + H * .92} ${TX + hw * .76},${yb}" stroke="#f6d26a" stroke-width="6" stroke-dasharray="0.1 10" stroke-linecap="round" fill="none"/>`;
+      // lights and baubles spread over the layer (only inside the triangle)
+      const spots = [8, 7, 6, 4][ti];
+      for (let i = 0; i < spots; i++) {
+        const f = .3 + r() * .62, y = top + f * H, x = TX + (r() * 2 - 1) * hw * f * .82;
+        lights.push(bulb(x, y, LIGHTS[(i + ti) % LIGHTS.length], 1.3));
+      }
+      for (let i = 0; i < (ti < 3 ? 3 : 1); i++) {
+        const f = .45 + r() * .45, y = top + f * H, x = TX + (r() * 2 - 1) * hw * f * .75, c = ['#e2564c', '#f6c443', '#5aa9ec', '#f48cc0'][(i + ti) % 4];
+        baubles.push(`<path d="M${x.toFixed(1)},${(y - 11).toFixed(1)} V${(y - 16).toFixed(1)}" stroke="#d8c06a" stroke-width="3"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="10" fill="${c}" stroke="${sink(c)}" stroke-width="2"/><circle cx="${(x - 3.5).toFixed(1)}" cy="${(y - 3.5).toFixed(1)}" r="3" fill="#fff" opacity=".75"/>`);
+      }
+    });
+    // five-pointed star centred at cx,cy with outer radius ro, as a list of polygon corner points
+    const starPts = (cx, cy, ro) => Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? ro * .45 : ro;
+      return `${(cx + rr * Math.cos(a)).toFixed(1)},${(cy + rr * Math.sin(a)).toFixed(1)}`; }).join(' ');
+    tree += baubles.join('') + twinkleGroups(lights) +
+      `<circle class="glow" cx="${TX}" cy="290" r="78" fill="url(#j-starglow)"/>` +
+      `<polygon points="${starPts(TX, 290, 32)}" fill="#ffd84d" stroke="#e09a1a" stroke-width="3" stroke-linejoin="round"/>` +
+      `<polygon points="${starPts(TX - 3, 287, 14)}" fill="#fff4b8" opacity=".85"/>`;
+
+    /** A wrapped present: box, lid, ribbon both ways and a bow on top. x = left, y = bottom, w × h = box size. */
+    const present = (x, y, w, h, box, rib) => { const t = y - h, m = x + w / 2;
+      return `<rect x="${x}" y="${t}" width="${w}" height="${h}" rx="3" fill="${box}" stroke="${sink(box)}" stroke-width="2"/>` +
+        `<rect x="${x - 3}" y="${t - 2}" width="${w + 6}" height="${(h * .24).toFixed(1)}" rx="3" fill="${box}" stroke="${sink(box)}" stroke-width="2"/>` +
+        `<rect x="${m - 4}" y="${t - 2}" width="8" height="${h + 2}" fill="${rib}"/>` +
+        `<path d="M${m},${t - 2} q-18,-16 -20,-2 q2,10 20,2 q18,-16 20,-2 q-2,10 -20,2Z" fill="${rib}" stroke="${sink(rib)}" stroke-width="1.5"/><circle cx="${m}" cy="${t - 2}" r="4" fill="${rib}" stroke="${sink(rib)}" stroke-width="1.5"/>`; };
+    const presents = present(770, 830, 62, 46, '#e2564c', '#f6d26a') + present(1012, 826, 44, 36, '#7fcf8a', '#f48cc0') +
+      present(842, 838, 48, 56, '#5aa9ec', '#fbfaf6') + present(940, 842, 72, 40, '#f6c443', '#e2564c') + present(898, 846, 40, 28, '#b59be6', '#f6d26a');
+
+    /** Friendly snowman with a green scarf, a red knitted hat and a stick arm that waves a little.
+        x = middle, y = where he stands on the snow. */
+    const snowman = (x, y) => `<g transform="translate(${x},${y})">
+      <ellipse cx="0" cy="0" rx="70" ry="12" fill="#9fb6d6" opacity=".5"/>
+      <path d="M-30,-128 L-80,-108 M-66,-114 l-10,-14 M-70,-112 l-14,4" stroke="#6a4630" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <g class="sway" style="transform-origin:30px -128px;animation-duration:1.8s"><path d="M30,-128 L78,-164 M64,-154 l2,-17 M70,-158 l15,0" stroke="#6a4630" stroke-width="5" fill="none" stroke-linecap="round"/></g>
+      <circle cx="0" cy="-50" r="52" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      <circle cx="0" cy="-126" r="38" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      <circle cx="0" cy="-184" r="29" fill="url(#j-ball)" stroke="#9fb0cc" stroke-width="2.5"/>
+      ${[-128, -108, -66, -42].map(b => `<circle cx="0" cy="${b}" r="4.5" fill="#3a3f55"/>`).join('')}
+      <path d="M-32,-158 Q0,-146 32,-158 L33,-147 Q0,-134 -33,-147Z" fill="#2f9a5e" stroke="#1f6a40" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12,-146 L24,-108 L10,-106 L2,-144Z" fill="#2f9a5e" stroke="#1f6a40" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12,-112 l-1,8 M17,-113 l1,8 M22,-113 l2,7" stroke="#1f6a40" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="-10" cy="-190" r="4" fill="#2a2f45"/><circle cx="10" cy="-190" r="4" fill="#2a2f45"/><circle cx="-8.6" cy="-191.6" r="1.4" fill="#fff"/><circle cx="11.4" cy="-191.6" r="1.4" fill="#fff"/>
+      <path d="M0,-182 L24,-177 L0,-173Z" fill="#f6922a" stroke="#c96a14" stroke-width="1.5" stroke-linejoin="round"/>
+      <ellipse cx="-17" cy="-176" rx="5.5" ry="3.5" fill="#f6a6bf" opacity=".7"/><ellipse cx="17" cy="-176" rx="5.5" ry="3.5" fill="#f6a6bf" opacity=".7"/>
+      ${[-9, -3.5, 3.5, 9].map((dx, i) => `<circle cx="${dx}" cy="${-167 + (i === 0 || i === 3 ? -2 : 0)}" r="2" fill="#2a2f45"/>`).join('')}
+      <path d="M-27,-203 Q-24,-236 0,-238 Q24,-236 27,-203Z" fill="#e2564c" stroke="#a83a33" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="-30" y="-208" width="60" height="12" rx="6" fill="#fbfaf6" stroke="#c9c4ba" stroke-width="1.5"/>
+      <circle cx="0" cy="-240" r="9" fill="#fbfaf6" stroke="#c9c4ba" stroke-width="1.5"/></g>`;
+
+    /** Wooden sled with red runners lying in the snow, with a little present on it. x = middle, y = bottom. */
+    const sled = (x, y) => `<g transform="translate(${x},${y})"><ellipse cx="0" cy="2" rx="86" ry="10" fill="#9fb6d6" opacity=".5"/>
+      <path d="M-50,0 V-20 M-10,0 V-20 M30,0 V-20" stroke="#c4473f" stroke-width="6"/>
+      <path d="M-72,0 H58 Q84,0 84,-24" stroke="#c4473f" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <rect x="-78" y="-30" width="150" height="13" rx="5" fill="#c48a52" stroke="#8a5a34" stroke-width="2"/>
+      <path d="M-40,-30 v13 M0,-30 v13 M40,-30 v13" stroke="#8a5a34" stroke-width="1.5" opacity=".6"/>
+      <path d="M-62,-31 h108" stroke="#eef4fc" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+      <path d="M82,-22 q24,18 54,14" stroke="#e6c66a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      ${present(-34, -30, 40, 30, '#5aa9ec', '#f6d26a')}</g>`;
+
+    // the big red house on the right, standing in the front snow, with a drift on both sides of the door
+    const bigHouse = cosy(1296, 800, 224, 140, '#c9554e', '#3f4f72', { smoke: true, delay: -1, lights: true, arch: true }) +
+      `<path d="M1278,816 V800 Q1310,782 1352,790 Q1368,794 1380,800 Q1400,808 1418,800 Q1446,786 1500,786 Q1530,788 1540,800 V816Z" fill="url(#j-snow)"/>` +
+      `<path d="M1278,800 Q1310,782 1352,790 Q1368,794 1380,800 M1418,800 Q1446,786 1500,786 Q1530,788 1540,800" stroke="#f4f8fd" stroke-width="4" fill="none" stroke-linecap="round"/>` +
+      // a green Christmas wreath with a red bow on the front door
+      `<circle cx="1408" cy="762" r="12" fill="none" stroke="#2f8a52" stroke-width="7"/><circle cx="1408" cy="762" r="12" fill="none" stroke="#5fbf7f" stroke-width="2.5" stroke-dasharray="3 5"/>` +
+      `<path d="M1408,773 l-8,-4 v8z M1408,773 l8,-4 v8z" fill="#e2564c" stroke="#a83a33" stroke-width="1.2" stroke-linejoin="round"/>` +
+      [[1400, 754], [1416, 756], [1399, 768], [1418, 767]].map(([bx, by]) => `<circle cx="${bx}" cy="${by}" r="2.2" fill="#e2564c"/>`).join('');
+    // little footprints in the snow leading up to the red house's door
+    let steps = '';
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8, fx = 1300 + 100 * t + (i % 2 ? 9 : -9), fy = 990 - 172 * t;
+      steps += `<ellipse cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" rx="${(7 - 3 * t).toFixed(1)}" ry="${(4 - 2 * t).toFixed(1)}" fill="#a9bfdd" opacity=".7"/>`;
+    }
+    // glints on the snow: tiny four-pointed sparkles that twinkle
+    const glints = [];
+    for (let i = 0; i < 24; i++) {
+      const gx = Math.round(r() * 1600), gy = Math.round(760 + r() * 230), s = 3 + r() * 3;
+      glints.push(`<path d="M${gx},${(gy - s).toFixed(1)} L${(gx + s * .3).toFixed(1)},${gy} L${gx},${(gy + s).toFixed(1)} L${(gx - s * .3).toFixed(1)},${gy}Z M${(gx - s).toFixed(1)},${gy} L${gx},${(gy - s * .3).toFixed(1)} L${(gx + s).toFixed(1)},${gy} L${gx},${(gy + s * .3).toFixed(1)}Z" fill="#fff"/>`);
+    }
+
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="j-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1a3d"/><stop offset=".55" stop-color="#1f3f78"/><stop offset=".75" stop-color="#3a62a0"/></linearGradient>
+      <linearGradient id="j-au-g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4dffb0" stop-opacity="0"/><stop offset=".3" stop-color="#4dffb0"/><stop offset=".7" stop-color="#6bf0d8"/><stop offset="1" stop-color="#6bf0d8" stop-opacity="0"/></linearGradient>
+      <linearGradient id="j-au-p" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8bd8" stop-opacity="0"/><stop offset=".5" stop-color="#d79bff"/><stop offset="1" stop-color="#ff8bd8" stop-opacity="0"/></linearGradient>
+      <linearGradient id="j-snow" gradientUnits="userSpaceOnUse" x1="0" y1="690" x2="0" y2="1000"><stop offset="0" stop-color="#e8f0fb"/><stop offset="1" stop-color="#bcd0ea"/></linearGradient>
+      <linearGradient id="j-snow2" gradientUnits="userSpaceOnUse" x1="0" y1="620" x2="0" y2="720"><stop offset="0" stop-color="#c4d4ec"/><stop offset="1" stop-color="#a3b9d9"/></linearGradient>
+      <linearGradient id="j-tree" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3d9a5e"/><stop offset=".55" stop-color="#25734a"/><stop offset="1" stop-color="#175536"/></linearGradient>
+      <linearGradient id="j-win" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeaa8"/><stop offset="1" stop-color="#f7b24a"/></linearGradient>
+      <radialGradient id="j-glow"><stop offset="0" stop-color="#ffd36b" stop-opacity=".75"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+      <radialGradient id="j-starglow"><stop offset="0" stop-color="#fff2a8" stop-opacity=".9"/><stop offset=".4" stop-color="#ffd84d" stop-opacity=".35"/><stop offset="1" stop-color="#ffd84d" stop-opacity="0"/></radialGradient>
+      <radialGradient id="j-ball" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef4fc"/><stop offset="1" stop-color="#c3d3ea"/></radialGradient>
+      <radialGradient id="j-moon"><stop offset="0" stop-color="#fffbe6" stop-opacity=".6"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/></radialGradient></defs>
+      <rect width="1600" height="1000" fill="url(#j-sky)"/>${stars}
+      ${aurora('M-100,300 C200,170 520,330 820,210 S1300,150 1700,280', 'j-au-g', 'j-au-p', 'aurora', 0)}
+      ${aurora('M-100,190 C300,80 620,240 920,130 S1400,70 1700,170', 'j-au-g', 'j-au-g', 'aurora slow', -5)}
+      <circle cx="1440" cy="130" r="110" fill="url(#j-moon)"/><circle cx="1440" cy="130" r="42" fill="#fffbe6"/><circle cx="1458" cy="121" r="36" fill="#1a3463" opacity=".1"/>
+      ${rainbow(900, 660, 430)}
+      <!-- snowy mountains far away -->
+      <path d="M0,600 L180,486 L330,556 L520,462 L700,566 L880,490 L1060,572 L1250,480 L1430,556 L1600,500 L1600,720 L0,720Z" fill="#2b4676"/>
+      <path d="M520,462 L478,498 L518,492 L556,504Z M880,490 L842,522 L880,517 L914,528Z M1250,480 L1210,514 L1250,509 L1288,520Z M180,486 L146,514 L182,510 L212,518Z" fill="#cfdcf0"/>
+      <!-- the hill behind the town -->
+      <path d="M0,690 Q200,632 460,660 Q760,690 1000,652 Q1300,612 1600,640 V1000 H0Z" fill="url(#j-snow2)"/>
+      <!-- the little town on the hill -->
+      ${cosy(30, 718, 88, 60, '#c9605a', '#4d5f86', { smoke: true, delay: 0 })}
+      ${cosy(140, 716, 66, 48, '#e6c66a', '#7a4a5a')}
+      ${cosy(226, 720, 92, 62, '#6f9fd0', '#a8433c', { smoke: true, delay: -2.2, lights: true })}
+      ${cosy(452, 722, 80, 56, '#7fbf96', '#4d5f86', { smoke: true, delay: -1.2, lights: true })}
+      ${cosy(546, 722, 60, 44, '#f2ede2', '#a8433c')}
+      ${church(650, 726)}
+      ${cosy(1104, 714, 78, 54, '#e6c66a', '#4d5f86', { smoke: true, delay: -3 })}
+      ${cosy(1196, 710, 62, 46, '#7fbf96', '#a8433c', { lights: true })}
+      ${cosy(1530, 712, 84, 58, '#6f9fd0', '#7a4a5a', { smoke: true, delay: -.6 })}
+      <!-- the snow in front, where she and the animals stand -->
+      <path d="M0,712 Q260,690 520,706 Q800,724 1080,704 Q1340,688 1600,700 L1600,1000 L0,1000Z" fill="url(#j-snow)"/>
+      <path d="M0,712 Q260,690 520,706 Q800,724 1080,704 Q1340,688 1600,700" fill="none" stroke="#f4f8fd" stroke-width="5" stroke-linecap="round"/>
+      ${lamp(L1, LB)}${lamp(L2, LB)}${stringLights}
+      ${tree}${presents}
+      ${bigHouse}${steps}
+      ${snowman(560, 900)}
+      ${sled(1215, 935)}
+      ${twinkleGroups(glints)}
+    </svg>`;
+  }
+
   /* =====================================================================
      Creatures: each returns a standalone SVG whose feet (or rock) sit on
      the bottom edge of its viewBox; the app places them by bottom-centre.
@@ -764,7 +1010,9 @@
    * two feet with paw pads. Options:
    *   p id prefix, fur [light, base, dark], belly, muzzle, nose, earIn (inner ear),
    *   ears 'round' | 'cat' | 'bunny' | 'floppy' (earColor), mane [colours] (lion), spikes [light, dark] (hedgehog),
-   *   tail 'lion' | 'cat' | 'puff' | 'curl', whiskers, stripes, stitch (teddy seams), bow colour.
+   *   tail 'lion' | 'cat' | 'puff' | 'curl', whiskers, stripes, stitch (teddy seams), bow colour,
+   *   wear { headBack, head, body }: clothes she put on the friend (markup from the app, see PLUSH_WEAR):
+   *   headBack behind the head (hat brims), head on top of the head (nods with it), body on the tummy.
    */
   function plush(o) {
     const p = o.p, [fl, fb, fd] = o.fur, line = o.line || cink(fd, .5);
@@ -809,23 +1057,41 @@
     const stitch = o.stitch ? `<path d="M60,74V116" stroke="${cink(o.belly, .3)}" stroke-width="1.4" stroke-dasharray="3 3" fill="none"/>` : '';
     const bow = o.bow ? shape('M60,70l-11,-7v14z M60,70l11,-7v14z', o.bow, cink(o.bow, .5), 1.8) + `<circle cx="60" cy="70" r="3.4" fill="${o.bow}" stroke="${cink(o.bow, .5)}" stroke-width="1.6"/>` : '';
     const vb = o.ears === 'bunny' ? '0 -26 120 156' : '0 0 120 130';
+    const wear = o.wear || {};
     return svgOf(vb, p, defs,
       oval(60, 126, 42, 5, `url(#${p}-sh)`) + back +
       // body, belly, arms and feet
       shape('M60,60C84,60 96,82 96,100C96,118 82,124 60,124C38,124 24,118 24,100C24,82 36,60 60,60Z', fur, line, 2.2) +
       oval(60, 100, 20, 17, `url(#${p}-belly)`) + stitch +
-      shape(arm, fur, line, 2) + shape(mirror(arm), fur, line, 2) + armStripes + feet +
+      shape(arm, fur, line, 2) + shape(mirror(arm), fur, line, 2) + armStripes + feet + (wear.body || '') +
       // head (nods from the neck)
-      `<g class="head" style="transform-origin:60px 70px">` + ears +
+      `<g class="head" style="transform-origin:60px 70px">` + (wear.headBack || '') + ears +
         shape('M60,19C80,19 91,32 91,47C91,62 78,72 60,72C42,72 29,62 29,47C29,32 40,19 60,19Z', fur, line, 2.2) + front +
         oval(52, 30, 10, 6, `url(#${p}-glow)`, .5) + headStripes +
         oval(60, 57, 13, 9.5, o.muzzle) +
         bigEye(p, 48, 43, 4.4, 5.2) + bigEye(p, 72, 43, 4.4, 5.2) +
         shape('M55,51.5q5,-3 10,0q-1,4 -5,5q-4,-1 -5,-5Z', o.nose, cink(o.nose, .45), 1.2) +
         stroke('M60,56.5v2.5M55.5,59.5q4.5,3.5 9,0', cink(o.muzzle, .6), 1.5) + whiskers +
-        oval(40, 54, 6, 4, `url(#${p}-blush)`) + oval(80, 54, 6, 4, `url(#${p}-blush)`) +
+        oval(40, 54, 6, 4, `url(#${p}-blush)`) + oval(80, 54, 6, 4, `url(#${p}-blush)`) + (wear.head || '') +
       `</g>` + bow);
   }
+
+  /**
+   * How the doll's clothes fit on a sitting plush friend (the lion). The clothes are drawn in the
+   * doll's coordinates; each transform moves and shrinks them onto the plush (viewBox 120×130):
+   *   hat / hairband: the top of the doll's head (y 75, brow ≈ 125) onto the plush head top (y 19, brow ≈ 36);
+   *     squashed a bit vertically because the plush head is rounder and shorter than hers
+   *   glasses: the doll's eyes (172 and 228, y 163) onto the plush eyes (48 and 72, y 43)
+   *   necklace / scarf: the doll's neck and shoulders (x 118–282, y 250) onto the plush neck and tummy (x 24–96, y 70)
+   * layer: where it goes in plush() (o.wear): 'head' moves with the nodding head, 'body' stays on the tummy.
+   */
+  const PLUSH_WEAR = {
+    hat: { layer: 'head', t: 'translate(-26,-6.5) scale(.43,.34)' },
+    hairband: { layer: 'head', t: 'translate(-26,-6.5) scale(.43,.34)' },
+    glasses: { layer: 'head', t: 'translate(-25.7,-26.9) scale(.4286)' },
+    necklace: { layer: 'body', t: 'translate(-28,-40) scale(.44)' },
+    scarf: { layer: 'body', t: 'translate(-28,-40) scale(.44)' },
+  };
 
   const C = {
     /** Atlantic puffin, upright, side view facing right: black back and cap, white face disc with a grey cheek, big striped beak, orange feet. */
@@ -1101,8 +1367,8 @@
   /* ---- Reward friends (they come out of the heart jar, one per full jar) ---- */
   Object.assign(C, {
     /** Lion teddy: golden plush with a big orange mane, tufted tail and a stitched belly. */
-    lion: () => plush({ p: 'cr-lion', fur: ['#ffe9a8', '#f4c35a', '#d18f2c'], belly: '#fff3d0', muzzle: '#fff4dc', nose: '#9a5a3a',
-      ears: 'round', earIn: '#f7d48a', mane: ['#ffb45a', '#ee8a2e', '#c4621c'], tail: 'lion', stitch: true }),
+    lion: (wear) => plush({ p: 'cr-lion', fur: ['#ffe9a8', '#f4c35a', '#d18f2c'], belly: '#fff3d0', muzzle: '#fff4dc', nose: '#9a5a3a',
+      ears: 'round', earIn: '#f7d48a', mane: ['#ffb45a', '#ee8a2e', '#c4621c'], tail: 'lion', stitch: true, wear }),
     /** Baby unicorn, pink with a lilac and blue mane. */
     foalpink: () => pony({ p: 'cr-foalpink', coat: ['#fff3f9', '#ffd8ec', '#e9a9c8'], line: '#c48aa8', muzzle: '#ffe8f2',
       mane: ['#c9a8ff', '#a9dcff', '#ffffff', '#d9c4ff'], maneLine: '#9a86c8', hoof: ['#fff3b0', '#e0b84a'], unicorn: true }),
@@ -1131,7 +1397,8 @@
    * Keys are stored in her save: never rename. Add new friends at the end.
    */
   const FRIENDS = [
-    { k: 'lion', is: 'Ljónabangsi', h: 9, voice: 'soft' },
+    // dress: she can put hats, hairbands, glasses, necklaces and scarves on this friend (fit: PLUSH_WEAR)
+    { k: 'lion', is: 'Ljónabangsi', h: 9, voice: 'soft', dress: true },
     { k: 'foalpink', is: 'Bleikur einhyrningur', h: 11, voice: 'sparkle' },
     { k: 'kitten', is: 'Kisa', h: 8.5, voice: 'mew' },
     { k: 'bunny', is: 'Kanína', h: 10, voice: 'soft' },
@@ -1171,9 +1438,16 @@
     pool: { name: 'Sundlaug', svg: pool, wind: 2.4, ground: 80, creatures: [
       { k: 'seal', x: 64, y: 84, h: 11 }, { k: 'puffin', x: 50, y: 96, h: 10 }, { k: 'unicorn', x: 86, y: 88, h: 16, flip: true },
       { k: 'elf', x: 75, y: 92, h: 10, peek: true }] },
+    // Christmas evening in the snow: animals stand on the snow in front of the town (ground 76),
+    // the little elf carries his lantern like in the night scene
+    jol: { name: 'Jól', svg: jol, wind: 4, snow: true, ground: 76, creatures: [
+      { k: 'fox', x: 57, y: 92, h: 10 }, { k: 'unicorn', x: 84, y: 90, h: 16, flip: true },
+      { k: 'elf', x: 70, y: 84, h: 10, lantern: true }, { k: 'sheep', x: 66, y: 97, h: 11, flip: true },
+      { k: 'puffin', x: 48, y: 97, h: 10 }] },
   };
 
   root.SCENES = SCENES;
   root.CREATURES = C;
   root.FRIENDS = FRIENDS;
+  root.PLUSH_WEAR = PLUSH_WEAR;
 })(typeof window !== 'undefined' ? window : globalThis);

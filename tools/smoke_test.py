@@ -5,7 +5,8 @@ Needs Playwright (pip install playwright) and Google Chrome.
     python tools/smoke_test.py
 
 Covers: saving and its safety nets, backup export/import, offline start, two-finger drag,
-normal drags, the heart jar and friend arrival, and the error codes (errors.js). Prints PASS/FAIL lines; exit code 1 on any FAIL.
+normal drags, the heart jar and friend arrival, the error codes (errors.js), hair colours,
+dressing the lion and the backup reminder. Prints PASS/FAIL lines; exit code 1 on any FAIL.
 
 Gotcha for writing tests: the game saves on page hide, so seeding localStorage while the
 game page is open gets overwritten on reload. Seed from another page of the same site
@@ -66,6 +67,7 @@ try:
         with pg.expect_download() as dl: pg.click('#menuExport')
         exp = json.loads(pathlib.Path(dl.value.path()).read_text(encoding='utf-8'))
         ok(exp.get('app') == 'fjarsjodskistan', 'backup file exported')
+        ok(bool(st().get('lastBackup')) and 'Síðasta afrit' in pg.inner_text('#backupWhen'), 'the menu remembers when the last backup was made')
         exp['outfits'].append({'id': 'onew', 'createdAt': '2026-11-01', 'hair': 'loose', 'worn': {'top': worn['top']}})
         f = tmpdir / 'import.json'; f.write_text(json.dumps(exp), encoding='utf-8')
         pg.set_input_files('#importFile', str(f)); pg.wait_for_timeout(400)
@@ -134,6 +136,39 @@ try:
         ok(tabs_before > 0 and pg.evaluate("document.querySelector('#tabs').scrollLeft") == tabs_before, 'the tab row stays where it was')
         pg.close()
 
+        # ---- hair colours ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'hair': 'redbraids', 'cat': 'hair', 'rewards': {'hearts': 2, 'friends': [], 'hairSeen': ['loose']}})
+        pg.evaluate('document.querySelector("#chest").click()'); pg.wait_for_timeout(700)
+        ok(pg.evaluate('document.querySelector(".hair-dot.on")?.dataset.color') == 'copper' and pg.evaluate('document.querySelector(".tile.worn")?.dataset.hair') == 'braids',
+           'an old red hairstyle becomes braids + the copper colour dot')
+        pg.click('.hair-dot[data-color=blue]'); pg.wait_for_timeout(1300)
+        s2 = pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}")')
+        ok(s2.get('hairColor') == 'blue' and 'url(#hairg-blue)' in pg.inner_html('#doll'), 'tapping a colour dot colours her hair')
+        ok(s2['rewards']['hearts'] == 3 and 'c:blue' in s2['rewards']['hairSeen'], 'the first try of a hair colour gives a heart')
+        ok('url(#hairg-blue)' in pg.inner_html('#grid .tile[data-hair=bob]'), 'the hairstyle tiles show the chosen colour')
+        pg.click('.hair-dot[data-color=blue]'); pg.wait_for_timeout(300)
+        ok(pg.evaluate('document.querySelectorAll(".hair-dot.on").length') == 0 and 'url(#hairg)' in pg.inner_html('#doll'), 'tapping the chosen dot again gives back the style\'s own colours')
+        ok(codes(pg) == [], f'hair colours log no errors {codes(pg)}')
+        pg.close()
+
+        # ---- dressing the lion ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'rewards': {'hearts': 0, 'friends': ['lion'], 'hairSeen': ['loose']}})
+        hat = pg.evaluate('DOLL.items.find(i => DOLL.slotOf(i) === "hat").id')
+        seed(pg, {'version': 1, 'loose': [{'id': hat, 'x': 80, 'y': 40}], 'rewards': {'hearts': 0, 'friends': ['lion'], 'hairSeen': ['loose']}})
+        lp = pg.locator('#loose .loose').first.bounding_box(); lr = pg.locator('[data-friend=lion]').bounding_box()
+        x0, y0, x1, y1 = lp['x'] + lp['width'] / 2, lp['y'] + lp['height'] / 2, lr['x'] + lr['width'] / 2, lr['y'] + lr['height'] * .3
+        pg.mouse.move(x0, y0); pg.mouse.down()
+        for k in range(1, 13): pg.mouse.move(x0 + (x1 - x0) * k / 12, y0 + (y1 - y0) * k / 12); pg.wait_for_timeout(16)
+        pg.mouse.up(); pg.wait_for_timeout(600)
+        ok(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").friendWorn?.lion?.hat || ""') == hat or pg.evaluate('document.querySelector("[data-friend=lion] [data-item]")?.dataset.item') == hat,
+           'dragging a hat onto the lion puts it on him')
+        pg.reload(); pg.wait_for_timeout(1300)
+        ok(pg.evaluate('document.querySelector("[data-friend=lion] [data-item]")?.dataset.item') == hat, 'the lion still wears it after closing the game')
+        ok(codes(pg) == [], f'dressing the lion logs no errors {codes(pg)}')
+        pg.close()
+
         # ---- heart jar and friends, both orientations ----
         for vp, tag in (({'width': 1280, 'height': 800}, 'landscape'), ({'width': 800, 'height': 1280}, 'portrait')):
             pg = b.new_page(viewport=vp)
@@ -144,7 +179,7 @@ try:
             pg.click('#btnSave'); pg.wait_for_timeout(1300)
             ok(rw()['hearts'] == 9, f'[{tag}] the same outfit again gives none')
             pg.click('#chest'); pg.wait_for_timeout(800); pg.click('#tabs [data-cat=hair]'); pg.wait_for_timeout(300)
-            pg.click('#grid .tile:nth-child(4)'); pg.wait_for_timeout(1000)
+            pg.click('#grid .tile[data-hair=bob]'); pg.wait_for_timeout(1000)
             ok(rw()['friends'] == ['lion'] and rw()['hearts'] == 0, f'[{tag}] a full jar brings the first friend')
             pg.click('#chest'); pg.wait_for_timeout(4000)
             ok(pg.evaluate("(() => { const e = document.querySelector('[data-friend=lion]'); return !!e && !e.hidden && !e.classList.contains('arriving'); })()"), f'[{tag}] the friend is in the scene')

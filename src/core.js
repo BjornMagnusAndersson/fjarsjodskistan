@@ -770,6 +770,7 @@
     const fs = front || [[0, P.light], [.25, P.light], [.6, P.base], [1, P.dark]];
     const bs = back || [[0, P.base], [.55, P.dark], [1, P.deep]];
     return Object.assign({}, P, {
+      stops: fs,                                   // the front colours, also used for the colour dot in the chest
       fill: () => addDef(fid, `<linearGradient id="${fid}"${dir}>${stopsOf(fs)}</linearGradient>`),
       bfill: () => addDef(bid, `<linearGradient id="${bid}"${dir}>${stopsOf(bs)}</linearGradient>`),
     });
@@ -786,10 +787,32 @@
     [[0, '#3fa8a8'], [.5, '#4f78c8'], [1, '#7a55b8']], [60, 540]);
   // Dark chocolate brown (curly cloud).
   const DARK = hairPalette('dark', { base: '#6e4532', light: '#a06e52', glow: '#e0bea2', dark: '#4b2c1f', deep: '#2f1b13', line: '#3b2319' });
-  // Copper red (natural red hair) and bright cherry red (dyed, for fun).
-  const COPPER = hairPalette('copper', { base: '#c8642f', light: '#f2a46a', glow: '#ffdcb6', dark: '#9c4524', deep: '#6e2c16', line: '#7a3a1e' });
-  const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e' });
+  /* Bow colours [fill, outline, highlight, centre] and hair-tie colours [fill, outline, shine].
+     A palette can name its own (bow, tie, flower) so they show up nicely against that hair colour;
+     otherwise pink bows, a blue tie and a pink flower, as on her own brown hair. */
   const MINT_BOW = ['#5fc9a0', '#2f8a68', '#bdf0dc', '#86dcbb'], SKY_BOW = ['#6cb8ec', '#2f6fa8', '#cfe9fb', '#93cdf2'];
+  const MINT_TIE = ['#5fc9a0', '#2f8a68', '#d6f7ea'];
+  // Copper red (natural red hair) and bright cherry red (dyed, for fun).
+  const COPPER = hairPalette('copper', { base: '#c8642f', light: '#f2a46a', glow: '#ffdcb6', dark: '#9c4524', deep: '#6e2c16', line: '#7a3a1e',
+    bow: MINT_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e',
+    bow: MINT_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  // More colours for the colour dots in the chest: blonde, pastel pink, sky blue and lilac.
+  const BLONDE = hairPalette('blonde', { base: '#e8c46e', light: '#fbe7a6', glow: '#fff8de', dark: '#c9a050', deep: '#97733a', line: '#9c7a3e' });
+  const PINKH = hairPalette('pink', { base: '#f49ac0', light: '#ffc9df', glow: '#fff0f6', dark: '#d9709f', deep: '#a84a78', line: '#a85582',
+    bow: SKY_BOW, tie: MINT_TIE, flower: '#fbfaf6' });
+  const BLUEH = hairPalette('blue', { base: '#6aaee8', light: '#a9d8fb', glow: '#eaf7ff', dark: '#4a86c8', deep: '#2f5f98', line: '#33649a',
+    tie: ['#f48cc0', '#c4568c', '#ffd6ea'] });
+  const LILAC = hairPalette('lilac', { base: '#b49be8', light: '#dccbff', glow: '#f6f0ff', dark: '#8f74d0', deep: '#64499e', line: '#6c55a0', bow: MINT_BOW });
+
+  /** The colour dots above the hairstyles in the chest, in order. Keys are stored in her save: never rename. */
+  const HAIR_COLORS = [
+    ['brown', 'Brúnt', BROWN], ['blonde', 'Ljóst', BLONDE], ['copper', 'Rautt', COPPER], ['cherry', 'Kirsuberjarautt', CHERRY],
+    ['dark', 'Dökkt', DARK], ['pink', 'Bleikt', PINKH], ['blue', 'Blátt', BLUEH], ['lilac', 'Fjólublátt', LILAC],
+    ['mermaid', 'Hafmeyja', MERMAID], ['rainbow', 'Regnbogi', RAINBOW],
+  ];
+  /** Palette for a colour key; undefined for '' (each style keeps its own colours) or an unknown key. */
+  const paletteOf = k => (HAIR_COLORS.find(c => c[0] === k) || [])[2];
 
   /** One hair shape: fill (front or darker back colours of palette pal) plus outline and soft shading. */
   const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
@@ -886,7 +909,7 @@
   /** Bow colours: [fill, outline, highlight, centre]. */
   const PINK_BOW = ['#e45a73', '#a8344c', '#f7a6b6', '#f07d92'];
   /** Two braids with bows at the ends. */
-  function braidsHair(pal = BROWN, bow = PINK_BOW) {
+  function braidsHair(pal = BROWN, bow = pal.bow || PINK_BOW) {
     const back = hp(NAPE, true, pal);
     // one braid hanging from x; s = -1 left, 1 right (the bumps zig-zag); cls = the sway class
     const braid = (x, s, cls) => {
@@ -902,7 +925,7 @@
     return { back, front: braid(124, -1, 'sway-l') + braid(276, 1, 'sway-r') + capFront(pal) };
   }
   /** Ponytail high on the right, with a hair tie (tie = [fill, outline, shine]). */
-  function ponytailHair(pal = BROWN, tie = ['#7ac0e8', '#3e7ea6', '#d7f0ff']) {
+  function ponytailHair(pal = BROWN, tie = pal.tie || ['#7ac0e8', '#3e7ea6', '#d7f0ff']) {
     const tailD = 'M262,96 C306,92 322,150 314,214 C308,262 316,300 302,334 Q292,316 290,292 C286,250 292,200 280,150 C274,124 262,110 262,96 Z';
     const back = hp('M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z', true, pal) +
       `<g class="sway-p">` + hp(tailD, false, pal) + strand('M300,140 Q308,220 300,310', 2, pal) + lstrand('M292,126 Q300,190 296,260', 1.8, pal) + strand('M286,160 Q292,230 292,290', 1.6, pal) + `</g>`;
@@ -939,7 +962,7 @@
     };
   }
   /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
-  function pigtailsHair(pal = BROWN, bow = PINK_BOW) {
+  function pigtailsHair(pal = BROWN, bow = pal.bow || PINK_BOW) {
     const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
     // one pigtail with its bow; m mirrors the left-side path to the right
     const tail = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
@@ -948,7 +971,7 @@
     return { back: hp(NAPE, true, pal), front: tail(tailL, 'sway-l', d => d) + tail(mirrorD(tailL), 'sway-r', mirrorD) + capFront(pal) };
   }
   /** Side braid: one thick braid over her shoulder, finished with a flower. */
-  function sidebraidHair(pal = BROWN, flower = '#f48cc0') {
+  function sidebraidHair(pal = BROWN, flower = pal.flower || '#f48cc0') {
     let braid = '<g class="sway-r">';
     const pts = [];
     for (let i = 0; i < 10; i++) {
@@ -962,47 +985,50 @@
     return { back: hp(NAPE, true, pal), front: braid + capFront(pal) };
   }
 
+  /* Every style takes o = { hat, pal }: hat = she wears a hat (hide what would poke through it),
+     pal = the hair colour she picked with the colour dots (missing: the style's own colours). */
   const HAIRSTYLES = {
-    /** Her own long loose brown hair (the default; approved, never change). */
-    loose() { return looseHair(BROWN); },
-    /** Two brown braids with pink bows (approved, never change). */
-    braids() { return braidsHair(); },
-    /** Brown ponytail with a blue hair tie (approved, never change). */
-    ponytail() { return ponytailHair(); },
+    /** Her own long loose brown hair (the default; approved, never change how it looks in brown). */
+    loose(o = {}) { return looseHair(o.pal || BROWN); },
+    /** Two brown braids with pink bows (approved, never change how it looks in brown). */
+    braids(o = {}) { return braidsHair(o.pal || BROWN); },
+    /** Brown ponytail with a blue hair tie (approved, never change how it looks in brown). */
+    ponytail(o = {}) { return ponytailHair(o.pal || BROWN); },
 
     /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
 
-    /** Rainbow: her long loose hair in rainbow colours, red at the top to violet at the tips. */
+    /** Rainbow: her long loose hair in rainbow colours (old style key, now made with the colour dots; see LEGACY_HAIR). */
     rainbow() { return looseHair(RAINBOW); },
 
     /** Bob: short hair that ends just under the chin and curls in at the ends. */
-    bob() { return bobHair(); },
+    bob(o = {}) { return bobHair(o.pal || BROWN); },
 
     /** Extra long: straight hair all the way down past the hands. */
-    longest() { return longestHair(); },
+    longest(o = {}) { return longestHair(o.pal || BROWN); },
 
     /** Mermaid: long wavy hair, sea green to ocean blue to violet, with a shell clip. */
-    mermaid() {
+    mermaid(o = {}) {
+      const M = o.pal || MERMAID;
       const backD = 'M200,58 C138,58 104,98 104,162 C104,220 94,262 104,300 C114,340 96,380 102,420 C108,460 96,490 108,524 Q126,512 142,528 Q160,512 178,526 Q200,512 222,526 Q240,512 258,528 Q274,512 292,524 C304,490 292,460 298,420 C304,380 286,340 296,300 C306,262 296,220 296,162 C296,98 262,58 200,58 Z';
       const lockLD = 'M138,128 C118,170 128,210 116,250 C104,290 128,330 118,370 C112,400 118,430 132,456 Q148,438 144,410 C142,380 136,350 144,320 C152,290 140,260 148,220 C152,190 150,160 154,146 Z';
       const wave = 'M132,170 C124,210 128,240 122,270 C116,300 132,330 126,370 C122,400 126,420 134,440';
       // one long wavy front lock; m mirrors the left-side path to the right
-      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, MERMAID) + strand(m(wave), 2, MERMAID) +
-        lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, MERMAID) + `</g>`;
+      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, M) + strand(m(wave), 2, M) +
+        lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, M) + `</g>`;
       // shell clip above the left ear: a fan with ridges
       const shell = `<path d="M150,112 L136,94 Q150,84 166,92 Z" fill="#fbd3e0" stroke="#c97a98" stroke-width="2" stroke-linejoin="round"/>` +
         `<path d="M150,112 L141,92 M150,112 L150,88 M150,112 L159,90" stroke="#c97a98" stroke-width="1.4" stroke-linecap="round"/>` +
         `<circle cx="150" cy="111" r="3.4" fill="#fff6fa" stroke="#c97a98" stroke-width="1.4"/>`;
       return {
-        back: `<g class="sway-b">` + hp(backD, true, MERMAID) +
-          ['M122,220 C110,280 128,330 116,380 C108,430 120,470 124,512', 'M140,380 C134,420 146,470 150,516'].map(d => strand(d, 2, MERMAID) + strand(mirrorD(d), 2, MERMAID)).join('') +
-          lstrand('M114,200 C104,260 120,310 110,360', 1.6, MERMAID) + lstrand(mirrorD('M114,200 C104,260 120,310 110,360'), 1.6, MERMAID) + `</g>`,
-        front: lock(lockLD, 'sway-l', d => d) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(MERMAID) + shell,
+        back: `<g class="sway-b">` + hp(backD, true, M) +
+          ['M122,220 C110,280 128,330 116,380 C108,430 120,470 124,512', 'M140,380 C134,420 146,470 150,516'].map(d => strand(d, 2, M) + strand(mirrorD(d), 2, M)).join('') +
+          lstrand('M114,200 C104,260 120,310 110,360', 1.6, M) + lstrand(mirrorD('M114,200 C104,260 120,310 110,360'), 1.6, M) + `</g>`,
+        front: lock(lockLD, 'sway-l', d => d) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(M) + shell,
       };
     },
 
     /** Extensions: her loose hair with clip-in coloured streaks (pink, lilac, blue, mint) and little clips at the roots. */
-    extensions() {
+    extensions(o = {}) {
       const COLS = ['#f48cc0', '#a98be0', '#5cc8e8', '#7fdc9a'];
       const clipB = addDef('hx-back', `<clipPath id="hx-back"><path d="${LOOSE_BACK}"/></clipPath>`);
       const clipL = addDef('hx-lockL', `<clipPath id="hx-lockL"><path d="${LOOSE_LOCK_L}"/></clipPath>`);
@@ -1018,7 +1044,7 @@
       const backS = ['M114,190 Q100,280 110,350', 'M132,220 Q124,290 134,350'];
       const back = `<g clip-path="${clipB}">` + backS.map((d, i) => streak(d, COLS[i], 13) + streak(mirrorD(d), COLS[3 - i], 13)).join('') + `</g>`;
       const front = 'M138,140 Q124,230 130,350', front2 = 'M147,150 Q138,240 141,330';
-      return looseHair(BROWN, {
+      return looseHair(o.pal || BROWN, {
         back,
         lockL: `<g clip-path="${clipL}">` + streak(front, COLS[0], 9) + streak(front2, COLS[2], 6) + `</g>` + hairClip(138, 164, COLS[0]),
         lockR: `<g clip-path="${clipR}">` + streak(mirrorD(front), COLS[1], 9) + streak(mirrorD(front2), COLS[3], 6) + `</g>` + hairClip(262, 164, COLS[1]),
@@ -1027,47 +1053,50 @@
 
     /** Space buns: two round buns on top of the head with scrunchies. The buns hide under hats. */
     spacebuns(o = {}) {
+      const pal = o.pal || BROWN;
       // one bun at x with its scrunchie (colour c); s nudges the scrunchie inwards
       const bun = (x, s, c) => {
         const cy = 74;
-        return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`) +
-          strand(`M${x - 20},${cy - 4} q10,-16 26,-6 q10,8 0,18`, 2) + strand(`M${x - 14},${cy + 10} q12,8 24,-4`, 1.8) +
-          lstrand(`M${x - 18},${cy - 12} q8,-10 20,-8`, 2.2) +
+        return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`, false, pal) +
+          strand(`M${x - 20},${cy - 4} q10,-16 26,-6 q10,8 0,18`, 2, pal) + strand(`M${x - 14},${cy + 10} q12,8 24,-4`, 1.8, pal) +
+          lstrand(`M${x - 18},${cy - 12} q8,-10 20,-8`, 2.2, pal) +
           scrunchie(x + s * 6, cy + 26, 26, 8, c);
       };
       const buns = o.hat ? '' : bun(146, 1, '#f48cc0') + bun(254, -1, '#a98be0');
-      return { back: buns + hp(NAPE, true), front: capFront() };
+      return { back: buns + hp(NAPE, true, pal), front: capFront(pal) };
     },
 
     /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
-    pigtails() { return pigtailsHair(); },
+    pigtails(o = {}) { return pigtailsHair(o.pal || BROWN); },
 
     /** Curly cloud: a big round cloud of dark curls with a curly fringe. */
-    curls() {
+    curls(o = {}) {
+      const D = o.pal || DARK;
       const ring = [];
       for (let i = 0; i < 22; i++) {
         const a = Math.PI / 2 + i / 22 * Math.PI * 2;
         ring.push([200 + Math.cos(a) * 126, 156 + Math.sin(a) * 120]);
       }
-      const back = hp(bumpy(ring, .32), true, DARK) +
-        curlMarks([[96, 150], [104, 200], [114, 240], [92, 110], [300, 150], [292, 200], [282, 240], [304, 110], [130, 60], [170, 44], [226, 44], [266, 60], [112, 228], [288, 228]], DARK);
+      const back = hp(bumpy(ring, .32), true, D) +
+        curlMarks([[96, 150], [104, 200], [114, 240], [92, 110], [300, 150], [292, 200], [282, 240], [304, 110], [130, 60], [170, 44], [226, 44], [266, 60], [112, 228], [288, 228]], D);
       // fringe: bumpy top following the head, curls along the forehead
       const fringe = bumpy([[122, 172], [116, 136], [126, 104], [148, 80], [176, 66], [200, 62], [226, 66], [252, 80], [274, 104], [284, 136], [278, 172],
         [270, 150], [258, 132], [242, 124], [224, 128], [208, 122], [190, 128], [172, 124], [156, 132], [140, 146], [130, 160]], .22);
-      const front = hp(fringe, false, DARK) +
-        curlMarks([[142, 96], [168, 80], [196, 74], [222, 78], [250, 92], [138, 128], [264, 122], [182, 102], [214, 100], [234, 108], [160, 112]], DARK) +
-        shine(DARK);
+      const front = hp(fringe, false, D) +
+        curlMarks([[142, 96], [168, 80], [196, 74], [222, 78], [250, 92], [138, 128], [264, 122], [182, 102], [214, 100], [234, 108], [160, 112]], D) +
+        shine(D);
       return { back, front };
     },
 
     /** Locs: rope-like locs falling to the shoulders, with colourful beads. */
-    locs() {
+    locs(o = {}) {
+      const pal = o.pal || BROWN;
       const BEADS = ['#e2464c', '#f7c948', '#4caf6a', '#f48ca0', '#6cc6f2'];
-      let back = hp(NAPE, true);
+      let back = hp(NAPE, true, pal);
       // locs behind the head, hanging down the back
       for (let i = 0; i < 10; i++) {
         const x = 112 + i * 19.5, out = (x - 200) * .28, y1 = 300 + (i % 3) * 18;
-        back += loc(x, 150, x + out, 230, x + out * 1.1, y1, 13, BROWN, i % 2 ? BEADS[(i >> 1) % 5] : '');
+        back += loc(x, 150, x + out, 230, x + out * 1.1, y1, 13, pal, i % 2 ? BEADS[(i >> 1) % 5] : '');
       }
       // locs in front, lying over the shoulders
       // roots tucked under the hair cap at the temples; they curve outwards so the face stays free
@@ -1076,16 +1105,17 @@
       const front = (s, m) => sideL.map(([x0, y0, cx, cy, x1, y1], i) => {
         // x on this side (mirrored for the right)
         const X = v => m ? 400 - v : v;
-        return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, BROWN, BEADS[(i + (m ? 2 : 0)) % 5]);
+        return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, pal, BEADS[(i + (m ? 2 : 0)) % 5]);
       }).join('');
-      return { back, front: `<g class="sway-l">${front(0, false)}</g><g class="sway-r">${front(0, true)}</g>` + capFront() };
+      return { back, front: `<g class="sway-l">${front(0, false)}</g><g class="sway-r">${front(0, true)}</g>` + capFront(pal) };
     },
 
     /** Side braid: one thick braid over her shoulder, finished with a flower. */
-    sidebraid() { return sidebraidHair(); },
+    sidebraid(o = {}) { return sidebraidHair(o.pal || BROWN); },
 
     /* ---- Red hair (owner's request). Copper red, like real red hair, plus one bright cherry red.
-       Bows and ties in mint, white and sky blue so they show up nicely against the red. ---- */
+       Old style keys: these are now made with the colour dots (see LEGACY_HAIR), but the keys stay
+       because saved outfits use them, and they keep drawing exactly as they did. ---- */
     /** Long loose copper-red hair. */
     redloose() { return looseHair(COPPER); },
     /** Two copper braids with mint bows. */
@@ -1102,20 +1132,34 @@
     cherry() { return longestHair(CHERRY); },
   };
 
-  /** Draw a hairstyle by key. An unknown key or a style that fails falls back to her own loose hair (code FJ-D02). */
-  function drawHair(style, o = {}) {
-    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(o);
-    try { return HAIRSTYLES[style](o); }
-    catch (e) { fail('FJ-D02', style, e); return HAIRSTYLES.loose(o); }
+  /**
+   * Old style keys that are really "a style in a colour". They are not shown in the chest any more (the colour
+   * dots make them), but still draw for saved outfits; the app turns them into [style, colour] when she wears one.
+   */
+  const LEGACY_HAIR = {
+    rainbow: ['loose', 'rainbow'], redloose: ['loose', 'copper'], redbraids: ['braids', 'copper'], redponytail: ['ponytail', 'copper'],
+    redpigtails: ['pigtails', 'copper'], redbob: ['bob', 'copper'], redsidebraid: ['sidebraid', 'copper'], cherry: ['longest', 'cherry'],
+  };
+
+  /**
+   * Draw a hairstyle by key in a hair colour (a HAIR_COLORS key; '' = the style's own colours).
+   * An unknown key or a style that fails falls back to her own loose hair (code FJ-D02).
+   */
+  function drawHair(style, o = {}, color = '') {
+    const pal = paletteOf(color), opts = pal ? Object.assign({}, o, { pal }) : o;
+    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(opts);
+    try { return HAIRSTYLES[style](opts); }
+    catch (e) { fail('FJ-D02', style + (color ? ' / ' + color : ''), e); return HAIRSTYLES.loose(o); }
   }
 
   /* ---------------------------------------------------------------
      Doll renderer
-     state: { hair: a key of HAIRSTYLES, worn:{slot:itemId}, mood:'smile'|'happy' }
+     state: { hair: a key of HAIRSTYLES, hairColor: a HAIR_COLORS key ('' = the style's own colours),
+              worn:{slot:itemId}, mood:'smile'|'happy' }
      Returns the inner markup of an <svg viewBox="0 0 400 800">.
      --------------------------------------------------------------- */
   DOLL.renderDoll = function (state = {}) {
-    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) });
+    const hair = drawHair(state.hair, { hat: !!(state.worn && state.worn.hat) }, state.hairColor);
     const layers = [];                      // [z, markup]
     layers.push([10, `<g class="hair-back">${hair.back}</g>`]);
     layers.push([20, `<g class="body">${drawBody()}</g>`]);
@@ -1147,11 +1191,26 @@
     return `<svg viewBox="${box.join(' ')}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${out.back}${out.front}</svg>`;
   };
 
-  /** Hairstyle "items" so hair can be picked from the chest like clothes. */
-  DOLL.hairstyles = Object.keys(HAIRSTYLES);
-  DOLL.renderHairThumb = function (style) {
-    const h = drawHair(style);
+  /** Hairstyles shown in the chest (old "style in a colour" keys are left out: the colour dots make them). */
+  DOLL.hairstyles = Object.keys(HAIRSTYLES).filter(k => !LEGACY_HAIR[k]);
+  /** Every hairstyle key that can be drawn (also the old ones, for saved outfits). */
+  DOLL.hairKeys = Object.keys(HAIRSTYLES);
+  /** Old key → [style, colour] (see LEGACY_HAIR). */
+  DOLL.legacyHair = LEGACY_HAIR;
+  /** The hair colour dots: [{ k, is }] in chest order. */
+  DOLL.hairColors = HAIR_COLORS.map(([k, is]) => ({ k, is }));
+  /** Chest tile for a hairstyle: her face with the style, in a hair colour ('' = the style's own colours). */
+  DOLL.renderHairThumb = function (style, color = '') {
+    const h = drawHair(style, {}, color);
     return `<svg viewBox="70 40 260 340" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${h.back}<g>${drawFace('smile')}</g>${h.front}${drawEars()}</svg>`;
+  };
+
+  /** A round colour dot for the hair colour picker (the colour's front gradient, top to bottom, with a shine). */
+  DOLL.renderHairSwatch = function (color) {
+    const pal = paletteOf(color); if (!pal) return '';
+    const id = addDef('hsw-' + color, `<linearGradient id="hsw-${color}" x1="0" y1="0" x2="0" y2="1">${stopsOf(pal.stops)}</linearGradient>`);
+    return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="${id}" stroke="${pal.line}" stroke-width="2.5"/>` +
+      `<path d="M11,15 Q15,8 23,8" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".7"/></svg>`;
   };
 
   root.G = G; root.H = H; root.DOLL = DOLL; root.SLOTS = SLOTS; root.CATS = CATS;

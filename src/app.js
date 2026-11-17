@@ -57,12 +57,17 @@
       version: VERSION,
       scene: 'meadow',
       hair: 'loose',
+      hairColor: '',            // hair colour dot she picked (DOLL.hairColors key); '' = each style's own colours
       worn: {},                 // slot → item id
+      friendWorn: {},           // what her friends wear: { lion: { hat: itemId, glasses: itemId, ... } }
       loose: [],                // [{ id, x, y }] pieces lying in the scene, x/y in % of the stage
-      outfits: [],              // [{ id, createdAt, hair, worn, scene }]
+      outfits: [],              // [{ id, createdAt, hair, hairColor, worn, scene }]
+      lastBackup: '',           // when parents last saved a backup file (ISO time), for the reminder in the menu
+      backupOutfits: 0,         // how many saved outfits there were then
       settings: { sound: true, calm: false, rewards: true },
       cat: 'top',               // open chest tab
-      // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order), hairstyles already tried
+      // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order),
+      // hairstyles and hair colours already tried (colours as 'c:copper')
       rewards: { hearts: 0, friends: [], hairSeen: [] },
     };
   }
@@ -71,7 +76,8 @@
   /** Keep only well-formed outfits (from storage or from an imported backup file). */
   function cleanOutfits(list) {
     return (Array.isArray(list) ? list : []).filter(o => isObj(o) && typeof o.id === 'string' && isObj(o.worn))
-      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose', worn: Object.assign({}, o.worn), scene: o.scene }));
+      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose',
+        hairColor: typeof o.hairColor === 'string' ? o.hairColor : '', worn: Object.assign({}, o.worn), scene: o.scene }));
   }
   /**
    * Turn whatever was stored into a valid current-version state.
@@ -84,7 +90,14 @@
     if (!isObj(d)) return s;
     if (typeof d.scene === 'string') s.scene = d.scene;
     if (typeof d.hair === 'string') s.hair = d.hair;
+    if (typeof d.hairColor === 'string') s.hairColor = d.hairColor;
     if (typeof d.cat === 'string') s.cat = d.cat;
+    if (typeof d.lastBackup === 'string') s.lastBackup = d.lastBackup;
+    if (Number.isFinite(d.backupOutfits)) s.backupOutfits = d.backupOutfits;
+    // friends' clothes: keep only { friend: { slot: itemId } } with text ids
+    if (isObj(d.friendWorn)) for (const k in d.friendWorn) if (isObj(d.friendWorn[k])) {
+      s.friendWorn[k] = Object.fromEntries(Object.entries(d.friendWorn[k]).filter(([, id]) => typeof id === 'string'));
+    }
     if (isObj(d.worn)) s.worn = Object.assign({}, d.worn);
     if (Array.isArray(d.loose)) s.loose = d.loose.filter(p => isObj(p) && typeof p.id === 'string');
     s.outfits = cleanOutfits(d.outfits).slice(0, MAX_OUTFITS);
@@ -105,8 +118,22 @@
   for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) { report('FJ-S06', 'worn ' + state.worn[s]); delete state.worn[s]; }
   for (const p of state.loose) if (!DOLL.byId[p.id]) report('FJ-S06', 'loose ' + p.id);
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
-  if (!DOLL.hairstyles.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (!DOLL.hairKeys.includes(state.hair)) { report('FJ-S06', 'hair ' + state.hair); state.hair = 'loose'; }
+  if (state.hairColor && !DOLL.hairColors.some(c => c.k === state.hairColor)) { report('FJ-S06', 'hair colour ' + state.hairColor); state.hairColor = ''; }
+  [state.hair, state.hairColor] = hairOf(state.hair, state.hairColor);
+  for (const k in state.friendWorn) for (const slot in state.friendWorn[k]) {
+    if (!DOLL.byId[state.friendWorn[k][slot]]) { report('FJ-S06', k + ' wears ' + state.friendWorn[k][slot]); delete state.friendWorn[k][slot]; }
+  }
   if (!SCENES[state.scene]) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
+
+  /**
+   * The hairstyle and colour to wear for a stored [style, colour]. Old keys that were "a style in a colour"
+   * (like redbraids) become that style with that colour, so the chest shows them as chosen. Other styles keep the colour.
+   */
+  function hairOf(hair, color) {
+    const old = DOLL.legacyHair[hair];
+    return old ? [old[0], old[1]] : [hair, color || ''];
+  }
 
   /* Zoom guard: the game should never be zoomed. If the page is zoomed in anyway
      (a pinch in some corner, or a browser setting that forces zoom), rewriting the
@@ -202,7 +229,7 @@
   let mood = 'smile', moodTimer = 0;
   /** Redraw the doll from state. */
   function renderDoll() {
-    const markup = DOLL.renderDoll({ hair: state.hair, worn: state.worn, mood });
+    const markup = DOLL.renderDoll({ hair: state.hair, hairColor: state.hairColor, worn: state.worn, mood });
     dollEl.innerHTML = `<svg viewBox="0 0 400 780" xmlns="http://www.w3.org/2000/svg" aria-label="Dúkkan"><g id="dollBody">${markup}</g></svg>`;
     syncDefs();
     markWornTiles();
@@ -335,7 +362,8 @@
   /** Small picture of a whole look: the doll from head to knees wearing it. */
   const lookThumb = l => {
     const worn = {}; for (const id of l.items) worn[DOLL.slotOf(DOLL.byId[id])] = id;
-    return `<svg viewBox="40 0 320 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DOLL.renderDoll({ hair: l.hair || state.hair, worn })}</svg>`;
+    const [hair, hairColor] = l.hair ? hairOf(l.hair, state.hairColor) : [state.hair, state.hairColor];
+    return `<svg viewBox="40 0 320 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DOLL.renderDoll({ hair, hairColor, worn })}</svg>`;
   };
   /** Put a whole costume on: everything she wears goes back to the chest first, then every piece of the look. */
   function applyLook(l, fromRect) {
@@ -347,13 +375,13 @@
       worn[DOLL.slotOf(it)] = id;
     }
     state.worn = worn;
-    if (l.hair && HAIR_OK(l.hair)) state.hair = l.hair;
+    if (l.hair && HAIR_OK(l.hair)) [state.hair, state.hairColor] = hairOf(l.hair, state.hairColor);
     // happy() redraws the doll, which also moves the gold borders; the list itself is NOT rebuilt,
     // so it stays where she has scrolled to
     Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
   }
-  /** Is h a hairstyle that exists? */
-  const HAIR_OK = h => DOLL.hairstyles.includes(h);
+  /** Is h a hairstyle that exists (also the old keys)? */
+  const HAIR_OK = h => DOLL.hairKeys.includes(h);
   /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
   const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
     if (!e.isIntersecting || !e.target._draw) return;
@@ -370,7 +398,7 @@
       const b = document.createElement('button');
       b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-label', c.is); b.dataset.cat = c.id;
       b.setAttribute('aria-selected', String(c.id === state.cat));
-      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair)
+      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair, state.hairColor)
         : c.id === 'costume' ? DOLL.renderThumb(DOLL.byId[(looks().find(l => l.id === 'look-fire-red') || looks()[0]).items[0]])   // the firefighter helmet says "costumes"
         : DOLL.renderThumb(itemsIn(c.id)[0]);
       b.addEventListener('click', () => { state.cat = c.id; Sound.tone(880, .08, 'sine', .03); renderTabs(); renderGrid(); persist(); });
@@ -384,9 +412,11 @@
   function renderGrid() {
     gridEl.innerHTML = ''; gridEl.scrollTop = 0;
     if (state.cat === 'hair') {
+      gridEl.appendChild(hairColorRow());
       for (const h of DOLL.hairstyles) {
         const t = document.createElement('button'); t.className = 'tile' + (state.hair === h ? ' worn' : ''); t.setAttribute('aria-label', h);
-        t.innerHTML = DOLL.renderHairThumb(h);
+        t.dataset.hair = h;
+        t.innerHTML = DOLL.renderHairThumb(h, state.hairColor);
         t.addEventListener('click', () => {
           const first = !state.rewards.hairSeen.includes(h), from = t.getBoundingClientRect();
           state.hair = h; Sound.snap(); happy(); renderTabs(); persist();
@@ -411,6 +441,29 @@
       }
     }
     syncDefs(); markWornTiles();
+  }
+  /**
+   * The row of hair colour dots above the hairstyles. Tapping a dot colours her hair (and every style tile);
+   * tapping the chosen dot again goes back to each style's own colours. The first try of each colour earns a heart.
+   */
+  function hairColorRow() {
+    const row = document.createElement('div'); row.className = 'hair-colors';
+    for (const c of DOLL.hairColors) {
+      const b = document.createElement('button'); b.className = 'hair-dot' + (state.hairColor === c.k ? ' on' : '');
+      b.setAttribute('aria-label', c.is); b.dataset.color = c.k;
+      b.innerHTML = DOLL.renderHairSwatch(c.k);
+      b.addEventListener('click', () => {
+        state.hairColor = state.hairColor === c.k ? '' : c.k;
+        const seen = 'c:' + c.k, first = state.hairColor && !state.rewards.hairSeen.includes(seen);
+        row.querySelectorAll('.hair-dot').forEach(x => x.classList.toggle('on', x.dataset.color === state.hairColor));
+        // redraw the style pictures in the new colour, in place (the list keeps its scroll)
+        gridEl.querySelectorAll('.tile[data-hair]').forEach(t => { t.innerHTML = DOLL.renderHairThumb(t.dataset.hair, state.hairColor); });
+        Sound.sparkle(); happy(); renderTabs(); syncDefs(); persist();
+        if (first) { state.rewards.hairSeen.push(seen); giveHeart(b.getBoundingClientRect()); }
+      });
+      row.appendChild(b);
+    }
+    return row;
   }
   /** Gold border on tiles the doll is wearing. */
   function markWornTiles() {
@@ -458,6 +511,7 @@
       const g = document.createElement('div'); g.className = 'ghost dragging'; g.innerHTML = DOLL.renderThumb(DOLL.byId[drag.id]);
       document.body.appendChild(g); drag.ghost = g; syncDefs();
       if (drag.origin === 'doll') { unequip(drag.id); Sound.off(); }
+      if (drag.origin === 'friend') { undressFriend(drag.friend, drag.id); Sound.off(); }
       if (drag.origin === 'loose') { drag.el.remove(); state.loose = state.loose.filter(p => p !== drag.loosePiece); }
     }
     e.preventDefault();
@@ -472,7 +526,9 @@
     if (!d.moved) return onTap(d);
     d.ghost.remove();
     const ghostRect = { left: x - 40, right: x + 40, top: y - 40, bottom: y + 40, width: 80, height: 80 };
-    if (overDoll(x, y, d.origin === 'doll')) { equip(d.id); renderDoll(); }
+    const friend = friendAt(x, y);
+    if (friend && canWear(friend, d.id)) dressFriend(friend, d.id);                 // dressing the lion
+    else if (overDoll(x, y, d.origin === 'doll')) { equip(d.id); renderDoll(); }
     else if (overChest(x, y)) { flyThumb(d.id, ghostRect, chestRect(), 350); Sound.off(); chestEl.classList.remove('wiggle'); void chestEl.offsetWidth; chestEl.classList.add('wiggle'); persist(); }
     else dropLoose(d.id, x, y);
   }
@@ -494,11 +550,12 @@
     window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
     drag = null;
   }
-  /** Taps: chest piece → a helper carries it on; loose piece → hops on; worn piece → goes home. */
+  /** Taps: chest piece → a helper carries it on; loose piece → hops on; piece worn by her or a friend → goes home. */
   function onTap(d) {
     if (d.origin === 'tray') carry(d.id, d.el.getBoundingClientRect());
     else if (d.origin === 'loose') { const r = d.el.getBoundingClientRect(); d.el.remove(); state.loose = state.loose.filter(p => p !== d.loosePiece); flyThumb(d.id, r, dollRect(), 450).then(() => { equip(d.id); renderDoll(); }); }
     else if (d.origin === 'doll') { unequip(d.id); Sound.off(); flyThumb(d.id, dollRect(), chestRect(), 500); }
+    else if (d.origin === 'friend') { undressFriend(d.friend, d.id); Sound.off(); flyThumb(d.id, d.el.getBoundingClientRect(), chestRect(), 500); }
   }
 
   /* ---------------------------------------------------------------
@@ -569,7 +626,7 @@
     critterLayer.innerHTML = '';
     if (sc.layout) seatPassengers(sc, opts);
     (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
-      const pic = guard('FJ-D04', c.k, () => CREATURES[c.k](c.lantern), null);
+      const pic = guard('FJ-D04', c.k, () => (c.friend ? friendPic(c.k) : CREATURES[c.k](c.lantern)), null);
       if (pic === null) return;                               // an animal that can't be drawn is left out
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
@@ -581,7 +638,11 @@
       el.setAttribute('role', 'button'); el.setAttribute('aria-label', c.k);
       el.innerHTML = `<div class="inner">${pic}</div>`;
       el.querySelectorAll('.tail,.head').forEach(n => n.style.animationDelay = (-i * .7) + 's');
-      el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
+      el.addEventListener('pointerdown', e => {
+        const piece = c.friend && e.target.closest('[data-item]');   // a piece the friend wears: drag it off
+        if (piece) { startDrag(e, piece.dataset.item, 'friend', el); if (drag) drag.friend = c.k; return; }
+        e.preventDefault(); creatureTap(c, el);
+      });
       critterLayer.appendChild(el);
     });
     spreadCreatures();
@@ -620,7 +681,7 @@
     const seat = (w, key, slot, of) => {
       const box = document.createElement('div'); box.className = 'seat-window';
       Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
-      const pic = guard('FJ-D04', key, () => CREATURES[key](), null);
+      const pic = guard('FJ-D04', key, () => (friendOf(key) ? friendPic(key) : CREATURES[key]()), null);
       if (pic === null) return;
       const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
       const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
@@ -729,20 +790,21 @@
   /* ---------------------------------------------------------------
      Saved outfits (she saves them herself with the heart)
      --------------------------------------------------------------- */
-  /** Text fingerprint of an outfit: hair plus the sorted item ids. */
-  function outfitKey(hair, worn) { return hair + '|' + Object.values(worn).sort().join(','); }
+  /** Text fingerprint of an outfit: hair (and colour, if one is picked) plus the sorted item ids. */
+  function outfitKey(hair, worn, color = '') { return hair + (color ? '~' + color : '') + '|' + Object.values(worn).sort().join(','); }
   /** The heart button: save what she wears (a new outfit earns a heart). */
   function saveOutfit() {
     if (!Object.keys(state.worn).length) { Sound.tone(330, .15); return; }
     // Same clothes and hair already saved? Move that one to the front instead of making a copy.
-    const sig = outfitKey(state.hair, state.worn);
-    const same = state.outfits.find(x => outfitKey(x.hair, x.worn) === sig);
-    const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, worn: Object.assign({}, state.worn), scene: state.scene };
+    const sig = outfitKey(state.hair, state.worn, state.hairColor);
+    const same = state.outfits.find(x => outfitKey(x.hair, x.worn, x.hairColor) === sig);
+    const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, hairColor: state.hairColor,
+      worn: Object.assign({}, state.worn), scene: state.scene };
     state.outfits = [o, ...state.outfits.filter(x => x !== o)].slice(0, MAX_OUTFITS);
     Sound.save(); sparkleAt(dollRect(), 14); happy(1600);
     if (!same) setTimeout(() => giveHeart(dollRect()), 350);   // a new outfit earns a heart for the jar
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
-    persist(); if (!galleryEl.hidden) renderGallery();
+    persist(); renderBackupDot(); if (!galleryEl.hidden) renderGallery();
   }
   /** The saved-outfits picture frame: tap one to wear it, long-press to delete. */
   function renderGallery() {
@@ -752,7 +814,7 @@
     }
     for (const o of state.outfits) {
       const card = document.createElement('div'); card.className = 'card'; card.setAttribute('role', 'button');
-      card.innerHTML = `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, worn: o.worn })}</svg><button class="del" aria-label="Eyða">✕</button>`;
+      card.innerHTML = `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, hairColor: o.hairColor, worn: o.worn })}</svg><button class="del" aria-label="Eyða">✕</button>`;
       let pressTimer = 0, long = false;
       card.addEventListener('pointerdown', () => { long = false; pressTimer = setTimeout(() => { long = true; card.classList.add('deleting'); }, 800); });
       card.addEventListener('pointerup', e => {
@@ -760,7 +822,7 @@
         if (e.target.closest('.del')) { state.outfits = state.outfits.filter(x => x !== o); Sound.off(); persist(); renderGallery(); return; }
         if (long) return;
         if (card.classList.contains('deleting')) { card.classList.remove('deleting'); return; }
-        state.hair = o.hair; state.worn = Object.fromEntries(Object.entries(o.worn).filter(([, id]) => DOLL.byId[id]));
+        [state.hair, state.hairColor] = hairOf(HAIR_OK(o.hair) ? o.hair : 'loose', o.hairColor); state.worn = Object.fromEntries(Object.entries(o.worn).filter(([, id]) => DOLL.byId[id]));
         Sound.sparkle(); happy(); sparkleAt(dollRect(), 10); persist(); galleryEl.hidden = true;
       });
       card.addEventListener('pointerleave', () => clearTimeout(pressTimer));
@@ -810,6 +872,52 @@
   const jarRect = () => jarBtn.getBoundingClientRect();
   /** Friend info by key. */
   const friendOf = k => FRIENDS.find(f => f.k === k);
+  /** Can friend k wear this item? (Friends with dress: true take hats, hairbands, glasses, necklaces and scarves.) */
+  const canWear = (k, id) => !!(friendOf(k) && friendOf(k).dress && DOLL.byId[id] && PLUSH_WEAR[DOLL.slotOf(DOLL.byId[id])]);
+  /**
+   * The friend's picture, wearing what she put on it. Each piece is drawn as on the doll and moved onto the
+   * plush by PLUSH_WEAR (scenes.js); hat brims go behind the head, the rest on top, in the doll's layer order.
+   */
+  function friendPic(k) {
+    const f = friendOf(k), worn = state.friendWorn[k] || {};
+    if (!f || !f.dress) return CREATURES[k]();
+    const wear = { headBack: '', head: '', body: '' };
+    for (const slot of Object.keys(worn).sort((a, b) => SLOTS[a].z - SLOTS[b].z)) {
+      const it = DOLL.byId[worn[slot]], fit = PLUSH_WEAR[slot];
+      if (!it || !fit) continue;
+      const out = DOLL.drawItem(it);
+      // one part of the piece, moved onto the plush; data-item lets her drag it off again
+      const g = m => (m ? `<g data-item="${it.id}" transform="${fit.t}">${m}</g>` : '');
+      if (fit.layer === 'head') { wear.headBack += g(out.back); wear.head += g(out.front); }
+      else wear.body += g(out.back) + g(out.front);
+    }
+    return CREATURES[k](wear);
+  }
+  /** Draw friend k again everywhere it shows (after she dressed or undressed it). */
+  function refreshFriend(k) {
+    critterLayer.querySelectorAll(`[data-friend="${k}"] .inner, [data-seat="${k}"] .inner`).forEach(n => { n.innerHTML = guard('FJ-D04', k, () => friendPic(k), ''); });
+    syncDefs();
+  }
+  /** Which dressable friend is at screen point x,y (or undefined)? */
+  function friendAt(x, y) {
+    const el = [...critterLayer.querySelectorAll('.creature[data-friend]')].find(e => !e.hidden && friendOf(e.dataset.friend)?.dress && inside(e.getBoundingClientRect(), x, y, 12));
+    return el && el.dataset.friend;
+  }
+  /** Put a piece on friend k (replacing what it wore in that slot); the friend hops and says thank you. */
+  function dressFriend(k, id) {
+    const w = state.friendWorn[k] = state.friendWorn[k] || {};
+    w[DOLL.slotOf(DOLL.byId[id])] = id;
+    refreshFriend(k); Sound.snap(); Sound.voice(friendOf(k).voice);
+    const el = critterLayer.querySelector(`[data-friend="${k}"]`);
+    if (el) { el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100); sparkleAt(el.getBoundingClientRect(), 6); }
+    persist();
+  }
+  /** Take a piece off friend k. */
+  function undressFriend(k, id) {
+    const w = state.friendWorn[k] || {};
+    for (const slot in w) if (w[slot] === id) delete w[slot];
+    refreshFriend(k); persist();
+  }
   /** Friends shown in this scene: the newest one always, plus one more that changes from scene to scene. */
   function friendsHere() {
     if (!state.settings.rewards) return [];
@@ -860,7 +968,7 @@
         const el = critterLayer.querySelector(`[data-friend="${friend}"]`);
         if (!el) return;
         el.classList.add('arriving');
-        flyMarkup(guard('FJ-D04', friend, () => CREATURES[friend](), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
+        flyMarkup(guard('FJ-D04', friend, () => friendPic(friend), ''), jarRect(), el.getBoundingClientRect(), 1400, 'friend-fly').then(() => {
           el.classList.remove('arriving'); Sound.arrive(); sparkleAt(el.getBoundingClientRect(), 14);
           el.classList.remove('react'); void el.offsetWidth; el.classList.add('react'); setTimeout(() => el.classList.remove('react'), 1100);
           happy(1600);
@@ -879,7 +987,7 @@
     friendsEl.innerHTML = '';
     for (const k of state.rewards.friends) {
       const f = friendOf(k); if (!f || !CREATURES[k]) continue;
-      const pic = guard('FJ-D04', k, () => CREATURES[k](), null); if (pic === null) continue;
+      const pic = guard('FJ-D04', k, () => friendPic(k), null); if (pic === null) continue;
       const card = document.createElement('button'); card.className = 'card friend-card'; card.setAttribute('aria-label', f.is);
       card.innerHTML = pic;
       card.addEventListener('click', () => { Sound.voice(f.voice); card.classList.remove('hop'); void card.offsetWidth; card.classList.add('hop'); });
@@ -916,8 +1024,29 @@
     $('#storeMsg').textContent = Store.ok
       ? `Allt er vistað á þessu tæki (${state.outfits.length} vistuð föt). Taktu afrit af og til.`
       : 'Vafrinn leyfir ekki að vista. Fötin gleymast þegar leiknum er lokað.';
+    renderBackupNote();
     renderErrors();
   }
+
+  const MONTHS_IS = ['janúar', 'febrúar', 'mars', 'apríl', 'maí', 'júní', 'júlí', 'ágúst', 'september', 'október', 'nóvember', 'desember'];
+  /** A date in Icelandic, e.g. "1. september 2026" (written out here because not every browser knows Icelandic dates). */
+  const dateIs = d => `${d.getDate()}. ${MONTHS_IS[d.getMonth()]} ${d.getFullYear()}`;
+  /** Days since the last backup file (Infinity if there never was one). */
+  const daysSinceBackup = () => (state.lastBackup ? Math.floor((Date.now() - Date.parse(state.lastBackup)) / 864e5) : Infinity);
+  /** Is a backup due? Outfits exist that are not in a backup, and the last one is over 30 days old (or never). */
+  const backupDue = () => state.outfits.length > 0 && state.outfits.length !== state.backupOutfits && daysSinceBackup() > 30;
+  /** The line in the parent menu that says when the last backup was, and a gentle dot on the gear when one is due. */
+  function renderBackupNote() {
+    const el = $('#backupWhen'), days = daysSinceBackup(), since = state.outfits.length - state.backupOutfits;
+    el.textContent = !state.lastBackup ? 'Ekkert afrit hefur verið tekið enn.'
+      : `Síðasta afrit: ${dateIs(new Date(state.lastBackup))}` +
+        ` (${days === 0 ? 'í dag' : days === 1 ? 'í gær' : `fyrir ${days} dögum`})` + (since > 0 ? `, ${since} ný föt síðan.` : '.');
+    el.classList.toggle('due', backupDue());
+  }
+  /** The small dot on the gear button (only parents know it): shows when a backup is due. */
+  function renderBackupDot() { $('#btnGear').classList.toggle('remind', backupDue()); }
+  /** A backup file was saved: remember when, so the reminder goes away. */
+  function backupDone() { state.lastBackup = new Date().toISOString(); state.backupOutfits = state.outfits.length; flush(); renderBackupNote(); renderBackupDot(); }
 
   /** The error log in the parent menu: one line per problem, newest first (code, how often, when, what). */
   function renderErrors() {
@@ -954,12 +1083,12 @@
     const data = JSON.stringify(Object.assign({ app: 'fjarsjodskistan', exportedAt: new Date().toISOString() }, state), null, 1);
     const file = new File([data], name, { type: 'application/json' });
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupNote('Afrit sent.'); return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupDone(); backupNote('Afrit sent.'); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; report('FJ-S05', 'share (now trying a download)', e); }
     try {
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      backupNote('Afrit vistað í niðurhal (Downloads).');
+      backupDone(); backupNote('Afrit vistað í niðurhal (Downloads).');
     } catch (e) { report('FJ-S05', 'download', e); backupNote('Ekki tókst að búa til afrit. Sjá villukóða.'); }
   });
   /*  Opening a backup ADDS its outfits to the ones already here (nothing is deleted).
@@ -970,8 +1099,8 @@
     if (!f) return;
     let d = null, why = null; try { d = JSON.parse(await f.text()); } catch (err) { why = err; }
     if (!isObj(d) || !Array.isArray(d.outfits)) { report('FJ-S04', f.name, why); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
-    const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn)));
-    const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn)));
+    const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn, o.hairColor)));
+    const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn, o.hairColor)));
     state.outfits = state.outfits.concat(added)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, MAX_OUTFITS);
     flush(); renderMenu();
@@ -992,7 +1121,7 @@
   });
   $('#menuReset').addEventListener('click', () => {
     const b = $('#menuReset');
-    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
+    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; state.friendWorn = {}; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
     else { b.dataset.armed = '1'; b.textContent = 'Ýttu aftur til að staðfesta'; }
   });
   (function longPress(btn) {
@@ -1030,7 +1159,7 @@
   sceneEl.addEventListener('pointerdown', () => { galleryEl.hidden = true; friendsEl.hidden = true; });
 
   /** Draw everything from state. */
-  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); renderJar(); stage.classList.toggle('calm', state.settings.calm); }
+  function renderAll() { renderScene(); renderDoll(); renderLoose(); renderTabs(); renderGrid(); renderJar(); renderBackupDot(); stage.classList.toggle('calm', state.settings.calm); }
   renderAll();
   trayEl.hidden = true;
 })();
