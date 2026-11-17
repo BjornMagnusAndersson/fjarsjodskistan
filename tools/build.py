@@ -15,7 +15,8 @@ root = pathlib.Path(__file__).resolve().parent.parent
 src = root / 'src'
 read = lambda p: p.read_text(encoding='utf-8')
 
-order = ['examples.js', 'heads.js', 'face.js', 'wrists.js', 'tops.js', 'dresses.js', 'bottoms.js', 'feet.js']
+order = ['examples.js', 'heads.js', 'face.js', 'wrists.js', 'tops.js', 'dresses.js', 'bottoms.js', 'feet.js',
+         'swim.js', 'costumes_work.js', 'costumes_care.js', 'costumes_magic.js']
 garments = [src / 'garments' / n for n in order if (src / 'garments' / n).exists()]
 js = '\n'.join(read(p) for p in [src / 'core.js', *garments, src / 'scenes.js'])
 app = read(src / 'app.js')
@@ -37,7 +38,7 @@ head = '''<!doctype html>
 <html lang="is">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" id="vp" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#bfe3f2">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">

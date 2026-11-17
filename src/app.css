@@ -58,6 +58,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   background: linear-gradient(var(--wood-light), var(--wood)); box-shadow: 0 10px 30px rgba(40, 20, 10, .35), inset 0 0 0 4px var(--wood-dark);
   transform-origin: 85% 100%; transition: transform .35s cubic-bezier(.3, 1.3, .5, 1), opacity .25s; }
 .tray[hidden] { display: flex !important; transform: scale(.2) translateY(30%); opacity: 0; pointer-events: none; }
+/* scroll strips allow only sideways scrolling: a pinch inside them used to zoom the whole game in, with no way back */
+.tabs, .gallery { touch-action: pan-x; }
 .tabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 4px 10px; scrollbar-width: none; flex: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { flex: none; width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--wood-dark); background: var(--parchment); padding: 6px; cursor: pointer; }
@@ -67,6 +69,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   background: var(--parchment); box-shadow: inset 0 2px 8px rgba(90, 50, 20, .25); align-content: start; touch-action: pan-y; }
 .tile { aspect-ratio: 1; border-radius: 16px; background: #fff; border: 3px solid #ecdcbf; padding: 6px; cursor: grab; touch-action: pan-y; }
 .tile.worn { border-color: var(--gold); background: #fff8dc; }
+.tile.look { aspect-ratio: 4 / 5; background: linear-gradient(#e6f4fb, #f4fbef); }
 
 /* buttons */
 .bar { position: absolute; display: flex; gap: 10px; z-index: 22; }

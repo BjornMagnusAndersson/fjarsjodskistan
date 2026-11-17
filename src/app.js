@@ -99,6 +99,20 @@
   for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) delete state.worn[s];
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
 
+  /* Zoom guard: the game should never be zoomed. If the page is zoomed in anyway
+     (a pinch in some corner, or a browser setting that forces zoom), rewriting the
+     viewport tag makes Chrome snap back to normal size. */
+  function resetZoom() {
+    const vv = window.visualViewport, meta = document.getElementById('vp');
+    if (!vv || !meta || vv.scale <= 1.01) return;
+    const c = meta.getAttribute('content');
+    meta.setAttribute('content', c.replace('maximum-scale=1', 'maximum-scale=1.01'));
+    setTimeout(() => meta.setAttribute('content', c), 60);
+  }
+  if (window.visualViewport) visualViewport.addEventListener('resize', () => { clearTimeout(resetZoom.t); resetZoom.t = setTimeout(resetZoom, 400); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resetZoom(); });
+  setTimeout(resetZoom, 500);
+
   let saveTimer = 0;
   /** Save shortly after changes (batches quick taps into one write). */
   function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 300); }
@@ -280,7 +294,35 @@
 
   /** Items for a chest tab (hair is special: hairstyles, not clothes). */
   const itemsIn = cat => DOLL.items.filter(i => i.cat === cat);
-  const catsWithItems = () => CATS.filter(c => c.id === 'hair' || itemsIn(c.id).length);
+  /** Costume looks whose pieces all exist. */
+  const looks = () => DOLL.looks.filter(l => l.items.length && l.items.every(id => DOLL.byId[id]));
+  const catsWithItems = () => CATS.filter(c => c.id === 'hair' || (c.id === 'costume' ? looks().length : itemsIn(c.id).length));
+  /** Small picture of a whole look: the doll from head to knees wearing it. */
+  const lookThumb = l => {
+    const worn = {}; for (const id of l.items) worn[DOLL.slotOf(DOLL.byId[id])] = id;
+    return `<svg viewBox="40 0 320 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DOLL.renderDoll({ hair: l.hair || state.hair, worn })}</svg>`;
+  };
+  /** Put a whole costume on: everything she wears goes back to the chest first, then every piece of the look. */
+  function applyLook(l, fromRect) {
+    const worn = {};
+    for (const id of l.items) {
+      const it = DOLL.byId[id]; if (!it) continue;
+      const occ = DOLL.occupiesOf(it);
+      for (const s in worn) if (s === DOLL.slotOf(it) || DOLL.occupiesOf(DOLL.byId[worn[s]]).some(x => occ.includes(x))) delete worn[s];
+      worn[DOLL.slotOf(it)] = id;
+    }
+    state.worn = worn;
+    if (l.hair && HAIR_OK(l.hair)) state.hair = l.hair;
+    Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
+    renderGrid();
+  }
+  const HAIR_OK = h => DOLL.hairstyles.includes(h);
+  /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
+  const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
+    if (!e.isIntersecting || !e.target._draw) return;
+    e.target.innerHTML = e.target._draw(); e.target._draw = null; lazyIO.unobserve(e.target); syncDefs();
+  }), { root: gridEl, rootMargin: '200px' }) : null;
+  function lazyThumb(el, draw) { if (lazyIO) { el._draw = draw; lazyIO.observe(el); } else el.innerHTML = draw(); }
 
   /** Build the category tabs; each tab icon is the first piece in that category. */
   function renderTabs() {
@@ -289,7 +331,9 @@
       const b = document.createElement('button');
       b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-label', c.is); b.dataset.cat = c.id;
       b.setAttribute('aria-selected', String(c.id === state.cat));
-      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair) : DOLL.renderThumb(itemsIn(c.id)[0]);
+      b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair)
+        : c.id === 'costume' ? DOLL.renderThumb(DOLL.byId[looks()[0].items[0]])
+        : DOLL.renderThumb(itemsIn(c.id)[0]);
       b.addEventListener('click', () => { state.cat = c.id; Sound.tone(880, .08, 'sine', .03); renderTabs(); renderGrid(); persist(); });
       tabsEl.appendChild(b);
     }
@@ -310,6 +354,13 @@
         });
         gridEl.appendChild(t);
       }
+    } else if (state.cat === 'costume') {
+      for (const l of looks()) {
+        const t = document.createElement('button'); t.className = 'tile look'; t.dataset.look = l.id; t.setAttribute('aria-label', l.name ? l.name.is : l.id);
+        t.addEventListener('click', () => applyLook(l, t.getBoundingClientRect()));
+        gridEl.appendChild(t);
+        lazyThumb(t, () => lookThumb(l));
+      }
     } else {
       for (const it of itemsIn(state.cat)) {
         const t = document.createElement('button'); t.className = 'tile'; t.dataset.id = it.id; t.setAttribute('aria-label', it.name ? it.name.is : it.id);
@@ -324,6 +375,8 @@
   function markWornTiles() {
     const worn = new Set(Object.values(state.worn));
     gridEl.querySelectorAll('.tile[data-id]').forEach(t => t.classList.toggle('worn', worn.has(t.dataset.id)));
+    // a look gets the gold border while she wears all of it
+    gridEl.querySelectorAll('.tile[data-look]').forEach(t => { const l = DOLL.looks.find(x => x.id === t.dataset.look); t.classList.toggle('worn', !!l && l.items.every(id => worn.has(id))); });
   }
   /** Open or close the chest. */
   function setChest(open) {

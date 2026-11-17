@@ -86,6 +86,9 @@ A shape should be reusable: several items share one shape with different colours
 | shoes | 42 | shoes and boots |
 | sweater | 46 | |
 | jacket | 52 | snowsuit: slot jacket, `occupies: ['jacket','bottom']` |
+| float | 54 | swim ring round the waist (back part behind the body) |
+| armfloats | 57 | inflatable arm bands |
+| hold | 66 | held in the right hand (beach ball, wand, broom, doctor's bag ...) |
 | bracelet | 56 | bracelets and bangles (`src/garments/wrists.js`): drawn in wrist space with `onWrist`, like mittens |
 | mittens | 58 | |
 | scarf | 60 | |
@@ -100,7 +103,7 @@ A shape should be reusable: several items share one shape with different colours
 
 ## Categories (`cat` = the chest tab)
 
-hat, crown, hairband, glasses, face, earrings, necklace, bracelet, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
+costume (looks only), hold (things to hold), hat, crown, hairband, glasses, face, earrings, necklace, bracelet, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
 
 ## Style rules (approved look)
 
@@ -114,6 +117,22 @@ hat, crown, hairband, glasses, face, earrings, necklace, bracelet, top, sweater,
 8. **Keep markup reasonable**: roughly under 10 KB of SVG per item. Loop-generated motifs are fine; avoid thousands of tiny nodes.
 9. Thumbnails: check each item looks good in the chest tile. Set `thumb` when the default window crops or shows it too small.
 10. Comment every shape (what it is, colour roles). The owner reads code but doesn't write much.
+
+## Swim gear, held things and costume looks
+
+New slots (see the table above for z):
+- `float` (z 54) – swim ring / float round the waist (waist 400, hips 434). Back part (`back`) goes behind the body,
+  front part in front; the arms hang inside the ring.
+- `armfloats` (z 57) – inflatable arm bands round the upper arms. Use `G.armPoint(side, t)` / `G.armPath(side, t0, t1, pad)`
+  around t ≈ .2–.45, mirror for R.
+- `hold` (z 66) – something held in her **right hand** (picture right): hand centre `G.hands[1]` = (302,458),
+  fingers point down. Draw the thing so the hand looks like it grips a handle/edge at about (300,452).
+- `glasses` also takes swim goggles and diving masks, `hat` takes swim caps and costume hats, `shoes` takes flippers.
+
+Costume **looks** (chest tab "Búningar"): register finished outfits with
+`DOLL.look([{ id, name: { is, en }, items: [ids...], hair? }])`. The first item is the tab/tile icon – make it the hat
+or the most recognisable piece. Every piece of a look must also be a normal item in its own category (hat, jacket,
+top, pants, shoes, hold ...), so she can swap parts. Tapping a look replaces everything she wears.
 
 ## Hairstyles
 

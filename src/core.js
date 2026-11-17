@@ -457,8 +457,11 @@
     shoes:    { z: 42, thumb: [128, 640, 144, 110] },
     sweater:  { z: 46, thumb: [60, 232, 280, 270] },
     jacket:   { z: 52, thumb: [54, 228, 292, 300] },
+    float:    { z: 54, thumb: [70, 330, 260, 190] },       // swim ring / float round the waist (arms look like they rest inside it)
     bracelet: { z: 56, thumb: [75, 416, 52, 52] },     // over sleeves and jackets, under mittens (left wrist in the tile)
+    armfloats: { z: 57, thumb: [70, 270, 120, 120] },      // inflatable arm bands on the upper arms (tile shows the left one)
     mittens:  { z: 58, thumb: [72, 422, 256, 82] },
+    hold:     { z: 66, thumb: [230, 330, 160, 220] },      // something held in her right hand (picture right, G.hands[1])
     scarf:    { z: 60, thumb: [140, 210, 130, 190] },
     necklace: { z: 70, thumb: [156, 236, 88, 90] },
     face:     { z: 72, thumb: [130, 150, 140, 70] },   // face paint: on the face, under the front hair
@@ -473,6 +476,8 @@
      the item's shape decides the slot it is worn in. */
   const CATS = [
     { id: 'hair',     is: 'Hár' },
+    { id: 'costume',  is: 'Búningar' },        // finished costume looks (DOLL.looks), not single pieces
+    { id: 'hold',     is: 'Dót' },             // things to hold: wand, broom, doctor's bag ...
     { id: 'hat',      is: 'Húfur og hattar' },
     { id: 'crown',    is: 'Kórónur' },
     { id: 'hairband', is: 'Spangir og slaufur' },
@@ -524,6 +529,19 @@
         if (DOLL.byId[it.id]) { console.warn('duplicate item id', it.id); continue; }
         if (!DOLL.shapes[it.shape]) { console.warn('item ' + it.id + ' has unknown shape ' + it.shape); continue; }
         DOLL.items.push(it); DOLL.byId[it.id] = it;
+      }
+    },
+
+    /**
+     * Costume looks for the "Búningar" tab: a finished outfit made of items from any category.
+     * def: { id, name: { is, en }, items: [itemId, ...], hair? }  (first item = tile icon, usually the hat)
+     * Tapping a look dresses the doll in all of it; she can then swap single parts in the other tabs.
+     */
+    looks: [],
+    look(list) {
+      for (const l of [].concat(list)) {
+        if (DOLL.looks.some(x => x.id === l.id)) { console.warn('duplicate look id', l.id); continue; }
+        DOLL.looks.push(l);
       }
     },
 

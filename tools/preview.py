@@ -9,27 +9,44 @@ Each entry in the JSON list is one tile:
     {"hair": "bob", "thumb": 1}            the hairstyle's chest tile
     {"itemThumb": "tee-strawberry"}        an item's chest tile
     {"friend": "lion"}                     a reward friend / creature drawing (any CREATURES key)
+    {"look": "fire-red"}                   a costume look (DOLL.looks) on the doll
 Optional per tile: "w", "h" (tile size in px), "label".
 Example (heads only, zoomed): python tools/preview.py tools/p.png '[{"hair":"locs","w":300,"h":390}]' 1000 "70 30 260 340"
+
+--files a.js b.js   (at the end) render straight from src/ instead of dist/: core.js, the approved garment files and
+                    the listed files from src/garments/, each in its own <script> (so a broken file elsewhere can't stop
+                    yours). Use this while drawing; no build needed.
 """
 import json, sys, pathlib
 from playwright.sync_api import sync_playwright
 
 root = pathlib.Path(__file__).resolve().parent.parent
-out = pathlib.Path(sys.argv[1]).resolve(); spec = json.loads(sys.argv[2])
-width = int(sys.argv[3]) if len(sys.argv) > 3 else 1400
-vb = sys.argv[4] if len(sys.argv) > 4 else '40 10 320 640'
-html = (root / 'dist' / 'fjarsjodskistan.html').read_text(encoding='utf-8')
+argv = sys.argv[1:]
+files = []
+if '--files' in argv:
+    i = argv.index('--files'); files = argv[i + 1:]; argv = argv[:i]
+out = pathlib.Path(argv[0]).resolve(); spec = json.loads(argv[1])
+width = int(argv[2]) if len(argv) > 2 else 1400
+vb = argv[3] if len(argv) > 3 else '40 10 320 640'
+if files:
+    src = root / 'src'
+    base = ['examples.js', 'heads.js', 'face.js', 'wrists.js', 'tops.js', 'dresses.js', 'bottoms.js', 'feet.js']
+    parts = [src / 'core.js'] + [src / 'garments' / n for n in base if n not in files] + [src / 'garments' / pathlib.Path(n).name for n in files] + [src / 'scenes.js']
+    html = ''.join('<script>\n' + p.read_text(encoding='utf-8') + '\n</script>\n' for p in parts if p.exists())
+else:
+    html = (root / 'dist' / 'fjarsjodskistan.html').read_text(encoding='utf-8')
 tmp = out.with_suffix('.html')
 tmp.write_text('<!doctype html><html><head><meta charset="utf-8"></head><body>' + html + '</body></html>', encoding='utf-8')
 with sync_playwright() as p:
     b = p.chromium.launch(channel='chrome'); pg = b.new_page(viewport={'width': width, 'height': 900}); errors = []
     pg.on('pageerror', lambda e: errors.append(str(e)))
+    pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type in ('error', 'warning') else None)   # duplicate ids, unknown items ...
     pg.goto(tmp.as_uri()); pg.wait_for_timeout(600)
     pg.evaluate("""([spec, vb]) => {
       document.body.innerHTML = '<svg id="defs" style="position:absolute;width:0;height:0"><defs></defs></svg><div id="g" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:linear-gradient(#bfe3f2,#e9f6ea)"></div>';
       document.body.style.overflow = 'auto';
       for (const s of spec) {
+        if (s.look) { const l = DOLL.looks.find(x => x.id === s.look); if (!l) console.error('unknown look ' + s.look); s.items = l ? l.items : []; s.hair = s.hair || (l && l.hair) || 'loose'; s.label = s.label || s.look; }
         const worn = {}; for (const id of (s.items || [])) { const it = DOLL.byId[id]; if (it) worn[DOLL.slotOf(it)] = id; else console.error('unknown item ' + id); }
         const inner = s.friend ? CREATURES[s.friend]()
           : s.thumb ? DOLL.renderHairThumb(s.hair)
