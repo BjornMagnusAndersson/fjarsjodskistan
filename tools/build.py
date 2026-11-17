@@ -16,7 +16,7 @@ src = root / 'src'
 read = lambda p: p.read_text(encoding='utf-8')
 
 order = ['examples.js', 'heads.js', 'face.js', 'wrists.js', 'tops.js', 'dresses.js', 'bottoms.js', 'feet.js',
-         'swim.js', 'costumes_work.js', 'costumes_care.js', 'costumes_magic.js']
+         'swim.js', 'costumes_work.js', 'costumes_care.js', 'costumes_magic.js', 'tails.js']
 garments = [src / 'garments' / n for n in order if (src / 'garments' / n).exists()]
 js = '\n'.join(read(p) for p in [src / 'core.js', *garments, src / 'scenes.js'])
 app = read(src / 'app.js')

@@ -332,7 +332,7 @@
       b.className = 'tab'; b.setAttribute('role', 'tab'); b.setAttribute('aria-label', c.is); b.dataset.cat = c.id;
       b.setAttribute('aria-selected', String(c.id === state.cat));
       b.innerHTML = c.id === 'hair' ? DOLL.renderHairThumb(state.hair)
-        : c.id === 'costume' ? DOLL.renderThumb(DOLL.byId[looks()[0].items[0]])
+        : c.id === 'costume' ? DOLL.renderThumb(DOLL.byId[(looks().find(l => l.id === 'look-fire-red') || looks()[0]).items[0]])   // the firefighter helmet says "costumes"
         : DOLL.renderThumb(itemsIn(c.id)[0]);
       b.addEventListener('click', () => { state.cat = c.id; Sound.tone(880, .08, 'sine', .03); renderTabs(); renderGrid(); persist(); });
       tabsEl.appendChild(b);

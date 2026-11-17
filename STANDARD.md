@@ -77,6 +77,7 @@ A shape should be reusable: several items share one shape with different colours
 | slot | z | notes |
 |---|---|---|
 | wings | 2 | everything is behind the body |
+| tail | 3 | animal tails behind the body; shape option `sway: 'tail'` makes it swish from (206,446) |
 | cape | 64 (back 4) | back = the cape, front = clasp/collar only |
 | bag | 62 (back 5) | back = bag peeking out, front = straps |
 | suit | 30 | swimsuits, pyjamas: `occupies: ['suit','top','bottom']` |

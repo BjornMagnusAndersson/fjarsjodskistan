@@ -180,6 +180,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .doll .sway-l { animation: hairL var(--wind) ease-in-out infinite alternate; transform-origin: 146px 132px; }
 .doll .sway-r { animation: hairR var(--wind) ease-in-out infinite alternate; transform-origin: 254px 132px; animation-delay: -.6s; }
 .doll .sway-p { animation: hairP var(--wind) ease-in-out infinite alternate; transform-origin: 266px 100px; }
+/* cat tails swish gently from the root at the lower back (shape option sway: 'tail') */
+.doll .sway-tail { animation: tailSwish 2.8s ease-in-out infinite alternate; transform-origin: 206px 446px; }
+@keyframes tailSwish { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
 
 /* calm mode: everything holds still */
 .calm *, .calm *::before, .calm *::after { animation-play-state: paused !important; }

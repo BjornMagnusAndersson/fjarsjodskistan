@@ -448,6 +448,7 @@
      --------------------------------------------------------------- */
   const SLOTS = {
     wings:    { z: 2,  thumb: [10, 190, 380, 320] },
+    tail:     { z: 3,  thumb: [190, 300, 170, 220] },     // animal tails, behind the body (wear them with wings too)
     cape:     { z: 64, backZ: 4, thumb: [40, 220, 320, 470] },
     bag:      { z: 62, backZ: 5, thumb: [100, 236, 200, 230] },
     suit:     { z: 30, thumb: [80, 240, 240, 270] },
@@ -503,6 +504,7 @@
     { id: 'shoes',    is: 'Skór' },
     { id: 'boots',    is: 'Stígvél' },
     { id: 'cape',     is: 'Skikkjur og vængir' },
+    { id: 'tail',     is: 'Halar' },             // cat tails and mermaid tails
     { id: 'bag',      is: 'Bakpokar' },
   ];
 
