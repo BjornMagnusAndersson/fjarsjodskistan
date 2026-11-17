@@ -18,32 +18,85 @@
      Saved outfits keep only item ids, so a planner board can reuse them.
      --------------------------------------------------------------- */
   const KEY = 'fjarsjodskistan.v1';
+  const BACKUP = KEY + '.backup';     // last state that loaded fine (written once per start)
+  const BROKEN = KEY + '.broken';     // unreadable data is parked here instead of being overwritten
+  const VERSION = 1;
+  const MAX_OUTFITS = 200;            // ~300 bytes each, far below the browser limit
+  /** Parse stored JSON; null when missing or unreadable. */
+  function readJSON(key) {
+    let raw = null;
+    try { raw = localStorage.getItem(key); } catch (e) { return { raw: null, data: null }; }
+    try { const d = JSON.parse(raw || 'null'); return { raw, data: d && typeof d === 'object' ? d : null }; }
+    catch (e) { return { raw, data: null }; }
+  }
   const LocalStore = {
-    /** Read the saved state, or null if nothing is saved or storage is blocked. */
-    load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } },
-    /** Write the whole state. Fails quietly in private windows. */
-    save(data) { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } },
+    ok: true,                 // false when the browser refuses to store anything
+    /** Read the saved state. Falls back to the backup copy if the main copy is damaged. */
+    load() {
+      const main = readJSON(KEY);
+      if (main.data) { try { localStorage.setItem(BACKUP, main.raw); } catch (e) { /* full or blocked */ } return main.data; }
+      if (main.raw) { try { localStorage.setItem(BROKEN, main.raw); } catch (e) { /* ignore */ } }
+      return readJSON(BACKUP).data;
+    },
+    /** Write the whole state. Remembers if it failed so the parent menu can say so. */
+    save(data) {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); this.ok = true; }
+      catch (e) { this.ok = false; }
+    },
   };
   const Store = LocalStore;
 
-  /** Everything the game remembers. */
-  const state = Object.assign({
-    version: 1,
-    scene: 'meadow',
-    hair: 'loose',
-    worn: {},                 // slot → item id
-    loose: [],                // [{ id, x, y }] pieces lying in the scene, x/y in % of the stage
-    outfits: [],              // [{ id, createdAt, hair, worn, scene }]
-    settings: { sound: true, calm: false },
-    cat: 'top',               // open chest tab
-  }, Store.load() || {});
-  // drop ids of pieces that no longer exist
+  /** Default state: everything the game remembers. */
+  function freshState() {
+    return {
+      version: VERSION,
+      scene: 'meadow',
+      hair: 'loose',
+      worn: {},                 // slot → item id
+      loose: [],                // [{ id, x, y }] pieces lying in the scene, x/y in % of the stage
+      outfits: [],              // [{ id, createdAt, hair, worn, scene }]
+      settings: { sound: true, calm: false },
+      cat: 'top',               // open chest tab
+    };
+  }
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  /** Keep only well-formed outfits (from storage or from an imported backup file). */
+  function cleanOutfits(list) {
+    return (Array.isArray(list) ? list : []).filter(o => isObj(o) && typeof o.id === 'string' && isObj(o.worn))
+      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose', worn: Object.assign({}, o.worn), scene: o.scene }));
+  }
+  /**
+   * Turn whatever was stored into a valid current-version state.
+   * Settings are merged key by key, so a setting added later gets its default
+   * instead of disappearing. Add migrations here when VERSION goes up:
+   *   if (d.version < 2) { ...change d...; }
+   */
+  function upgrade(d) {
+    const s = freshState();
+    if (!isObj(d)) return s;
+    if (typeof d.scene === 'string') s.scene = d.scene;
+    if (typeof d.hair === 'string') s.hair = d.hair;
+    if (typeof d.cat === 'string') s.cat = d.cat;
+    if (isObj(d.worn)) s.worn = Object.assign({}, d.worn);
+    if (Array.isArray(d.loose)) s.loose = d.loose.filter(p => isObj(p) && typeof p.id === 'string');
+    s.outfits = cleanOutfits(d.outfits).slice(0, MAX_OUTFITS);
+    if (isObj(d.settings)) Object.assign(s.settings, d.settings);
+    return s;
+  }
+  const state = upgrade(Store.load());
+  // drop ids of pieces that no longer exist (saved outfits keep theirs: the gallery skips them when drawing)
   for (const s in state.worn) if (!DOLL.byId[state.worn[s]]) delete state.worn[s];
   state.loose = state.loose.filter(p => DOLL.byId[p.id]);
 
   let saveTimer = 0;
   /** Save shortly after changes (batches quick taps into one write). */
-  function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => Store.save(state), 300); }
+  function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 300); }
+  /** Save right now (when the app is hidden or closed, so the last tap isn't lost). */
+  function flush() { clearTimeout(saveTimer); saveTimer = 0; Store.save(state); }
+  addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+  // Ask the browser to never clear our data when space runs low (granted automatically for installed apps).
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
 
   /* ---------------------------------------------------------------
      Sounds: tiny synthesized chimes and chirps (Web Audio, no files).
@@ -458,10 +511,15 @@
   /* ---------------------------------------------------------------
      Saved outfits (she saves them herself with the heart)
      --------------------------------------------------------------- */
+  /** Text fingerprint of an outfit: hair plus the sorted item ids. */
+  function outfitKey(hair, worn) { return hair + '|' + Object.values(worn).sort().join(','); }
   function saveOutfit() {
     if (!Object.keys(state.worn).length) { Sound.tone(330, .15); return; }
-    const o = { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, worn: Object.assign({}, state.worn), scene: state.scene };
-    state.outfits.unshift(o); state.outfits = state.outfits.slice(0, 60);
+    // Same clothes and hair already saved? Move that one to the front instead of making a copy.
+    const sig = outfitKey(state.hair, state.worn);
+    const same = state.outfits.find(x => outfitKey(x.hair, x.worn) === sig);
+    const o = same || { id: 'o' + Date.now().toString(36), createdAt: new Date().toISOString(), hair: state.hair, worn: Object.assign({}, state.worn), scene: state.scene };
+    state.outfits = [o, ...state.outfits.filter(x => x !== o)].slice(0, MAX_OUTFITS);
     Sound.save(); sparkleAt(dollRect(), 14); happy(1600);
     const b = $('#btnGallery'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
     persist(); if (!galleryEl.hidden) renderGallery();
@@ -495,7 +553,46 @@
      --------------------------------------------------------------- */
   function renderMenu() {
     $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm;
+    $('#backupMsg').hidden = true;
+    flush();
+    $('#storeMsg').textContent = Store.ok
+      ? `Allt er vistað á þessu tæki (${state.outfits.length} vistuð föt). Taktu afrit af og til.`
+      : 'Vafrinn leyfir ekki að vista. Fötin gleymast þegar leiknum er lokað.';
   }
+  /** Short note under the backup buttons. */
+  function backupNote(text) { const m = $('#backupMsg'); m.textContent = text; m.hidden = false; }
+
+  /*  Backup file for parents: all saved outfits and settings as JSON.
+      On Android it opens the share sheet (Drive, email, …); elsewhere it downloads. */
+  $('#menuExport').addEventListener('click', async () => {
+    flush();
+    const day = new Date().toISOString().slice(0, 10);
+    const name = `fjarsjodskistan-${day}.json`;
+    const data = JSON.stringify(Object.assign({ app: 'fjarsjodskistan', exportedAt: new Date().toISOString() }, state), null, 1);
+    const file = new File([data], name, { type: 'application/json' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); backupNote('Afrit sent.'); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; /* sharing failed: download instead */ }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    backupNote('Afrit vistað í niðurhal (Downloads).');
+  });
+  /*  Opening a backup ADDS its outfits to the ones already here (nothing is deleted).
+      The doll, scene and settings stay as they are. */
+  $('#menuImport').addEventListener('click', () => $('#importFile').click());
+  $('#importFile').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let d = null; try { d = JSON.parse(await f.text()); } catch (err) { d = null; }
+    if (!isObj(d) || !Array.isArray(d.outfits)) { backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
+    const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn)));
+    const added = cleanOutfits(d.outfits).filter(o => !have.has(o.id) && !keys.has(outfitKey(o.hair, o.worn)));
+    state.outfits = state.outfits.concat(added)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, MAX_OUTFITS);
+    flush(); renderMenu();
+    backupNote(added.length ? `${added.length} föt bættust við.` : 'Öll fötin í afritinu voru þegar hér.');
+    if (!galleryEl.hidden) renderGallery();
+  });
   $('#optSound').addEventListener('change', e => { state.settings.sound = e.target.checked; persist(); });
   $('#optCalm').addEventListener('change', e => { state.settings.calm = e.target.checked; stage.classList.toggle('calm', state.settings.calm); persist(); });
   $('#menuClose').addEventListener('click', () => { menuEl.hidden = true; });
@@ -509,7 +606,7 @@
   });
   $('#menuReset').addEventListener('click', () => {
     const b = $('#menuReset');
-    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; renderAll(); persist(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
+    if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
     else { b.dataset.armed = '1'; b.textContent = 'Ýttu aftur til að staðfesta'; }
   });
   (function longPress(btn) {

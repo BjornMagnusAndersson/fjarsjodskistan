@@ -67,7 +67,9 @@ DOLL.add([{ id, shape, cat, name: { is, en }, colors: [...], pattern?, patternSi
 ```
 
 `back` is drawn behind the body (hood lying down, cape, backpack bag, hat brim behind the head). `front` is drawn at the slot's layer.
-Item ids: lowercase, unique, prefixed by category (`tee-…`, `lopi-…`). Shape names unique across all files: prefix with your group if unsure.
+Item ids: lowercase, unique, prefixed by category (`tee-…`, `lopi-…`). **Never rename or reuse an id once it is
+published**: saved outfits and backup files store only ids, so a renamed piece silently drops out of her saved outfits.
+To retire a piece, delete it; to change it, keep the id and change the drawing. Shape names unique across all files: prefix with your group if unsure.
 A shape should be reusable: several items share one shape with different colours, patterns or params (`it.sleeve`, `it.trim`, …).
 
 ## Slots and layers (higher z is on top)
