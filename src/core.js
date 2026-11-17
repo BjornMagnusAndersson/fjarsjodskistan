@@ -765,7 +765,10 @@
     [[0, '#3fa8a8'], [.5, '#4f78c8'], [1, '#7a55b8']], [60, 540]);
   // Dark chocolate brown (curly cloud).
   const DARK = hairPalette('dark', { base: '#6e4532', light: '#a06e52', glow: '#e0bea2', dark: '#4b2c1f', deep: '#2f1b13', line: '#3b2319' });
-  const hairFill = () => BROWN.fill();
+  // Copper red (natural red hair) and bright cherry red (dyed, for fun).
+  const COPPER = hairPalette('copper', { base: '#c8642f', light: '#f2a46a', glow: '#ffdcb6', dark: '#9c4524', deep: '#6e2c16', line: '#7a3a1e' });
+  const CHERRY = hairPalette('cherry', { base: '#d6343f', light: '#ff7f7f', glow: '#ffd6d6', dark: '#a8213a', deep: '#741628', line: '#7e1c2e' });
+  const MINT_BOW = ['#5fc9a0', '#2f8a68', '#bdf0dc', '#86dcbb'], SKY_BOW = ['#6cb8ec', '#2f6fa8', '#cfe9fb', '#93cdf2'];
 
   const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="url(#soft-h)" opacity=".55"/>`;
@@ -851,31 +854,86 @@
         `<ellipse cx="${f(bx - 2)}" cy="${f(by - 1.5)}" rx="2.4" ry="1.4" fill="#fff" opacity=".8"/>` : '');
   };
 
+  /* The shapes below take a palette (pal) and a bow/tie colour set, so the same style can be drawn in
+     other hair colours. With the defaults they draw exactly the approved brown styles. */
+  /** Bow colours: [fill, outline, highlight, centre]. */
+  const PINK_BOW = ['#e45a73', '#a8344c', '#f7a6b6', '#f07d92'];
+  /** Two braids with bows at the ends. */
+  function braidsHair(pal = BROWN, bow = PINK_BOW) {
+    const back = hp(NAPE, true, pal);
+    const braid = (x, s, cls) => {
+      let g = `<g class="${cls}">`;
+      for (let i = 0; i < 7; i++) {
+        const y = 196 + i * 23, ox = (i % 2 ? 4 : -4) * s, rx = 15 - i * .6;
+        g += braidBump(x + ox, y, rx, 15, pal);
+      }
+      g += `<path d="M${x - 9},364 q9,14 18,0 q-4,22 -9,26 q-5,-4 -9,-26z" fill="${pal.fill()}" stroke="${pal.line}" stroke-width="2.2"/>`;
+      g += hairBow(x, 357, ...bow);
+      return g + '</g>';
+    };
+    return { back, front: braid(124, -1, 'sway-l') + braid(276, 1, 'sway-r') + capFront(pal) };
+  }
+  /** Ponytail high on the right, with a hair tie (tie = [fill, outline, shine]). */
+  function ponytailHair(pal = BROWN, tie = ['#7ac0e8', '#3e7ea6', '#d7f0ff']) {
+    const tailD = 'M262,96 C306,92 322,150 314,214 C308,262 316,300 302,334 Q292,316 290,292 C286,250 292,200 280,150 C274,124 262,110 262,96 Z';
+    const back = hp('M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z', true, pal) +
+      `<g class="sway-p">` + hp(tailD, false, pal) + strand('M300,140 Q308,220 300,310', 2, pal) + lstrand('M292,126 Q300,190 296,260', 1.8, pal) + strand('M286,160 Q292,230 292,290', 1.6, pal) + `</g>`;
+    const band = `<ellipse cx="270" cy="104" rx="11" ry="9" fill="${tie[0]}" stroke="${tie[1]}" stroke-width="2"/><ellipse cx="267" cy="101" rx="4" ry="2.6" fill="${tie[2]}" opacity=".9"/>`;
+    return { back, front: capFront(pal) + band };
+  }
+  /** Bob: short hair that ends just under the chin and curls in at the ends. */
+  function bobHair(pal = BROWN) {
+    const backD = 'M200,58 C136,58 104,100 106,160 C108,196 108,224 116,246 Q134,258 152,250 L248,250 Q266,258 284,246 C292,224 292,196 294,160 C296,100 264,58 200,58 Z';
+    const sideL = 'M132,126 C114,160 110,206 116,238 Q122,254 138,256 Q154,256 162,246 Q146,236 142,212 C138,188 140,160 150,140 Z';
+    const side = (d, cls, s) => `<g class="${cls}">` + hp(d, false, pal) +
+      strand(s < 0 ? 'M130,150 Q120,200 132,246' : mirrorD('M130,150 Q120,200 132,246'), 2, pal) +
+      lstrand(s < 0 ? 'M140,148 Q132,190 140,232' : mirrorD('M140,148 Q132,190 140,232'), 1.8, pal) + `</g>`;
+    return {
+      back: hp(backD, true, pal) + strand('M122,180 Q118,220 126,244', 2, pal) + strand('M278,180 Q282,220 274,244', 2, pal),
+      front: side(sideL, 'sway-l', -1) + side(mirrorD(sideL), 'sway-r', 1) + capFront(pal),
+    };
+  }
+  /** Extra long: straight hair all the way down past the hands. */
+  function longestHair(pal = BROWN) {
+    const backD = 'M200,58 C138,58 106,98 106,162 C106,240 100,330 102,420 C104,500 112,560 120,600 Q140,588 158,604 Q178,590 200,606 Q222,590 242,604 Q260,588 280,600 C288,560 296,500 298,420 C300,330 294,240 294,162 C294,98 262,58 200,58 Z';
+    const lockLD = 'M138,128 C120,170 110,250 114,340 C116,400 120,440 130,480 Q144,466 148,440 C144,380 142,300 146,230 C148,190 150,160 154,146 Z';
+    const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
+      strand(m('M134,170 Q122,300 134,460'), 2, pal) + lstrand(m('M142,156 Q132,260 140,420'), 1.8, pal) + `</g>`;
+    const id = d => d;
+    return {
+      back: `<g class="sway-b">` + hp(backD, true, pal) +
+        ['M124,230 Q112,400 126,586', 'M112,300 Q106,450 118,590', 'M140,420 Q138,500 150,596'].map(d => strand(d, 2, pal) + strand(mirrorD(d), 2, pal)).join('') +
+        lstrand('M120,220 Q110,360 120,520', 1.6, pal) + lstrand(mirrorD('M120,220 Q110,360 120,520'), 1.6, pal) + `</g>`,
+      front: lock(lockLD, 'sway-l', id) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(pal),
+    };
+  }
+  /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
+  function pigtailsHair(pal = BROWN, bow = PINK_BOW) {
+    const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
+    const tail = (d, cls, m) => `<g class="${cls}">` + hp(d, false, pal) +
+      strand(m('M108,130 C88,150 92,200 86,250'), 2, pal) + strand(m('M116,150 C104,180 104,220 98,270'), 1.6, pal) +
+      lstrand(m('M98,122 C84,140 82,170 84,196'), 2, pal) + hairBow(m === mirrorD ? 276 : 124, 122, ...bow) + `</g>`;
+    return { back: hp(NAPE, true, pal), front: tail(tailL, 'sway-l', d => d) + tail(mirrorD(tailL), 'sway-r', mirrorD) + capFront(pal) };
+  }
+  /** Side braid: one thick braid over her shoulder, finished with a flower. */
+  function sidebraidHair(pal = BROWN, flower = '#f48cc0') {
+    let braid = '<g class="sway-r">';
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+      const t = i / 9;
+      pts.push([270 - 14 * t - 6 * Math.sin(t * Math.PI), 188 + 210 * t]);
+    }
+    pts.forEach(([x, y], i) => { braid += braidBump(x + (i % 2 ? 5 : -5), y, 18 - i * .7, 16, pal); });
+    const [ex, ey] = pts[9];
+    braid += `<path d="M${f(ex - 10)},${f(ey + 10)} q10,14 20,0 q-4,24 -10,28 q-6,-4 -10,-28z" fill="${pal.fill()}" stroke="${pal.line}" stroke-width="2.2"/>` +
+      H.flower(ex, ey + 6, 11, flower) + '</g>';
+    return { back: hp(NAPE, true, pal), front: braid + capFront(pal) };
+  }
+
   const HAIRSTYLES = {
     loose() { return looseHair(BROWN); },
-    braids() {
-      const back = hp(NAPE, true);
-      const braid = (x, s, cls) => {
-        let g = `<g class="${cls}">`;
-        for (let i = 0; i < 7; i++) {
-          const y = 196 + i * 23, ox = (i % 2 ? 4 : -4) * s, rx = 15 - i * .6;
-          g += braidBump(x + ox, y, rx, 15);
-        }
-        g += `<path d="M${x - 9},364 q9,14 18,0 q-4,22 -9,26 q-5,-4 -9,-26z" fill="${hairFill()}" stroke="${HAIR.line}" stroke-width="2.2"/>`;
-        g += `<path d="M${x},357 l-14,-9 v20z M${x},357 l14,-9 v20z" fill="#e45a73" stroke="#a8344c" stroke-width="2" stroke-linejoin="round"/>` +
-          `<path d="M${x - 11},${352} l6,3 M${x + 11},${352} l-6,3" stroke="#f7a6b6" stroke-width="2" stroke-linecap="round"/>` +
-          `<circle cx="${x}" cy="357" r="4.5" fill="#f07d92" stroke="#a8344c" stroke-width="2"/>`;
-        return g + '</g>';
-      };
-      return { back, front: braid(124, -1, 'sway-l') + braid(276, 1, 'sway-r') + capFront() };
-    },
-    ponytail() {
-      const tailD = 'M262,96 C306,92 322,150 314,214 C308,262 316,300 302,334 Q292,316 290,292 C286,250 292,200 280,150 C274,124 262,110 262,96 Z';
-      const back = hp('M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z', true) +
-        `<g class="sway-p">` + hp(tailD) + strand('M300,140 Q308,220 300,310') + lstrand('M292,126 Q300,190 296,260') + strand('M286,160 Q292,230 292,290', 1.6) + `</g>`;
-      const tie = `<ellipse cx="270" cy="104" rx="11" ry="9" fill="#7ac0e8" stroke="#3e7ea6" stroke-width="2"/><ellipse cx="267" cy="101" rx="4" ry="2.6" fill="#d7f0ff" opacity=".9"/>`;
-      return { back, front: capFront() + tie };
-    },
+    braids() { return braidsHair(); },
+    ponytail() { return ponytailHair(); },
 
     /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
 
@@ -883,32 +941,10 @@
     rainbow() { return looseHair(RAINBOW); },
 
     /** Bob: short hair that ends just under the chin and curls in at the ends. */
-    bob() {
-      const backD = 'M200,58 C136,58 104,100 106,160 C108,196 108,224 116,246 Q134,258 152,250 L248,250 Q266,258 284,246 C292,224 292,196 294,160 C296,100 264,58 200,58 Z';
-      const sideL = 'M132,126 C114,160 110,206 116,238 Q122,254 138,256 Q154,256 162,246 Q146,236 142,212 C138,188 140,160 150,140 Z';
-      const side = (d, cls, s) => `<g class="${cls}">` + hp(d) +
-        strand(s < 0 ? 'M130,150 Q120,200 132,246' : mirrorD('M130,150 Q120,200 132,246')) +
-        lstrand(s < 0 ? 'M140,148 Q132,190 140,232' : mirrorD('M140,148 Q132,190 140,232')) + `</g>`;
-      return {
-        back: hp(backD, true) + strand('M122,180 Q118,220 126,244') + strand('M278,180 Q282,220 274,244'),
-        front: side(sideL, 'sway-l', -1) + side(mirrorD(sideL), 'sway-r', 1) + capFront(),
-      };
-    },
+    bob() { return bobHair(); },
 
     /** Extra long: straight hair all the way down past the hands. */
-    longest() {
-      const backD = 'M200,58 C138,58 106,98 106,162 C106,240 100,330 102,420 C104,500 112,560 120,600 Q140,588 158,604 Q178,590 200,606 Q222,590 242,604 Q260,588 280,600 C288,560 296,500 298,420 C300,330 294,240 294,162 C294,98 262,58 200,58 Z';
-      const lockLD = 'M138,128 C120,170 110,250 114,340 C116,400 120,440 130,480 Q144,466 148,440 C144,380 142,300 146,230 C148,190 150,160 154,146 Z';
-      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d) +
-        strand(m('M134,170 Q122,300 134,460')) + lstrand(m('M142,156 Q132,260 140,420')) + `</g>`;
-      const id = d => d;
-      return {
-        back: `<g class="sway-b">` + hp(backD, true) +
-          ['M124,230 Q112,400 126,586', 'M112,300 Q106,450 118,590', 'M140,420 Q138,500 150,596'].map(d => strand(d) + strand(mirrorD(d))).join('') +
-          lstrand('M120,220 Q110,360 120,520', 1.6) + lstrand(mirrorD('M120,220 Q110,360 120,520'), 1.6) + `</g>`,
-        front: lock(lockLD, 'sway-l', id) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(),
-      };
-    },
+    longest() { return longestHair(); },
 
     /** Mermaid: long wavy hair, sea green to ocean blue to violet, with a shell clip. */
     mermaid() {
@@ -967,13 +1003,7 @@
     },
 
     /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
-    pigtails() {
-      const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
-      const tail = (d, cls, m) => `<g class="${cls}">` + hp(d) +
-        strand(m('M108,130 C88,150 92,200 86,250'), 2) + strand(m('M116,150 C104,180 104,220 98,270'), 1.6) +
-        lstrand(m('M98,122 C84,140 82,170 84,196'), 2) + hairBow(m === mirrorD ? 276 : 124, 122) + `</g>`;
-      return { back: hp(NAPE, true), front: tail(tailL, 'sway-l', d => d) + tail(mirrorD(tailL), 'sway-r', mirrorD) + capFront() };
-    },
+    pigtails() { return pigtailsHair(); },
 
     /** Curly cloud: a big round cloud of dark curls with a curly fringe. */
     curls() {
@@ -1013,19 +1043,24 @@
     },
 
     /** Side braid: one thick braid over her shoulder, finished with a flower. */
-    sidebraid() {
-      let braid = '<g class="sway-r">';
-      const pts = [];
-      for (let i = 0; i < 10; i++) {
-        const t = i / 9;
-        pts.push([270 - 14 * t - 6 * Math.sin(t * Math.PI), 188 + 210 * t]);
-      }
-      pts.forEach(([x, y], i) => { braid += braidBump(x + (i % 2 ? 5 : -5), y, 18 - i * .7, 16); });
-      const [ex, ey] = pts[9];
-      braid += `<path d="M${f(ex - 10)},${f(ey + 10)} q10,14 20,0 q-4,24 -10,28 q-6,-4 -10,-28z" fill="${hairFill()}" stroke="${HAIR.line}" stroke-width="2.2"/>` +
-        H.flower(ex, ey + 6, 11, '#f48cc0') + '</g>';
-      return { back: hp(NAPE, true), front: braid + capFront() };
-    },
+    sidebraid() { return sidebraidHair(); },
+
+    /* ---- Red hair (owner's request). Copper red, like real red hair, plus one bright cherry red.
+       Bows and ties in mint, white and sky blue so they show up nicely against the red. ---- */
+    /** Long loose copper-red hair. */
+    redloose() { return looseHair(COPPER); },
+    /** Two copper braids with mint bows. */
+    redbraids() { return braidsHair(COPPER, MINT_BOW); },
+    /** Copper ponytail with a mint hair tie. */
+    redponytail() { return ponytailHair(COPPER, ['#5fc9a0', '#2f8a68', '#d6f7ea']); },
+    /** Copper pigtails with sky-blue bows. */
+    redpigtails() { return pigtailsHair(COPPER, SKY_BOW); },
+    /** Short copper bob. */
+    redbob() { return bobHair(COPPER); },
+    /** Copper side braid with a white flower. */
+    redsidebraid() { return sidebraidHair(COPPER, '#fbfaf6'); },
+    /** Extra long bright cherry-red hair. */
+    cherry() { return longestHair(CHERRY); },
   };
 
   /* ---------------------------------------------------------------

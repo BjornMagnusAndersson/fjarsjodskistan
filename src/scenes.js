@@ -479,6 +479,106 @@
     </svg>`;
   }
 
+  /* ---------------- Scene 8: Sundlaug, an Icelandic outdoor swimming pool ----------------
+     Warm geothermal pool outdoors: steam rising from the water and the hot tub, lane ropes,
+     a big yellow water slide, a whale fountain in the pool, the pool house with the flag,
+     the mountain behind, and a light tiled deck in front where she and the animals stand.
+     Moving parts: steam (smoke), ripples (wave), floating toys (boat), whale spout (foam),
+     flag. The deck starts at y 768; scene ground 80 keeps the animals on the deck. */
+  function pool() {
+    const r = rng(23);
+    const PT = 560, PB = 752;   // pool water top and bottom
+    // steam puffs drifting up from the warm water (and lots from the hot tub)
+    const puff = (x, y, s, d) => `<circle class="smoke" style="animation-delay:${d.toFixed(2)}s;animation-duration:5s" cx="${x}" cy="${y}" r="${s}" fill="#fff" opacity=".45"/>`;
+    let steam = '';
+    for (let i = 0; i < 14; i++) steam += puff(Math.round(40 + i * 113 + r() * 40), PT + 4, 9 + Math.round(r() * 5), -r() * 5);
+    let tubSteam = '';
+    for (let i = 0; i < 6; i++) tubSteam += puff(1400 + i * 30, 526, 15, -i * .8);
+    // ripples on the water (clipped to the pool)
+    const ripples = [0, 1, 2].map(i => `<g class="wave" style="animation-duration:${9 + i * 2}s;animation-delay:${-i * 2.5}s"><path d="M-200,${PT + 20 + i * 54} ${Array.from({ length: 20 }, () => 'q50,-7 100,0').join(' ')}" fill="none" stroke="#fff" stroke-width="3" opacity="${.45 - i * .08}"/></g>`).join('');
+    // lane ropes: rows of little floats (red/white, blue/yellow, red/white)
+    const rope = (y, a, b) => { let s = `<path d="M0,${y} H1600" stroke="#2f6f9a" stroke-width="2" opacity=".5"/>`;
+      for (let x = 8; x < 1600; x += 30) s += `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.5" fill="${(x / 30 | 0) % 2 ? a : b}" stroke="#2f5f80" stroke-width="1"/>`;
+      return s; };
+    const ropes = rope(PT + 40, '#e2564c', '#fbfaf6') + rope(PT + 96, '#3f7fd0', '#f7d16a') + rope(PT + 152, '#e2564c', '#fbfaf6');
+    // the big yellow water slide: tower with stairs on the right, a winding tube down into the pool
+    const TUBE = 'M1268,346 C1150,340 1090,372 1120,410 C1150,446 1330,436 1338,492 C1346,548 1210,548 1150,566 C1098,582 1082,612 1074,636';
+    const slide = `<g transform="translate(0,-40)">
+      ${[[1150, 566, 1150, 600], [1338, 492, 1338, 600], [1120, 410, 1120, 600]].map(([x, y, , y2]) => `<path d="M${x},${y + 20} V${y2}" stroke="#8a919e" stroke-width="7"/>`).join('')}
+      <path d="M1250,600 V346 M1310,600 V346" stroke="#c9ced6" stroke-width="10"/>
+      ${Array.from({ length: 11 }, (_, i) => `<path d="M1250,${590 - i * 24} L1310,${578 - i * 24}" stroke="${i % 2 ? '#e2564c' : '#fbfaf6'}" stroke-width="6" stroke-linecap="round"/>`).join('')}
+      <path d="M1240,346 H1320 V334 H1240Z" fill="#3f7fd0" stroke="#2a5a96" stroke-width="2.5"/>
+      <path d="M1244,334 V306 M1316,334 V306 M1244,310 H1316" stroke="#3f7fd0" stroke-width="5" stroke-linecap="round"/>
+      <path d="${TUBE}" fill="none" stroke="#c98a14" stroke-width="54" stroke-linecap="round"/>
+      <path d="${TUBE}" fill="none" stroke="#ffcf3a" stroke-width="46" stroke-linecap="round"/>
+      <path d="${TUBE}" fill="none" stroke="#ffe98a" stroke-width="10" stroke-linecap="round" transform="translate(0,-12)" opacity=".9"/>
+      <path d="${TUBE}" fill="none" stroke="#e2a514" stroke-width="3" stroke-dasharray="4 26" transform="translate(0,8)" opacity=".7"/></g>`;
+    // splash where the slide ends
+    const splash = `<g class="foam"><ellipse cx="1074" cy="${PT + 36}" rx="56" ry="10" fill="#fff" opacity=".7"/><path d="M1044,${PT + 32} q-8,-18 -2,-30 M1074,${PT + 28} q0,-22 6,-34 M1104,${PT + 32} q8,-18 4,-30" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/></g>`;
+    // friendly whale fountain in the pool, spouting water
+    const whale = `<g transform="translate(780,${PT + 126})">
+      <path d="M-60,14 Q-62,-34 -10,-40 Q40,-44 58,-6 Q64,10 56,14Z" fill="#5d8fd6" stroke="#36609e" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M-40,8 Q0,-6 50,4" stroke="#bcd6f2" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <circle cx="32" cy="-16" r="5" fill="#2a3550"/><circle cx="33.5" cy="-17.5" r="1.6" fill="#fff"/><path d="M38,-4 q8,4 14,-2" stroke="#36609e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="44" cy="-6" rx="5" ry="3" fill="#f6a6bf" opacity=".8"/>
+      <g class="foam"><path d="M-6,-42 Q-20,-80 -42,-74 M-6,-42 Q-6,-90 6,-96 M-6,-42 Q10,-82 30,-74" stroke="#e8f7ff" stroke-width="6" fill="none" stroke-linecap="round"/>
+        ${[[-44, -70], [6, -98], [32, -70]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#e8f7ff"/>`).join('')}</g></g>`;
+    // floating toys bobbing on the water: a pink swim ring and a beach ball
+    const toys = `<g class="boat" style="animation-delay:-1s"><ellipse cx="560" cy="${PT + 124}" rx="36" ry="13" fill="#f48cc0" stroke="#c4568c" stroke-width="3"/><ellipse cx="560" cy="${PT + 122}" rx="17" ry="5" fill="#4fb4de"/>
+        <path d="M530,${PT + 120} q8,-6 16,-6 M574,${PT + 114} q10,2 16,6" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none"/></g>` +
+      `<g class="boat" style="animation-delay:-2.6s"><circle cx="930" cy="${PT + 124}" r="20" fill="#fff" stroke="#9aa3ae" stroke-width="2"/>
+        <path d="M930,${PT + 104} A20,20 0 0 1 950,${PT + 124} L930,${PT + 124}Z" fill="#e2564c"/><path d="M910,${PT + 124} A20,20 0 0 1 930,${PT + 104} L930,${PT + 124}Z" fill="#3f7fd0"/><path d="M930,${PT + 144} A20,20 0 0 1 910,${PT + 124} L930,${PT + 124}Z" fill="#f7d16a"/>
+        <circle cx="930" cy="${PT + 124}" r="20" fill="none" stroke="#7a828c" stroke-width="2"/><ellipse cx="922" cy="${PT + 114}" rx="6" ry="3.5" fill="#fff" opacity=".8"/></g>`;
+    // hot tub (heitur pottur): round tub with a stone rim, warm water, a rubber duck and lots of steam
+    const tub = `<g transform="translate(0,-52)"><path d="M1360,596 V614 Q1470,636 1580,614 V596Z" fill="#9aa0aa" stroke="#6c7280" stroke-width="2.5"/>
+      <ellipse cx="1470" cy="596" rx="110" ry="22" fill="#c9ced6" stroke="#6c7280" stroke-width="2.5"/><ellipse cx="1470" cy="597" rx="94" ry="15" fill="#7fd6e6"/>
+      <path d="M1400,598 q20,-5 40,0 M1500,600 q20,-5 40,0" stroke="#fff" stroke-width="2.5" fill="none" opacity=".6"/>
+      <g class="boat" style="animation-duration:3s"><ellipse cx="1510" cy="594" rx="13" ry="7" fill="#ffd84d" stroke="#c49a2a" stroke-width="2"/><circle cx="1519" cy="584" r="6.5" fill="#ffd84d" stroke="#c49a2a" stroke-width="2"/><path d="M1524,584 l7,2 l-7,3z" fill="#f6a23a"/><circle cx="1520" cy="582" r="1.4" fill="#2a1d26"/></g></g>`;
+    // the pool house: low white building with big windows, a blue stripe and the Icelandic flag
+    const house = `<g transform="translate(0,-52)"><path d="M30,612 V452 H540 V612Z" fill="#f4f2ec" stroke="#b5b0a6" stroke-width="2.5"/>
+      <path d="M22,452 H548 V436 H22Z" fill="#3f8fd0" stroke="#2a6aa6" stroke-width="2"/>
+      ${Array.from({ length: 6 }, (_, i) => `<rect x="${56 + i * 80}" y="478" width="60" height="70" rx="4" fill="#a9d3e6" stroke="#fff" stroke-width="4"/><path d="M${66 + i * 80},${488} l14,-6" stroke="#fff" stroke-width="4" opacity=".6" stroke-linecap="round"/>`).join('')}
+      <rect x="252" y="560" width="56" height="52" rx="4" fill="#bfe3f2" stroke="#2a6aa6" stroke-width="3"/><path d="M280,560 V612" stroke="#2a6aa6" stroke-width="2"/>
+      <g transform="translate(500,436)"><path d="M0,0 V-90" stroke="#c9ccd4" stroke-width="4"/>
+        <g class="flag"><path d="M2,-90 H50 V-58 H2Z" fill="#2457a6"/><path d="M2,-74 H50 M18,-90 V-58" stroke="#fff" stroke-width="9"/><path d="M2,-74 H50 M18,-90 V-58" stroke="#d72830" stroke-width="5"/></g></g></g>`;
+    // light tiles on the deck, in perspective (lines run towards a point far behind the pool)
+    let tiles = '';
+    for (const y of [790, 818, 854, 900, 958]) tiles += `M0,${y} H1600`;
+    for (let i = -12; i <= 12; i++) tiles += `M${800 + i * 70},768 L${800 + i * 150},1000`;
+    // striped towel lying on the deck and a lifebuoy on a post
+    const towel = `<path d="M1010,900 L1180,890 L1210,940 L1030,952Z" fill="#fbfaf6" stroke="#c9c4ba" stroke-width="2"/>` +
+      [0, 1, 2].map(i => { const t0 = .14 + i * .3, t1 = t0 + .15, y = t => 900 + (952 - 900) * t, x = (t, s) => (s ? 1180 + 30 * t : 1010 + 20 * t), yy = (t, s) => (s ? 890 + 50 * t : y(t));
+        return `<path d="M${x(t0, 0)},${yy(t0, 0)} L${x(t0, 1)},${yy(t0, 1)} L${x(t1, 1)},${yy(t1, 1)} L${x(t1, 0)},${yy(t1, 0)}Z" fill="${['#f48cc0', '#6fb3e6', '#f7d16a'][i]}"/>`; }).join('');
+    const buoy = `<g transform="translate(1560,770)"><path d="M0,0 V60" stroke="#8a919e" stroke-width="6"/>
+      <circle cx="0" cy="-6" r="26" fill="none" stroke="#ef6f3a" stroke-width="14"/><circle cx="0" cy="-6" r="26" fill="none" stroke="#fff" stroke-width="14" stroke-dasharray="20.4 20.4"/>
+      <circle cx="0" cy="-6" r="33" fill="none" stroke="#b8481e" stroke-width="1.5"/><circle cx="0" cy="-6" r="19" fill="none" stroke="#b8481e" stroke-width="1.5"/></g>`;
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="p-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86ccf0"/><stop offset="1" stop-color="#eaf7fc"/></linearGradient>
+      <linearGradient id="p-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fd3ec"/><stop offset="1" stop-color="#2f9fd0"/></linearGradient>
+      <linearGradient id="p-deck" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6eef2"/><stop offset="1" stop-color="#cfdde6"/></linearGradient>
+      <clipPath id="p-pool"><rect x="0" y="${PT}" width="1600" height="${PB - PT}"/></clipPath></defs>
+      <rect width="1600" height="1000" fill="url(#p-sky)"/>
+      ${sun(1460, 140, 50)}${cloud(320, 120, .8, 110, -30)}${cloud(1000, 190, .6, 130, -80)}
+      ${rainbow(860, 600, 400)}
+      <!-- the mountain behind, with snow in the gullies -->
+      <path d="M-40,520 V470 Q120,420 300,430 Q520,396 760,412 Q980,396 1200,428 Q1420,410 1640,452 V560Z" fill="#9fb3cf"/>
+      <path d="M300,432 q-8,14 -14,26 M318,430 q2,14 6,26 M760,414 q-8,16 -14,28 M778,414 q2,14 6,26 M1200,430 q-8,14 -12,24 M1216,430 q4,12 10,22" stroke="#fff" stroke-width="7" stroke-linecap="round" fill="none" opacity=".85"/>
+      <path d="M0,490 Q400,470 800,486 T1600,480 V560 H0Z" fill="#9ccf84"/>
+      ${house}${tub}${tubSteam}
+      <!-- the pool: far rim, water, lane ropes, ripples, near rim -->
+      <rect x="0" y="${PT - 8}" width="1600" height="10" fill="#fbfaf6"/>
+      <rect x="0" y="${PT}" width="1600" height="${PB - PT}" fill="url(#p-water)"/>
+      <g clip-path="url(#p-pool)">${ripples}${ropes}</g>${toys}${whale}${splash}
+      ${slide}${steam}
+      <rect x="0" y="${PB}" width="1600" height="14" fill="#fbfaf6"/><path d="M0,${PB + 14} H1600" stroke="#3f7fd0" stroke-width="4"/>
+      <!-- the deck -->
+      <rect x="0" y="${PB + 16}" width="1600" height="${1000 - PB - 16}" fill="url(#p-deck)"/>
+      <path d="${tiles}" stroke="#b9cad6" stroke-width="2" opacity=".7"/>
+      ${towel}${buoy}
+      ${[[300, 980], [640, 860], [1300, 960], [1460, 820]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="60" ry="9" fill="#bfe3f2" opacity=".6"/><ellipse cx="${x - 14}" cy="${y - 2}" rx="18" ry="3" fill="#fff" opacity=".8"/>`).join('')}
+    </svg>`;
+  }
+
   /* =====================================================================
      Creatures: each returns a standalone SVG whose feet (or rock) sit on
      the bottom edge of its viewBox; the app places them by bottom-centre.
@@ -1036,6 +1136,10 @@
     // (her heart-jar friends first, newest first, then these), and the driver sits at the front
     bus: { name: 'Strætó', svg: bus, layout: busLayout, wind: 3, creatures: [],
       passengers: ['unicorn', 'puffin', 'sheep', 'fox', 'puffin', 'horse'] },
+    // the outdoor swimming pool: animals stay on the deck in front of the pool (ground 80)
+    pool: { name: 'Sundlaug', svg: pool, wind: 2.4, ground: 80, creatures: [
+      { k: 'seal', x: 64, y: 84, h: 11 }, { k: 'puffin', x: 50, y: 96, h: 10 }, { k: 'unicorn', x: 86, y: 88, h: 16, flip: true },
+      { k: 'elf', x: 75, y: 92, h: 10, peek: true }] },
   };
 
   root.SCENES = SCENES;

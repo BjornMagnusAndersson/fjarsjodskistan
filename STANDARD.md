@@ -141,7 +141,10 @@ Hairstyles live in `HAIRSTYLES` in `src/core.js` (added at the owner's request; 
 ponytail are unchanged). Each style returns `{ back, front }`: back is drawn behind the body (z 10), front over the
 face (z 74). Use the helpers there: `hp(d, back, palette)`, `strand`, `lstrand`, `capFront(palette)` (the shared
 fringe), `NAPE` (short back hair), `looseHair(palette)`, `braidBump`, `mirrorD` (mirror a left-side path).
-Colours come from a palette made with `hairPalette(...)` (`BROWN` is her own hair; `RAINBOW`, `MERMAID`, `DARK`).
+Colours come from a palette made with `hairPalette(...)` (`BROWN` is her own hair; `RAINBOW`, `MERMAID`, `DARK`,
+`COPPER` (red hair), `CHERRY` (bright dyed red)). The shape functions `looseHair`, `braidsHair`, `ponytailHair`,
+`bobHair`, `longestHair`, `pigtailsHair`, `sidebraidHair` take a palette (and bow/tie colours), so a new colour of an
+existing style is one line, e.g. `redbraids() { return braidsHair(COPPER, MINT_BOW); }`.
 A style gets `{ hat }` and can hide parts that would poke through a hat (see `spacebuns`).
 **Style keys are stored in saved outfits: never rename one.** New styles appear in the chest automatically.
 
