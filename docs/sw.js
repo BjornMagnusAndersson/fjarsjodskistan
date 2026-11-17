@@ -1,9 +1,9 @@
 /* Service worker: lets the installed game start without internet.
    The game itself is one HTML file, so there is very little to cache.
-   tools/build.py replaces 9b616f0f98 with a hash of the page, so every new build
+   tools/build.py replaces 94b2dbad7a with a hash of the page, so every new build
    gets a fresh cache and old copies are cleaned up.
    Saved outfits are NOT here: they live in localStorage, which this never touches. */
-const CACHE = 'fjarsjodskistan-9b616f0f98';
+const CACHE = 'fjarsjodskistan-94b2dbad7a';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

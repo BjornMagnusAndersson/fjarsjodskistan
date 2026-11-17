@@ -319,23 +319,29 @@
       <path d="M-30,38 V-28 Q0,-130 30,-28 V38Z" fill="url(#k-glass)" stroke="#8a857e" stroke-width="2.5"/>
       <path d="M-10,38 V-80 M10,38 V-80 M-30,0 H30 M-26,-40 H26" stroke="#efece6" stroke-width="3" opacity=".8"/>
       <path d="M0,-112 V-150 M-11,-138 H11" stroke="#a9a49c" stroke-width="5" stroke-linecap="round"/></g>`;
-    /* Turninn (the Smáratorg tower): the tallest building in Iceland, a flat-topped slim block of dark
-       blue glass, 20 floors, with a light crown at the top. It stands at the end of Smáralind. */
-    let tower = `<rect x="1088" y="292" width="78" height="372" fill="url(#k-tower)" stroke="#2f4a62" stroke-width="2.5"/>` +
-      `<rect x="1088" y="292" width="30" height="372" fill="#fff" opacity=".12"/>`;           // the sunlit side
-    for (let i = 1; i < 20; i++) tower += `<path d="M1090,${292 + i * 17} H1164" stroke="#bfe0ee" stroke-width="1.2" opacity=".45"/>`;   // floors
-    tower += `<path d="M1127,296 V660" stroke="#bfe0ee" stroke-width="1.5" opacity=".35"/>` +
-      `<rect x="1084" y="282" width="86" height="14" rx="3" fill="#e9eef2" stroke="#8a9aa8" stroke-width="2"/>` +    // crown
-      `<path d="M1100,288 H1154" stroke="#fff" stroke-width="2" opacity=".8"/>`;
-    /* Smáralind: the big shopping centre. A long low building with a soft wave-shaped roof, a band
-       of windows, and a round glass winter garden at the far end. (No signs or logos.) */
-    const mall = `<path d="M1170,664 V590 Q1240,560 1310,578 Q1380,594 1440,566 V664Z" fill="#eceae4" stroke="#a9a49c" stroke-width="2.5"/>` +
-      `<path d="M1170,590 Q1240,560 1310,578 Q1380,594 1440,566" fill="none" stroke="#f7b267" stroke-width="7" stroke-linecap="round"/>` +
-      `<path d="M1176,606 H1434 V622 H1176Z" fill="#a9d3e6"/>` +
-      [1206, 1246, 1286, 1326, 1366, 1406].map(x => `<path d="M${x},606 V622" stroke="#eceae4" stroke-width="3"/>`).join('') +
-      `<path d="M1420,664 V600 Q1420,548 1475,546 Q1530,548 1530,600 V664Z" fill="url(#k-dome)" stroke="#3a6788" stroke-width="2.5"/>` +
-      `<path d="M1440,664 V594 Q1444,562 1475,558 M1475,546 V664 M1510,664 V594 Q1506,562 1475,558 M1421,598 H1529" stroke="#e4f6fc" stroke-width="2" fill="none" opacity=".7"/>` +
-      `<path d="M1432,598 Q1436,566 1462,556" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".45"/>`;
+    /* Turninn (the Smáratorg tower): the tallest building in Iceland. A big block of black glass on a
+       low dark base, a glass grid all over, sky reflections, and "TURNINN" at the top (owner's photo). */
+    const TX = 1068, TW = 110, TT = 304;   // left edge, width, top of the tower
+    let tower = `<rect x="1030" y="626" width="176" height="38" fill="#1f2731"/>` +                       // the low dark base building
+      `<rect x="${TX}" y="${TT}" width="${TW}" height="${664 - TT}" fill="url(#k-tower)" stroke="#0f141b" stroke-width="2.5"/>`;
+    for (let x = TX + 11; x < TX + TW; x += 11) tower += `<path d="M${x},${TT + 2} V662" stroke="#7d93a8" stroke-width="1" opacity=".35"/>`;   // glass grid
+    for (let y = TT + 30; y < 660; y += 17) tower += `<path d="M${TX + 1},${y} H${TX + TW - 1}" stroke="#7d93a8" stroke-width="1" opacity=".4"/>`;
+    tower += `<path d="M${TX},420 L${TX + TW},372 V404 L${TX},456Z M${TX},520 L${TX + TW},486 V500 L${TX},536Z" fill="#9fd0ec" opacity=".22"/>` +   // sky reflections
+      `<rect x="${TX + 26}" y="${TT - 14}" width="${TW - 52}" height="14" fill="#55606c" stroke="#2a323c" stroke-width="2"/>` +      // little roof house
+      `<text x="${TX + TW / 2}" y="${TT + 21}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#fff">TURNINN</text>`;
+    /* Smáralind: the big shopping centre, shaped a bit like a whale. A long deep-blue wall, a pale roof
+       that curves down at the left end like the whale's head, a row of little humps along the roof,
+       a tall white pylon at the left end, and the big orange HAGKAUP letters that everyone sees. */
+    const roofY = x => 560 - (x - 1264) * 6 / 302;   // top of the roof (slopes up very slightly to the right)
+    const mall = `<path d="M1226,664 V592 Q1236,578 1266,576 H1566 V664Z" fill="url(#k-mall)"/>` +
+      Array.from({ length: 12 }, (_, i) => `<path d="M${1270 + i * 24},580 V664" stroke="#5f80d0" stroke-width="1.2" opacity=".5"/>`).join('') +
+      `<path d="M1212,652 Q1200,578 1264,560 L1566,554 V576 L1266,578 Q1230,584 1226,652Z" fill="#e3e7ec" stroke="#98a2ae" stroke-width="2" stroke-linejoin="round"/>` +
+      Array.from({ length: 8 }, (_, i) => { const x = 1292 + i * 34, y = roofY(x);
+        return `<path d="M${x - 10},${y.toFixed(1)} Q${x},${(y - 22).toFixed(1)} ${x + 10},${y.toFixed(1)}Z" fill="#d6e8f6" stroke="#98a2ae" stroke-width="1.5"/>`; }).join('') +
+      `<rect x="1298" y="634" width="36" height="30" fill="#bfe3f2" stroke="#fff" stroke-width="2.5"/><path d="M1316,634 V664" stroke="#fff" stroke-width="2"/>` +   // entrance
+      `<text x="1446" y="618" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="30" textLength="176" lengthAdjust="spacingAndGlyphs" fill="#f47a2a" stroke="#a8451a" stroke-width=".8">HAGKAUP</text>` +
+      `<path d="M1186,664 V470 L1210,460 V664Z" fill="#f2f4f6" stroke="#a9b0b8" stroke-width="2" stroke-linejoin="round"/>` +   // white pylon at the left end
+      `<circle cx="1198" cy="490" r="8" fill="none" stroke="#f48cc0" stroke-width="3.5"/><circle cx="1198" cy="490" r="3" fill="#6fb3e6"/>`;
     /* Little wooden footbridge over the stream. The stream runs left-right across the picture, so the
        bridge runs away from us: the near end sits on the grass in front of the stream (y 752), the far
        end on the far bank (y 690), and it gets narrower further away. The ducks swim under it.
@@ -369,8 +375,8 @@
     return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
       <linearGradient id="k-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ccdf0"/><stop offset="1" stop-color="#eef8fc"/></linearGradient>
       <linearGradient id="k-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset=".35" stop-color="#f48cc0"/><stop offset=".7" stop-color="#8f7fe0"/><stop offset="1" stop-color="#5aa9ec"/></linearGradient>
-      <linearGradient id="k-tower" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f86a6"/><stop offset="1" stop-color="#35536e"/></linearGradient>
-      <linearGradient id="k-dome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b4e0ee"/><stop offset="1" stop-color="#5f96b8"/></linearGradient>
+      <linearGradient id="k-tower" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#435060"/><stop offset=".5" stop-color="#232c37"/><stop offset="1" stop-color="#121820"/></linearGradient>
+      <linearGradient id="k-mall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a62c0"/><stop offset="1" stop-color="#22408e"/></linearGradient>
       <linearGradient id="k-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd06f"/><stop offset="1" stop-color="#5aa64c"/></linearGradient>
       <linearGradient id="k-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6ec0e6"/><stop offset="1" stop-color="#3f92c4"/></linearGradient></defs>
       <rect width="1600" height="1000" fill="url(#k-sky)"/>
@@ -378,7 +384,7 @@
       ${rainbow(860, 620, 420)}
       <path d="M0,560 Q200,470 420,520 Q600,460 820,510 Q1050,450 1280,510 Q1450,480 1600,520 L1600,640 L0,640Z" fill="#a9b8d8"/>
       <path d="M380,500 l-20,16 l16,-2 l8,10 l10,-20Z M1050,462 l-16,14 l14,-2 l6,8 l8,-16Z" fill="#fff" opacity=".85"/>
-      ${mall}${tower}
+      ${tower}${mall}
       <path d="M600,660 Q870,500 1140,660Z" fill="#7dbf63"/>
       ${kirk}
       ${kite}
