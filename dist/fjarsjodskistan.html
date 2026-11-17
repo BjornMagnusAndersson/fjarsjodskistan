@@ -710,6 +710,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     mittens:  { z: 58, thumb: [72, 422, 256, 82] },
     scarf:    { z: 60, thumb: [140, 210, 130, 190] },
     necklace: { z: 70, thumb: [156, 236, 88, 90] },
+    face:     { z: 72, thumb: [130, 150, 140, 70] },   // face paint: on the face, under the front hair
+
     earrings: { z: 78, thumb: [105, 160, 44, 64] },
     glasses:  { z: 80, thumb: [118, 128, 164, 76] },
     hairband: { z: 84, thumb: [104, 50, 192, 120] },
@@ -724,6 +726,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     { id: 'crown',    is: 'Kórónur' },
     { id: 'hairband', is: 'Spangir og slaufur' },
     { id: 'glasses',  is: 'Gleraugu' },
+    { id: 'face',     is: 'Andlitsmálning' },
     { id: 'earrings', is: 'Eyrnalokkar' },
     { id: 'necklace', is: 'Hálsmen' },
     { id: 'top',      is: 'Bolir' },
@@ -958,48 +961,133 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 
   /* Hairstyles: each returns {back, front}. Groups with class "sway-*"
      move in the wind (CSS in the app). Back hair uses a darker gradient
-     than front hair, which gives the hair depth. */
-  const hairFill = () => addDef('hairg', `<linearGradient id="hairg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${HAIR.light}"/><stop offset=".25" stop-color="${HAIR.light}"/><stop offset=".6" stop-color="${HAIR.base}"/><stop offset="1" stop-color="${HAIR.dark}"/></linearGradient>`);
-  const hairBack = () => addDef('hairb', `<linearGradient id="hairb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${HAIR.base}"/><stop offset=".55" stop-color="${HAIR.dark}"/><stop offset="1" stop-color="${HAIR.deep}"/></linearGradient>`);
-  const hp = (d, back = false) => `<path d="${d}" fill="${back ? hairBack() : hairFill()}" stroke="${HAIR.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
+     than front hair, which gives the hair depth.
+     Every helper takes a palette (default: her own brown), so the same
+     shapes can be drawn in rainbow, mermaid or dark curly colours. */
+  const stopsOf = s => s.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('');
+  /**
+   * A hair colour set. P = { base, light, glow, dark, deep, line }.
+   * front/back: optional gradient stops [[offset, colour]].
+   * span [y0, y1]: run the gradient over the whole doll instead of over each
+   * shape, so the colours of multi-colour hair line up between the pieces.
+   */
+  function hairPalette(key, P, front, back, span) {
+    const fid = key ? 'hairg-' + key : 'hairg', bid = key ? 'hairb-' + key : 'hairb';
+    const dir = span ? ` gradientUnits="userSpaceOnUse" x1="0" y1="${span[0]}" x2="0" y2="${span[1]}"` : ' x1="0" y1="0" x2="0" y2="1"';
+    const fs = front || [[0, P.light], [.25, P.light], [.6, P.base], [1, P.dark]];
+    const bs = back || [[0, P.base], [.55, P.dark], [1, P.deep]];
+    return Object.assign({}, P, {
+      fill: () => addDef(fid, `<linearGradient id="${fid}"${dir}>${stopsOf(fs)}</linearGradient>`),
+      bfill: () => addDef(bid, `<linearGradient id="${bid}"${dir}>${stopsOf(bs)}</linearGradient>`),
+    });
+  }
+  // Her own hair (the approved brown).
+  const BROWN = hairPalette('', HAIR);
+  // Rainbow: red at the top of the head down to violet at the tips.
+  const RAINBOW = hairPalette('rainbow', { base: '#9f8be0', light: '#ffe36e', glow: '#ffffff', dark: '#7d6bd0', deep: '#5b4a9e', line: '#6d5590' },
+    [[0, '#ff8a9a'], [.2, '#ffb562'], [.36, '#ffe36e'], [.52, '#86dc8c'], [.7, '#6cc6f2'], [.86, '#a690f0'], [1, '#d58ae6']],
+    [[0, '#ef7088'], [.2, '#f29a4c'], [.36, '#f2cf52'], [.52, '#62c070'], [.7, '#4aa8dc'], [.86, '#8a72dc'], [1, '#bb6ccf']], [62, 380]);
+  // Mermaid: sea green at the roots, ocean blue, then violet tips.
+  const MERMAID = hairPalette('mermaid', { base: '#3fb8b0', light: '#8fe3d6', glow: '#e6fffa', dark: '#5d7fd0', deep: '#3f3a86', line: '#2f5f78' },
+    [[0, '#8fe3d6'], [.3, '#52c7c0'], [.65, '#6a9be0'], [1, '#b07ee0']],
+    [[0, '#3fa8a8'], [.5, '#4f78c8'], [1, '#7a55b8']], [60, 540]);
+  // Dark chocolate brown (curly cloud).
+  const DARK = hairPalette('dark', { base: '#6e4532', light: '#a06e52', glow: '#e0bea2', dark: '#4b2c1f', deep: '#2f1b13', line: '#3b2319' });
+  const hairFill = () => BROWN.fill();
+
+  const hp = (d, back = false, pal = BROWN) => `<path d="${d}" fill="${back ? pal.bfill() : pal.fill()}" stroke="${pal.line}" stroke-width="2.4" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="url(#soft-h)" opacity=".55"/>`;
-  const strand = (d, w = 2) => `<path d="${d}" fill="none" stroke="${HAIR.deep}" stroke-width="${w}" stroke-linecap="round" opacity=".45"/>`;
-  const lstrand = (d, w = 1.8) => `<path d="${d}" fill="none" stroke="${HAIR.glow}" stroke-width="${w}" stroke-linecap="round" opacity=".7"/>`;
+  const strand = (d, w = 2, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.deep}" stroke-width="${w}" stroke-linecap="round" opacity=".45"/>`;
+  const lstrand = (d, w = 1.8, pal = BROWN) => `<path d="${d}" fill="none" stroke="${pal.glow}" stroke-width="${w}" stroke-linecap="round" opacity=".7"/>`;
   /** Glossy shine: a few light lens shapes following the curve of the head. */
-  const shine = () => [
+  const shine = (pal = BROWN) => [
     'M146,112 Q156,92 176,84 Q162,96 152,116 Z',
     'M184,79 Q200,74 214,76 Q200,80 186,84 Z',
     'M224,78 Q244,84 256,100 Q240,90 222,84 Z',
-  ].map(d => `<path d="${d}" fill="${HAIR.glow}" opacity=".85"/>`).join('');
+  ].map(d => `<path d="${d}" fill="${pal.glow}" opacity=".85"/>`).join('');
+  /** Mirror a path drawn on the left side to the right side (absolute x,y pairs only). */
+  const mirrorD = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => f(400 - x) + ',' + y);
 
   // Hair cap with a side-swept fringe, shared by all styles.
   const CAP = 'M122,170 C114,108 150,62 202,62 C254,62 288,106 278,170 C273,146 266,128 254,116 C246,128 230,132 214,124 C204,134 184,138 168,130 C158,140 140,150 122,170 Z';
-  const capFront = () => hp(CAP) +
-    strand('M170,74 Q150,96 146,128') + strand('M214,70 Q236,86 250,112') + strand('M168,128 Q186,108 206,90', 1.8) +
-    strand('M214,122 Q232,104 244,92', 1.8) + lstrand('M156,124 Q164,104 182,90') + lstrand('M236,104 Q246,112 252,122') +
-    shine();
+  const capFront = (pal = BROWN) => hp(CAP, false, pal) +
+    strand('M170,74 Q150,96 146,128', 2, pal) + strand('M214,70 Q236,86 250,112', 2, pal) + strand('M168,128 Q186,108 206,90', 1.8, pal) +
+    strand('M214,122 Q232,104 244,92', 1.8, pal) + lstrand('M156,124 Q164,104 182,90', 1.8, pal) + lstrand('M236,104 Q246,112 252,122', 1.8, pal) +
+    shine(pal);
+  // Short back hair that ends at the nape (under braids, ponytail, buns...).
+  const NAPE = 'M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z';
+
+  /**
+   * Long loose hair (her default style), in any palette.
+   * extra: optional markup added inside the back hair and each front lock
+   * (used for the coloured extensions).
+   */
+  const LOOSE_BACK = 'M200,58 C138,58 106,98 106,162 C106,222 98,286 96,338 Q116,356 138,342 Q160,360 182,346 Q200,362 218,346 Q240,360 262,342 Q284,356 304,338 C302,286 294,222 294,162 C294,98 262,58 200,58 Z';
+  const LOOSE_LOCK_L = 'M138,128 C120,168 112,236 118,300 Q120,336 136,352 Q146,330 144,298 C140,246 146,186 154,146 Z';
+  function looseHair(pal, extra = {}) {
+    const backD = LOOSE_BACK;
+    const back = `<g class="sway-b">` + hp(backD, true, pal) +
+      strand('M128,220 Q120,280 124,330', 2, pal) + strand('M272,220 Q280,280 276,330', 2, pal) + strand('M112,260 Q106,300 110,334', 2, pal) + strand('M288,260 Q294,300 290,334', 2, pal) +
+      lstrand('M120,200 Q114,250 118,300', 1.6, pal) + lstrand('M280,200 Q286,250 282,300', 1.6, pal) + (extra.back || '') + `</g>`;
+    const lockLD = LOOSE_LOCK_L;
+    const lockRD = 'M262,128 C280,168 288,236 282,300 Q280,336 264,352 Q254,330 256,298 C260,246 254,186 246,146 Z';
+    const lockL = `<g class="sway-l">` + hp(lockLD, false, pal) + strand('M134,170 Q126,240 132,320', 2, pal) + lstrand('M142,156 Q134,220 138,290', 1.8, pal) + (extra.lockL || '') + `</g>`;
+    const lockR = `<g class="sway-r">` + hp(lockRD, false, pal) + strand('M266,170 Q274,240 268,320', 2, pal) + lstrand('M258,156 Q266,220 262,290', 1.8, pal) + (extra.lockR || '') + `</g>`;
+    return { back, front: lockL + lockR + capFront(pal) };
+  }
+
+  /** One braid segment (a plump oval with a shine on top and a crease below). */
+  const braidBump = (x, y, rx, ry, pal = BROWN) => {
+    const k = ry / 15;   // the approved braid uses ry 15; offsets scale with it
+    return `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="${pal.fill()}" stroke="${pal.line}" stroke-width="2.2"/>` +
+      `<path d="M${f(x - rx * .5)},${f(y - 8 * k)} Q${f(x)},${f(y - 12 * k)} ${f(x + rx * .5)},${f(y - 7 * k)}" fill="none" stroke="${pal.glow}" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>` +
+      `<path d="M${f(x - rx * .7)},${f(y + 7 * k)} Q${f(x)},${f(y + 13 * k)} ${f(x + rx * .7)},${f(y + 7 * k)}" fill="none" stroke="${pal.deep}" stroke-width="1.8" stroke-linecap="round" opacity=".45"/>`;
+  };
+  /** Little ribbon bow (pink by default), centred at x,y. */
+  const hairBow = (x, y, c = '#e45a73', dk = '#a8344c', hi = '#f7a6b6', mid = '#f07d92') =>
+    `<path d="M${x},${y} l-14,-9 v20z M${x},${y} l14,-9 v20z" fill="${c}" stroke="${dk}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M${x - 11},${y - 5} l6,3 M${x + 11},${y - 5} l-6,3" stroke="${hi}" stroke-width="2" stroke-linecap="round"/>` +
+    `<circle cx="${x}" cy="${y}" r="4.5" fill="${mid}" stroke="${dk}" stroke-width="2"/>`;
+  /** Scrunchie: a puffy ring seen from the side. */
+  const scrunchie = (x, y, rx, ry, c) =>
+    `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${c}" stroke="${ink(c)}" stroke-width="2"/>` +
+    `<path d="M${x - rx * .6},${y - ry * .2} q${rx * .3},-${ry * .6} ${rx * .6},0 q${rx * .3},-${ry * .6} ${rx * .6},0" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>`;
+  /** A bumpy outline through pts: each segment bulges outwards by amt × its length (curls, clouds). */
+  const bumpy = (pts, amt) => {
+    let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+    for (let i = 0; i < pts.length; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length];
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0;
+      d += `Q${f(mx + dy * amt)},${f(my - dx * amt)} ${f(x1)},${f(y1)}`;
+    }
+    return d + 'Z';
+  };
+  /** Small curl spirals scattered over curly hair. */
+  const curlMarks = (pts, pal) => pts.map(([x, y], i) =>
+    `<path d="M${x},${y} a5,5 0 1 ${i % 2} 8,-3" fill="none" stroke="${i % 3 ? pal.deep : pal.glow}" stroke-width="2" stroke-linecap="round" opacity="${i % 3 ? .45 : .7}"/>`).join('');
+  /** One loc (dreadlock): a soft rope from (x0,y0) curving through (cx,cy) to (x1,y1), with a bead near the end. */
+  const loc = (x0, y0, cx, cy, x1, y1, w, pal, bead) => {
+    const d = `M${x0},${y0} Q${cx},${cy} ${x1},${y1}`;
+    const at = t => [(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1];
+    const [bx, by] = at(.82);
+    return `<path d="${d}" fill="none" stroke="${pal.line}" stroke-width="${w + 4}" stroke-linecap="round"/>` +
+      `<path d="${d}" fill="none" stroke="${pal.base}" stroke-width="${w}" stroke-linecap="round"/>` +
+      `<path d="${d}" fill="none" stroke="${pal.dark}" stroke-width="3" stroke-linecap="round" opacity=".5" transform="translate(${w / 2 - 2.5},0)"/>` +
+      `<path d="${d}" fill="none" stroke="${pal.deep}" stroke-width="${w - 6}" stroke-dasharray="1.6 6" opacity=".3"/>` +
+      `<path d="${d}" fill="none" stroke="${pal.glow}" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="9 5" opacity=".6" transform="translate(${-w / 4},0)"/>` +
+      (bead ? `<ellipse cx="${f(bx)}" cy="${f(by)}" rx="${f(w / 2 + 2.5)}" ry="5" fill="${bead}" stroke="${ink(bead)}" stroke-width="1.6"/>` +
+        `<ellipse cx="${f(bx - 2)}" cy="${f(by - 1.5)}" rx="2.4" ry="1.4" fill="#fff" opacity=".8"/>` : '');
+  };
 
   const HAIRSTYLES = {
-    loose() {
-      const backD = 'M200,58 C138,58 106,98 106,162 C106,222 98,286 96,338 Q116,356 138,342 Q160,360 182,346 Q200,362 218,346 Q240,360 262,342 Q284,356 304,338 C302,286 294,222 294,162 C294,98 262,58 200,58 Z';
-      const back = `<g class="sway-b">` + hp(backD, true) +
-        strand('M128,220 Q120,280 124,330') + strand('M272,220 Q280,280 276,330') + strand('M112,260 Q106,300 110,334') + strand('M288,260 Q294,300 290,334') +
-        lstrand('M120,200 Q114,250 118,300', 1.6) + lstrand('M280,200 Q286,250 282,300', 1.6) + `</g>`;
-      const lockLD = 'M138,128 C120,168 112,236 118,300 Q120,336 136,352 Q146,330 144,298 C140,246 146,186 154,146 Z';
-      const lockRD = 'M262,128 C280,168 288,236 282,300 Q280,336 264,352 Q254,330 256,298 C260,246 254,186 246,146 Z';
-      const lockL = `<g class="sway-l">` + hp(lockLD) + strand('M134,170 Q126,240 132,320') + lstrand('M142,156 Q134,220 138,290') + `</g>`;
-      const lockR = `<g class="sway-r">` + hp(lockRD) + strand('M266,170 Q274,240 268,320') + lstrand('M258,156 Q266,220 262,290') + `</g>`;
-      return { back, front: lockL + lockR + capFront() };
-    },
+    loose() { return looseHair(BROWN); },
     braids() {
-      const back = hp('M200,58 C140,58 110,98 110,158 C110,186 118,204 134,214 Q200,240 266,214 C282,204 290,186 290,158 C290,98 260,58 200,58 Z', true);
+      const back = hp(NAPE, true);
       const braid = (x, s, cls) => {
         let g = `<g class="${cls}">`;
         for (let i = 0; i < 7; i++) {
           const y = 196 + i * 23, ox = (i % 2 ? 4 : -4) * s, rx = 15 - i * .6;
-          g += `<ellipse cx="${x + ox}" cy="${y}" rx="${rx}" ry="15" fill="${hairFill()}" stroke="${HAIR.line}" stroke-width="2.2"/>` +
-            `<path d="M${x + ox - rx * .5},${y - 8} Q${x + ox},${y - 12} ${x + ox + rx * .5},${y - 7}" fill="none" stroke="${HAIR.glow}" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>` +
-            `<path d="M${x + ox - rx * .7},${y + 7} Q${x + ox},${y + 13} ${x + ox + rx * .7},${y + 7}" fill="none" stroke="${HAIR.deep}" stroke-width="1.8" stroke-linecap="round" opacity=".45"/>`;
+          g += braidBump(x + ox, y, rx, 15);
         }
         g += `<path d="M${x - 9},364 q9,14 18,0 q-4,22 -9,26 q-5,-4 -9,-26z" fill="${hairFill()}" stroke="${HAIR.line}" stroke-width="2.2"/>`;
         g += `<path d="M${x},357 l-14,-9 v20z M${x},357 l14,-9 v20z" fill="#e45a73" stroke="#a8344c" stroke-width="2" stroke-linejoin="round"/>` +
@@ -1016,16 +1104,166 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       const tie = `<ellipse cx="270" cy="104" rx="11" ry="9" fill="#7ac0e8" stroke="#3e7ea6" stroke-width="2"/><ellipse cx="267" cy="101" rx="4" ry="2.6" fill="#d7f0ff" opacity=".9"/>`;
       return { back, front: capFront() + tie };
     },
+
+    /* ---- Added hairstyles (keys are stored in saved outfits: never rename) ---- */
+
+    /** Rainbow: her long loose hair in rainbow colours, red at the top to violet at the tips. */
+    rainbow() { return looseHair(RAINBOW); },
+
+    /** Bob: short hair that ends just under the chin and curls in at the ends. */
+    bob() {
+      const backD = 'M200,58 C136,58 104,100 106,160 C108,196 108,224 116,246 Q134,258 152,250 L248,250 Q266,258 284,246 C292,224 292,196 294,160 C296,100 264,58 200,58 Z';
+      const sideL = 'M132,126 C114,160 110,206 116,238 Q122,254 138,256 Q154,256 162,246 Q146,236 142,212 C138,188 140,160 150,140 Z';
+      const side = (d, cls, s) => `<g class="${cls}">` + hp(d) +
+        strand(s < 0 ? 'M130,150 Q120,200 132,246' : mirrorD('M130,150 Q120,200 132,246')) +
+        lstrand(s < 0 ? 'M140,148 Q132,190 140,232' : mirrorD('M140,148 Q132,190 140,232')) + `</g>`;
+      return {
+        back: hp(backD, true) + strand('M122,180 Q118,220 126,244') + strand('M278,180 Q282,220 274,244'),
+        front: side(sideL, 'sway-l', -1) + side(mirrorD(sideL), 'sway-r', 1) + capFront(),
+      };
+    },
+
+    /** Extra long: straight hair all the way down past the hands. */
+    longest() {
+      const backD = 'M200,58 C138,58 106,98 106,162 C106,240 100,330 102,420 C104,500 112,560 120,600 Q140,588 158,604 Q178,590 200,606 Q222,590 242,604 Q260,588 280,600 C288,560 296,500 298,420 C300,330 294,240 294,162 C294,98 262,58 200,58 Z';
+      const lockLD = 'M138,128 C120,170 110,250 114,340 C116,400 120,440 130,480 Q144,466 148,440 C144,380 142,300 146,230 C148,190 150,160 154,146 Z';
+      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d) +
+        strand(m('M134,170 Q122,300 134,460')) + lstrand(m('M142,156 Q132,260 140,420')) + `</g>`;
+      const id = d => d;
+      return {
+        back: `<g class="sway-b">` + hp(backD, true) +
+          ['M124,230 Q112,400 126,586', 'M112,300 Q106,450 118,590', 'M140,420 Q138,500 150,596'].map(d => strand(d) + strand(mirrorD(d))).join('') +
+          lstrand('M120,220 Q110,360 120,520', 1.6) + lstrand(mirrorD('M120,220 Q110,360 120,520'), 1.6) + `</g>`,
+        front: lock(lockLD, 'sway-l', id) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(),
+      };
+    },
+
+    /** Mermaid: long wavy hair, sea green to ocean blue to violet, with a shell clip. */
+    mermaid() {
+      const backD = 'M200,58 C138,58 104,98 104,162 C104,220 94,262 104,300 C114,340 96,380 102,420 C108,460 96,490 108,524 Q126,512 142,528 Q160,512 178,526 Q200,512 222,526 Q240,512 258,528 Q274,512 292,524 C304,490 292,460 298,420 C304,380 286,340 296,300 C306,262 296,220 296,162 C296,98 262,58 200,58 Z';
+      const lockLD = 'M138,128 C118,170 128,210 116,250 C104,290 128,330 118,370 C112,400 118,430 132,456 Q148,438 144,410 C142,380 136,350 144,320 C152,290 140,260 148,220 C152,190 150,160 154,146 Z';
+      const wave = 'M132,170 C124,210 128,240 122,270 C116,300 132,330 126,370 C122,400 126,420 134,440';
+      const lock = (d, cls, m) => `<g class="${cls}">` + hp(d, false, MERMAID) + strand(m(wave), 2, MERMAID) +
+        lstrand(m('M144,160 C140,200 144,230 138,260'), 1.8, MERMAID) + `</g>`;
+      // shell clip above the left ear: a fan with ridges
+      const shell = `<path d="M150,112 L136,94 Q150,84 166,92 Z" fill="#fbd3e0" stroke="#c97a98" stroke-width="2" stroke-linejoin="round"/>` +
+        `<path d="M150,112 L141,92 M150,112 L150,88 M150,112 L159,90" stroke="#c97a98" stroke-width="1.4" stroke-linecap="round"/>` +
+        `<circle cx="150" cy="111" r="3.4" fill="#fff6fa" stroke="#c97a98" stroke-width="1.4"/>`;
+      return {
+        back: `<g class="sway-b">` + hp(backD, true, MERMAID) +
+          ['M122,220 C110,280 128,330 116,380 C108,430 120,470 124,512', 'M140,380 C134,420 146,470 150,516'].map(d => strand(d, 2, MERMAID) + strand(mirrorD(d), 2, MERMAID)).join('') +
+          lstrand('M114,200 C104,260 120,310 110,360', 1.6, MERMAID) + lstrand(mirrorD('M114,200 C104,260 120,310 110,360'), 1.6, MERMAID) + `</g>`,
+        front: lock(lockLD, 'sway-l', d => d) + lock(mirrorD(lockLD), 'sway-r', mirrorD) + capFront(MERMAID) + shell,
+      };
+    },
+
+    /** Extensions: her loose hair with clip-in coloured streaks (pink, lilac, blue, mint) and little clips at the roots. */
+    extensions() {
+      const COLS = ['#f48cc0', '#a98be0', '#5cc8e8', '#7fdc9a'];
+      const clipB = addDef('hx-back', `<clipPath id="hx-back"><path d="${LOOSE_BACK}"/></clipPath>`);
+      const clipL = addDef('hx-lockL', `<clipPath id="hx-lockL"><path d="${LOOSE_LOCK_L}"/></clipPath>`);
+      const clipR = addDef('hx-lockR', `<clipPath id="hx-lockR"><path d="${mirrorD(LOOSE_LOCK_L)}"/></clipPath>`);
+      // a dyed streak inside the hair: colour band, a darker edge strand and a light shine strand
+      const streak = (d, c, w) =>
+        `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" opacity=".92"/>` +
+        `<path d="${d}" fill="none" stroke="${ink(c)}" stroke-width="1.6" stroke-linecap="round" opacity=".45" transform="translate(${w / 2 - 1},0)"/>` +
+        `<path d="${d}" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55" transform="translate(${-w / 4},0)"/>`;
+      // tiny clip holding a streak in (gold with a gem)
+      const hairClip = (x, y, c) => `<rect x="${x - 7}" y="${y - 3.5}" width="14" height="7" rx="3.5" fill="#f6d36a" stroke="#b8862a" stroke-width="1.6"/>` +
+        `<circle cx="${x}" cy="${y}" r="2.4" fill="${c}" stroke="${ink(c)}" stroke-width="1"/>`;
+      const backS = ['M114,190 Q100,280 110,350', 'M132,220 Q124,290 134,350'];
+      const back = `<g clip-path="${clipB}">` + backS.map((d, i) => streak(d, COLS[i], 13) + streak(mirrorD(d), COLS[3 - i], 13)).join('') + `</g>`;
+      const front = 'M138,140 Q124,230 130,350', front2 = 'M147,150 Q138,240 141,330';
+      return looseHair(BROWN, {
+        back,
+        lockL: `<g clip-path="${clipL}">` + streak(front, COLS[0], 9) + streak(front2, COLS[2], 6) + `</g>` + hairClip(138, 164, COLS[0]),
+        lockR: `<g clip-path="${clipR}">` + streak(mirrorD(front), COLS[1], 9) + streak(mirrorD(front2), COLS[3], 6) + `</g>` + hairClip(262, 164, COLS[1]),
+      });
+    },
+
+    /** Space buns: two round buns on top of the head with scrunchies. The buns hide under hats. */
+    spacebuns(o = {}) {
+      const bun = (x, s, c) => {
+        const cy = 74;
+        return hp(`M${x - 31},${cy} a31,30 0 1 1 62,0 a31,30 0 1 1 -62,0Z`) +
+          strand(`M${x - 20},${cy - 4} q10,-16 26,-6 q10,8 0,18`, 2) + strand(`M${x - 14},${cy + 10} q12,8 24,-4`, 1.8) +
+          lstrand(`M${x - 18},${cy - 12} q8,-10 20,-8`, 2.2) +
+          scrunchie(x + s * 6, cy + 26, 26, 8, c);
+      };
+      const buns = o.hat ? '' : bun(146, 1, '#f48cc0') + bun(254, -1, '#a98be0');
+      return { back: buns + hp(NAPE, true), front: capFront() };
+    },
+
+    /** Pigtails: two fluffy bunches above the ears, tied with ribbon bows. */
+    pigtails() {
+      const tailL = 'M124,116 C98,100 72,124 76,164 C78,196 66,226 78,262 C84,284 100,296 112,286 Q102,272 106,252 Q90,250 96,226 Q108,226 110,206 Q96,196 104,176 Q116,178 118,160 Q108,146 120,134 Z';
+      const tail = (d, cls, m) => `<g class="${cls}">` + hp(d) +
+        strand(m('M108,130 C88,150 92,200 86,250'), 2) + strand(m('M116,150 C104,180 104,220 98,270'), 1.6) +
+        lstrand(m('M98,122 C84,140 82,170 84,196'), 2) + hairBow(m === mirrorD ? 276 : 124, 122) + `</g>`;
+      return { back: hp(NAPE, true), front: tail(tailL, 'sway-l', d => d) + tail(mirrorD(tailL), 'sway-r', mirrorD) + capFront() };
+    },
+
+    /** Curly cloud: a big round cloud of dark curls with a curly fringe. */
+    curls() {
+      const ring = [];
+      for (let i = 0; i < 22; i++) {
+        const a = Math.PI / 2 + i / 22 * Math.PI * 2;
+        ring.push([200 + Math.cos(a) * 126, 156 + Math.sin(a) * 120]);
+      }
+      const back = hp(bumpy(ring, .32), true, DARK) +
+        curlMarks([[96, 150], [104, 200], [114, 240], [92, 110], [300, 150], [292, 200], [282, 240], [304, 110], [130, 60], [170, 44], [226, 44], [266, 60], [112, 228], [288, 228]], DARK);
+      // fringe: bumpy top following the head, curls along the forehead
+      const fringe = bumpy([[122, 172], [116, 136], [126, 104], [148, 80], [176, 66], [200, 62], [226, 66], [252, 80], [274, 104], [284, 136], [278, 172],
+        [270, 150], [258, 132], [242, 124], [224, 128], [208, 122], [190, 128], [172, 124], [156, 132], [140, 146], [130, 160]], .22);
+      const front = hp(fringe, false, DARK) +
+        curlMarks([[142, 96], [168, 80], [196, 74], [222, 78], [250, 92], [138, 128], [264, 122], [182, 102], [214, 100], [234, 108], [160, 112]], DARK) +
+        shine(DARK);
+      return { back, front };
+    },
+
+    /** Locs: rope-like locs falling to the shoulders, with colourful beads. */
+    locs() {
+      const BEADS = ['#e2464c', '#f7c948', '#4caf6a', '#f48ca0', '#6cc6f2'];
+      let back = hp(NAPE, true);
+      // locs behind the head, hanging down the back
+      for (let i = 0; i < 10; i++) {
+        const x = 112 + i * 19.5, out = (x - 200) * .28, y1 = 300 + (i % 3) * 18;
+        back += loc(x, 150, x + out, 230, x + out * 1.1, y1, 13, BROWN, i % 2 ? BEADS[(i >> 1) % 5] : '');
+      }
+      // locs in front, lying over the shoulders
+      // roots tucked under the hair cap at the temples; they curve outwards so the face stays free
+      const sideL = [[126, 150, 100, 220, 96, 312], [136, 140, 112, 230, 112, 332], [146, 136, 120, 200, 130, 300]];
+      const front = (s, m) => sideL.map(([x0, y0, cx, cy, x1, y1], i) => {
+        const X = v => m ? 400 - v : v;
+        return loc(X(x0), y0, X(cx), cy, X(x1), y1, 13, BROWN, BEADS[(i + (m ? 2 : 0)) % 5]);
+      }).join('');
+      return { back, front: `<g class="sway-l">${front(0, false)}</g><g class="sway-r">${front(0, true)}</g>` + capFront() };
+    },
+
+    /** Side braid: one thick braid over her shoulder, finished with a flower. */
+    sidebraid() {
+      let braid = '<g class="sway-r">';
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const t = i / 9;
+        pts.push([270 - 14 * t - 6 * Math.sin(t * Math.PI), 188 + 210 * t]);
+      }
+      pts.forEach(([x, y], i) => { braid += braidBump(x + (i % 2 ? 5 : -5), y, 18 - i * .7, 16); });
+      const [ex, ey] = pts[9];
+      braid += `<path d="M${f(ex - 10)},${f(ey + 10)} q10,14 20,0 q-4,24 -10,28 q-6,-4 -10,-28z" fill="${hairFill()}" stroke="${HAIR.line}" stroke-width="2.2"/>` +
+        H.flower(ex, ey + 6, 11, '#f48cc0') + '</g>';
+      return { back: hp(NAPE, true), front: braid + capFront() };
+    },
   };
 
   /* ---------------------------------------------------------------
      Doll renderer
-     state: { hair:'loose'|'braids'|'ponytail', worn:{slot:itemId}, mood:'smile'|'happy' }
+     state: { hair: a key of HAIRSTYLES, worn:{slot:itemId}, mood:'smile'|'happy' }
      Returns the inner markup of an <svg viewBox="0 0 400 800">.
      --------------------------------------------------------------- */
   DOLL.renderDoll = function (state = {}) {
     const hairDef = HAIRSTYLES[state.hair] || HAIRSTYLES.loose;
-    const hair = hairDef();
+    const hair = hairDef({ hat: !!(state.worn && state.worn.hat) });
     const layers = [];                      // [z, markup]
     layers.push([10, `<g class="hair-back">${hair.back}</g>`]);
     layers.push([20, `<g class="body">${drawBody()}</g>`]);
@@ -2330,6 +2568,58 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     { id: 'neck-friendship', shape: 'head-necklace', cat: 'necklace', name: { is: 'Vinaperlur', en: 'Friendship beads' }, colors: ['#f7a6c2'], kind: 'beads', beads: ['#f7a6c2', '#ffffff', '#9fd3f2', '#ffffff', '#f7d660', '#ffffff', '#b59be6', '#ffffff'], count: 13, beadR: 4.2, hearts: true },
     { id: 'neck-crystal', shape: 'head-necklace', cat: 'necklace', name: { is: 'Kristalshálsmen', en: 'Crystal necklace' }, colors: ['#b9a8f2'], kind: 'crystal', metal: '#dfe5ee' },
     { id: 'neck-strawberry', shape: 'head-necklace', cat: 'necklace', name: { is: 'Jarðarberjahálsmen', en: 'Strawberry necklace' }, colors: ['#e8475a'], kind: 'berry', cord: '#f7a6c2' },
+  ]);
+})();
+
+/* =====================================================================
+   Face paint (slot face, cat face): drawn on the face, under the front
+   hair, so it can be worn together with glasses, hats and earrings.
+   ===================================================================== */
+(function () {
+  'use strict';
+  const { ink } = H;
+
+  /* -------------------------------------------------------------
+     Cat face: a little cat nose over her own nose, a line down to
+     the mouth, and three painted whiskers on each cheek.
+     colors: [nose, whiskers]
+     rainbow: true gives a rainbow nose and a different colour per whisker.
+     ------------------------------------------------------------- */
+  const NOSE = 'M188,177 Q200,171 212,177 Q214,182 206,188 Q200,193 194,188 Q186,182 188,177 Z';
+  // left cheek whiskers (from the nose side outwards); the right side is mirrored
+  const WHISKERS = ['M176,186 Q160,180 142,180', 'M175,193 Q158,193 140,196', 'M176,200 Q160,205 145,212'];
+  const RAINBOW_W = [['#ef5b6c', '#f6a447', '#f2cf3b'], ['#5fc46d', '#4aa8e0', '#9b72e0']];
+
+  DOLL.shape('face-cat', {
+    slot: 'face',
+    draw(it) {
+      const [noseC, whiskC] = it.colors;
+      const noseFill = it.rainbow
+        ? H.def('g-' + it.id, '<linearGradient id="g-' + it.id + '" x1="0" y1="0" x2="1" y2="0">' +
+            ['#ef5b6c', '#f6a447', '#f2cf3b', '#5fc46d', '#4aa8e0', '#9b72e0'].map((c, i) => `<stop offset="${i / 5}" stop-color="${c}"/>`).join('') + '</linearGradient>')
+        : noseC;
+      const mirror = d => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => (400 - x) + ',' + y);
+      // one whisker: soft light halo underneath, then the paint line
+      const whisker = (d, c) =>
+        `<path d="${d}" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".35"/>` +
+        `<path d="${d}" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;
+      let g = '';
+      WHISKERS.forEach((d, i) => {
+        g += whisker(d, it.rainbow ? RAINBOW_W[0][i] : whiskC) + whisker(mirror(d), it.rainbow ? RAINBOW_W[1][i] : whiskC);
+      });
+      // nose with a shine, and the little line down to the mouth
+      g += `<path d="M200,191 L200,198" stroke="${it.rainbow ? '#9b72e0' : whiskC}" stroke-width="2.6" stroke-linecap="round"/>` +
+        `<path d="${NOSE}" fill="${noseFill}" stroke="${ink(noseC)}" stroke-width="2" stroke-linejoin="round"/>` +
+        `<ellipse cx="195.5" cy="178.5" rx="4" ry="2.2" fill="#fff" opacity=".75"/>`;
+      return g;
+    },
+  });
+
+  DOLL.add([
+    { id: 'face-cat-blue', shape: 'face-cat', cat: 'face', name: { is: 'Blátt kisunef', en: 'Blue cat nose' }, colors: ['#5aa9ec', '#2f6fb0'] },
+    { id: 'face-cat-pink', shape: 'face-cat', cat: 'face', name: { is: 'Bleikt kisunef', en: 'Pink cat nose' }, colors: ['#f58bb8', '#d4588a'] },
+    { id: 'face-cat-rainbow', shape: 'face-cat', cat: 'face', name: { is: 'Regnbogakisunef', en: 'Rainbow cat nose' }, colors: ['#f2cf3b', '#9b72e0'], rainbow: true },
+    { id: 'face-cat-black', shape: 'face-cat', cat: 'face', name: { is: 'Svart kisunef', en: 'Black cat nose' }, colors: ['#2d2a33', '#2d2a33'] },
   ]);
 })();
 

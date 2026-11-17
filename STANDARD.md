@@ -89,6 +89,7 @@ A shape should be reusable: several items share one shape with different colours
 | mittens | 58 | |
 | scarf | 60 | |
 | necklace | 70 | |
+| face | 72 | face paint (cat nose and whiskers): on the face, under the front hair |
 | hair front | 74 | (core) |
 | ears | 76 | (core) |
 | earrings | 78 | |
@@ -98,7 +99,7 @@ A shape should be reusable: several items share one shape with different colours
 
 ## Categories (`cat` = the chest tab)
 
-hat, crown, hairband, glasses, earrings, necklace, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
+hat, crown, hairband, glasses, face, earrings, necklace, top, sweater, jacket, rain, snowsuit, dress (princess dresses), frock (everyday dresses), pants, shorts, skirt, swim, pyjamas, mittens, scarf, shoes, boots, cape (capes and wings), bag.
 
 ## Style rules (approved look)
 
@@ -112,6 +113,16 @@ hat, crown, hairband, glasses, earrings, necklace, top, sweater, jacket, rain, s
 8. **Keep markup reasonable**: roughly under 10 KB of SVG per item. Loop-generated motifs are fine; avoid thousands of tiny nodes.
 9. Thumbnails: check each item looks good in the chest tile. Set `thumb` when the default window crops or shows it too small.
 10. Comment every shape (what it is, colour roles). The owner reads code but doesn't write much.
+
+## Hairstyles
+
+Hairstyles live in `HAIRSTYLES` in `src/core.js` (added at the owner's request; the original loose, braids and
+ponytail are unchanged). Each style returns `{ back, front }`: back is drawn behind the body (z 10), front over the
+face (z 74). Use the helpers there: `hp(d, back, palette)`, `strand`, `lstrand`, `capFront(palette)` (the shared
+fringe), `NAPE` (short back hair), `looseHair(palette)`, `braidBump`, `mirrorD` (mirror a left-side path).
+Colours come from a palette made with `hairPalette(...)` (`BROWN` is her own hair; `RAINBOW`, `MERMAID`, `DARK`).
+A style gets `{ hat }` and can hide parts that would poke through a hat (see `spacebuns`).
+**Style keys are stored in saved outfits: never rename one.** New styles appear in the chest automatically.
 
 ## Princess dresses
 
