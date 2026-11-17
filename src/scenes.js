@@ -333,15 +333,18 @@
        that curves down at the left end like the whale's head, a row of little humps along the roof,
        a tall white pylon at the left end, and the big orange HAGKAUP letters that everyone sees. */
     const roofY = x => 560 - (x - 1264) * 6 / 302;   // top of the roof (slopes up very slightly to the right)
-    const mall = `<path d="M1226,664 V592 Q1236,578 1266,576 H1566 V664Z" fill="url(#k-mall)"/>` +
+    // the white pylon is drawn first, so it rises out of the building's head: the roof and wall cover its foot
+    const mall = `<path d="M1228,640 V470 L1256,460 V640Z" fill="#f2f4f6" stroke="#a9b0b8" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M1234,640 V474" stroke="#fff" stroke-width="4" opacity=".8"/>` +
+      `<circle cx="1242" cy="490" r="8" fill="none" stroke="#f48cc0" stroke-width="3.5"/><circle cx="1242" cy="490" r="3" fill="#6fb3e6"/>` +
+      `<path d="M1226,664 V592 Q1236,578 1266,576 H1566 V664Z" fill="url(#k-mall)"/>` +
       Array.from({ length: 12 }, (_, i) => `<path d="M${1270 + i * 24},580 V664" stroke="#5f80d0" stroke-width="1.2" opacity=".5"/>`).join('') +
       `<path d="M1212,652 Q1200,578 1264,560 L1566,554 V576 L1266,578 Q1230,584 1226,652Z" fill="#e3e7ec" stroke="#98a2ae" stroke-width="2" stroke-linejoin="round"/>` +
       Array.from({ length: 8 }, (_, i) => { const x = 1292 + i * 34, y = roofY(x);
         return `<path d="M${x - 10},${y.toFixed(1)} Q${x},${(y - 22).toFixed(1)} ${x + 10},${y.toFixed(1)}Z" fill="#d6e8f6" stroke="#98a2ae" stroke-width="1.5"/>`; }).join('') +
       `<rect x="1298" y="634" width="36" height="30" fill="#bfe3f2" stroke="#fff" stroke-width="2.5"/><path d="M1316,634 V664" stroke="#fff" stroke-width="2"/>` +   // entrance
       `<text x="1446" y="618" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="30" textLength="176" lengthAdjust="spacingAndGlyphs" fill="#f47a2a" stroke="#a8451a" stroke-width=".8">HAGKAUP</text>` +
-      `<path d="M1186,664 V470 L1210,460 V664Z" fill="#f2f4f6" stroke="#a9b0b8" stroke-width="2" stroke-linejoin="round"/>` +   // white pylon at the left end
-      `<circle cx="1198" cy="490" r="8" fill="none" stroke="#f48cc0" stroke-width="3.5"/><circle cx="1198" cy="490" r="3" fill="#6fb3e6"/>`;
+      '';
     /* Little wooden footbridge over the stream. The stream runs left-right across the picture, so the
        bridge runs away from us: the near end sits on the grass in front of the stream (y 752), the far
        end on the far bank (y 690), and it gets narrower further away. The ducks swim under it.
