@@ -92,6 +92,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .ghost.heart-fly { width: 9vmin; height: 9vmin; }
 .ghost.friend-fly { width: 22vmin; height: 22vmin; }
 .creature.arriving { visibility: hidden; }
+/* bus scene: each window clips its passengers, so they look like they sit inside */
+.seat-window { position: absolute; overflow: hidden; border-radius: 12px; pointer-events: none; }
+.seat-window .creature { pointer-events: auto; }
 .card.friend-card { width: 130px; height: 130px; padding: 8px; display: flex; align-items: center; justify-content: center; font: inherit; }
 .card.friend-card svg { width: 100%; height: 100%; }
 .card.friend-card.hop { animation: hop .7s ease; }
@@ -246,7 +249,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* narrow phones: six scene buttons and the jar must fit in one row */
 @media (max-width: 460px) {
   .bar.top-left { gap: 6px; }
-  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 42px; height: 42px; border-width: 3px; }
+  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 39px; height: 39px; border-width: 3px; }
   .bar.top-left .btn.jar-btn { margin-left: 2px; }
 }
 

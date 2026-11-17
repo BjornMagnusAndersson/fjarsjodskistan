@@ -96,6 +96,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .ghost.heart-fly { width: 9vmin; height: 9vmin; }
 .ghost.friend-fly { width: 22vmin; height: 22vmin; }
 .creature.arriving { visibility: hidden; }
+/* bus scene: each window clips its passengers, so they look like they sit inside */
+.seat-window { position: absolute; overflow: hidden; border-radius: 12px; pointer-events: none; }
+.seat-window .creature { pointer-events: auto; }
 .card.friend-card { width: 130px; height: 130px; padding: 8px; display: flex; align-items: center; justify-content: center; font: inherit; }
 .card.friend-card svg { width: 100%; height: 100%; }
 .card.friend-card.hop { animation: hop .7s ease; }
@@ -250,7 +253,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* narrow phones: six scene buttons and the jar must fit in one row */
 @media (max-width: 460px) {
   .bar.top-left { gap: 6px; }
-  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 42px; height: 42px; border-width: 3px; }
+  .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 39px; height: 39px; border-width: 3px; }
   .bar.top-left .btn.jar-btn { margin-left: 2px; }
 }
 
@@ -12204,6 +12207,83 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     </svg>`;
   }
 
+  /* ---------------- Scene 7: Strætó, the yellow city bus ----------------
+     A close-up of the bus side. The open door is drawn exactly behind the doll, so
+     she stands in the doorway; passengers (animals and her heart-jar friends) sit in
+     the windows and the driver sits at the front looking ahead to the right.
+     The app measures where the doll stands and passes it in (see busOptions in app.js):
+       o = { doorX, groundY (scene units), k (bus scale), left, right (visible scene x range) }
+     Bus drawing units: the door opening is 300 wide and 900 tall, its floor at (0,0).
+     The passengers and the driver are NOT in this SVG: the app puts them in the window
+     rectangles from busLayout(), clipped by the window, so they can be tapped. */
+  const BUS = { winTop: -840, winBot: -470, winW: 230, gap: 30, driverW: 250, doorHalf: 150 };
+  /** Where everything goes, in scene units, for the doll's current position. */
+  function busLayout(o = {}) {
+    const doorX = o.doorX ?? 520, groundY = o.groundY ?? 975, k = o.k ?? .95, left = o.left ?? 0, right = o.right ?? 1600;
+    const rightSpace = (right - doorX) / k, leftSpace = (doorX - left) / k;
+    // driver at the far right of what is visible (right next to the door on narrow screens)
+    const driverX = Math.max(BUS.doorHalf + 40, Math.min(rightSpace - BUS.driverW - 30, 1400));
+    /** Fill the stretch from a to b with as many windows as fit (at least 180 wide), sharing the space evenly. */
+    const fill = (a, b) => {
+      const span = b - a, n = Math.floor((span + BUS.gap) / (180 + BUS.gap));
+      if (n < 1) return [];
+      const w = Math.min(320, (span - (n - 1) * BUS.gap) / n), x0 = a + (span - (n * w + (n - 1) * BUS.gap)) / 2;
+      return Array.from({ length: n }, (_, i) => ({ x: x0 + i * (w + BUS.gap), w }));
+    };
+    const wins = fill(BUS.doorHalf + 40, driverX - 40)                                   // between the door and the driver
+      .concat(fill(-leftSpace - 40, -BUS.doorHalf - 40).reverse());                      // behind the door (nearest first)
+    const rect = (lx, w) => ({ x: doorX + lx * k, y: groundY + BUS.winTop * k, w: w * k, h: (BUS.winBot - BUS.winTop) * k });
+    return { doorX, groundY, k, left, right, driverX, wins, leftSpace,
+      windows: wins.map(o => rect(o.x, o.w)), driver: rect(driverX, BUS.driverW) };
+  }
+  function bus(o) {
+    const L = busLayout(o), k = L.k, T = BUS.winTop, B = BUS.winBot;
+    const rearX = -L.leftSpace - 80, noseX = L.driverX + BUS.driverW + 230;
+    /** Window: black rubber frame, dark glass, seat backs inside (the passengers sit in front of them). */
+    const win = (x, w, seats) => `<rect x="${x - 10}" y="${T - 10}" width="${w + 20}" height="${B - T + 20}" rx="26" fill="#2a2e36"/>` +
+      `<rect x="${x}" y="${T}" width="${w}" height="${B - T}" rx="18" fill="url(#bus-glass)"/>` +
+      (seats ? [x + w * .28, x + w * .72].map(cx => `<rect x="${cx - 44}" y="${B - 120}" width="88" height="140" rx="22" fill="#c8453e" stroke="#8e2a26" stroke-width="5"/><path d="M${cx - 30},${B - 100} h60 M${cx - 30},${B - 70} h60" stroke="#e7766c" stroke-width="5" stroke-dasharray="6 8"/>`).join('') : '') +
+      `<path d="M${x + 24},${T + 40} L${x + 70},${T + 10} M${x + 24},${T + 90} L${x + 120},${T + 18}" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".18"/>`;
+    const wheel = x => `<path d="M${x - 170},30 V-90 Q${x - 170},-170 ${x},-170 Q${x + 170},-170 ${x + 170},-90 V30Z" fill="#3a3f48"/>` +
+      `<circle cx="${x}" cy="40" r="130" fill="#26292f"/><circle cx="${x}" cy="40" r="72" fill="#c9ccd4" stroke="#8a8e98" stroke-width="8"/><circle cx="${x}" cy="40" r="24" fill="#8a8e98"/>`;
+    let parts = '';
+    // body: long yellow side with a rounded nose at the front (right)
+    parts += `<path d="M${rearX},-1080 H${noseX - 160} Q${noseX},-1080 ${noseX},-900 V-40 Q${noseX},30 ${noseX - 70},30 H${rearX}Z" fill="url(#bus-body)" stroke="#b8860b" stroke-width="6"/>`;
+    parts += `<rect x="${rearX}" y="-420" width="${noseX - rearX}" height="34" fill="#e2a514"/><rect x="${rearX}" y="-60" width="${noseX - rearX}" height="90" fill="#4a4f5a"/>`;
+    parts += wheel(-BUS.doorHalf - 420) + wheel(L.driverX + 120);
+    // windows with seats, the driver's window (no seats, a dashboard instead) and the windscreen
+    parts += L.wins.map(o => win(o.x, o.w, true)).join('');
+    parts += win(L.driverX, BUS.driverW, false) + `<rect x="${L.driverX}" y="${B - 60}" width="${BUS.driverW}" height="60" rx="10" fill="#3a3f48"/>`;
+    parts += `<path d="M${L.driverX + BUS.driverW + 40},${T} H${noseX - 60} Q${noseX - 20},${T + 120} ${noseX - 30},${B + 60} H${L.driverX + BUS.driverW + 40}Z" fill="url(#bus-glass)" stroke="#2a2e36" stroke-width="14" stroke-linejoin="round"/>`;
+    // the door: dark inside, lit steps, hand poles, and the two glass door leaves folded open
+    const D = BUS.doorHalf;
+    parts += `<rect x="${-D - 34}" y="-934" width="${2 * D + 68}" height="964" rx="20" fill="#2a2e36"/>` +
+      `<rect x="${-D}" y="-900" width="${2 * D}" height="900" fill="url(#bus-inside)"/>` +
+      `<rect x="${-D}" y="-60" width="${2 * D}" height="60" fill="#8a919e"/><rect x="${-D}" y="-60" width="${2 * D}" height="8" fill="#ffd84a"/>` +
+      `<path d="M${-D + 30},-880 V-60 M${D - 30},-880 V-60" stroke="#d6dbe3" stroke-width="12" stroke-linecap="round"/>` +
+      `<path d="M${-D + 30},-520 h22 M${D - 30},-520 h-22" stroke="#ffd84a" stroke-width="14" stroke-linecap="round"/>` +
+      [-1, 1].map(s => `<path d="M${s * D},-890 L${s * (D + 46)},-860 V-50 L${s * D},-20Z" fill="url(#bus-glass)" stroke="#2a2e36" stroke-width="8" stroke-linejoin="round"/>`).join('') +
+      // little amber light above the door that blinks while the door is open
+      `<circle class="twinkle" cx="0" cy="-960" r="18" fill="#ffb02e" stroke="#c4761a" stroke-width="4" style="animation-duration:1.2s"/>`;
+    return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
+      <linearGradient id="s-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86c8ee"/><stop offset="1" stop-color="#e6f6fc"/></linearGradient>
+      <linearGradient id="bus-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe066"/><stop offset=".55" stop-color="#f7c825"/><stop offset="1" stop-color="#e8a913"/></linearGradient>
+      <linearGradient id="bus-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9cc7e2"/><stop offset=".5" stop-color="#5f8fb4"/><stop offset="1" stop-color="#3f6a8f"/></linearGradient>
+      <linearGradient id="bus-inside" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5262"/><stop offset="1" stop-color="#6c7586"/></linearGradient></defs>
+      <rect width="1600" height="1000" fill="url(#s-sky)"/>
+      ${sun(1380, 150, 50)}${cloud(400, 120, .8, 110, -30)}${cloud(1100, 200, .6, 130, -70)}
+      ${rainbow(800, 700, 420)}
+      <path d="M0,420 Q160,300 360,320 Q560,290 760,330 Q980,300 1200,340 Q1420,310 1600,350 L1600,1000 L0,1000Z" fill="#a9b8d8"/>
+      <path d="M330,322 q-12,18 -20,30 M560,294 q-10,16 -16,28 M1000,304 q-8,14 -12,24" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".85"/>
+      <g transform="translate(860,250)"><path d="M-10,150 V40 L0,0 L10,40 V150Z" fill="#efece6" stroke="#a9a49c" stroke-width="2"/>
+        ${[1, 2, 3].map(i => `<rect x="${-10 - i * 8}" y="${40 + i * 26}" width="8" height="${110 - i * 26}" fill="#e2ded6" stroke="#a9a49c" stroke-width="1.5"/><rect x="${10 + (i - 1) * 8}" y="${40 + i * 26}" width="8" height="${110 - i * 26}" fill="#e2ded6" stroke="#a9a49c" stroke-width="1.5"/>`).join('')}</g>
+      <path d="M0,640 Q300,560 640,610 T1300,590 T1600,600 L1600,1000 L0,1000Z" fill="#a8db8f"/>
+      ${house(120, 640, 70, 60, '#ef8a7a', '#5a7fae')}${house(1220, 630, 70, 60, '#8fc6e2', '#c4504a')}${house(1320, 640, 60, 54, '#f7d16a', '#4f9a6a')}
+      <rect y="940" width="1600" height="60" fill="#8e939c"/>
+      <g transform="translate(${L.doorX.toFixed(1)},${L.groundY.toFixed(1)}) scale(${k.toFixed(4)})">${parts}</g>
+    </svg>`;
+  }
+
   /* =====================================================================
      Creatures: each returns a standalone SVG whose feet (or rock) sit on
      the bottom edge of its viewBox; the app places them by bottom-centre.
@@ -12656,6 +12736,42 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     },
   };
 
+  /**
+   * Bus driver, seated, seen from the side looking ahead to the right, hands on the big
+   * steering wheel. Only the upper body shows in the driver's window. The near arm has
+   * class "arm" (shoulder pivot) so a tap makes the driver wave.
+   */
+  C.driver = () => {
+    const p = 'cr-driver', skin = '#f2c9a8', line = '#b98a74';
+    const defs = lin(`${p}-shirt`, [[0, '#7fb0e6'], [1, '#4a78b8']]) + lin(`${p}-cap`, [[0, '#3d5486'], [1, '#26365c']]);
+    return svgOf('0 0 170 160', p, defs,
+      // seat back behind the driver
+      shape('M14,160 V52 Q14,36 30,36 H44 Q56,36 56,52 V160Z', '#5a6070', '#3a3f48', 2) +
+      // body in a blue uniform shirt, with a yellow tie
+      shape('M38,160 C36,122 44,94 70,90 C98,88 110,114 112,160Z', `url(#${p}-shirt)`, '#35598c', 2.2) +
+      shape('M80,94 L86,96 L84,128 L80,134 L76,128 Z', '#f7c825', '#b8860b', 1.4) +
+      shape('M70,72 h16 v22 h-16Z', skin, line, 1.8) +
+      // head in profile facing right: hair at the back, ear, nose, eye, smile, blush
+      shape('M56,52 C54,30 70,22 84,24 C100,26 106,40 104,52 C103,66 96,76 82,78 C66,78 57,68 56,52Z', skin, line, 2) +
+      shape('M56,52 C54,36 62,28 72,26 C66,36 64,48 66,60 C62,62 58,60 56,52Z', '#8a5a3a', '#5e3b26', 1.6) +
+      oval(68, 54, 5, 7, skin, 1, ` stroke="${line}" stroke-width="1.6"`) +
+      shape('M103,48 q7,4 1,10', skin, line, 1.8) +
+      oval(93, 48, 3.2, 4, '#2a1d26') + oval(94.2, 46.6, 1.2, 1.4, '#fff') +
+      stroke('M88,40 q5,-3 10,0', '#5e3b26', 2) +
+      stroke('M89,64 q6,4 12,-1', '#b5677a', 2) + oval(86, 60, 6, 4, `url(#${p}-blush)`) +
+      // peaked cap with a yellow band, peak pointing ahead
+      shape('M54,40 C54,20 70,12 84,13 C100,14 108,24 106,36 L124,40 Q110,46 80,43 Q62,42 54,40Z', `url(#${p}-cap)`, '#1c2848', 2) +
+      `<rect x="56" y="33" width="50" height="6" fill="#f7c825"/>` +
+      // steering wheel (seen from the side, tilted) and its column
+      stroke('M150,160 L140,112', '#3a3f48', 7) +
+      oval(146, 98, 9, 30, 'none', 1, ' stroke="#2a2e36" stroke-width="7" transform="rotate(-14 146 98)"') +
+      // near arm reaching for the wheel (waves when the driver is tapped)
+      `<g class="arm" style="transform-origin:86px 100px">` +
+        shape('M80,96 C96,98 120,96 138,92 L140,104 C120,110 98,112 82,112Z', `url(#${p}-shirt)`, '#35598c', 2) +
+        `<circle cx="141" cy="97" r="8" fill="${skin}" stroke="${line}" stroke-width="1.8"/>` +
+      `</g>`);
+  };
+
   /* ---- Reward friends (they come out of the heart jar, one per full jar) ---- */
   Object.assign(C, {
     /** Lion teddy: golden plush with a big orange mane, tufted tail and a stitched belly. */
@@ -12721,6 +12837,10 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     kopavogur: { name: 'Kópavogur', svg: kopavogur, wind: 3.2, ground: 77, creatures: [
       { k: 'unicorn', x: 70, y: 86, h: 16 }, { k: 'sheep', x: 56, y: 94, h: 11 }, { k: 'puffin', x: 48, y: 97, h: 10 },
       { k: 'elf', x: 84, y: 90, h: 10, peek: true }] },
+    // the yellow city bus: no animals on the ground; they ride as passengers in the windows
+    // (her heart-jar friends first, newest first, then these), and the driver sits at the front
+    bus: { name: 'Strætó', svg: bus, layout: busLayout, wind: 3, creatures: [],
+      passengers: ['unicorn', 'puffin', 'sheep', 'fox', 'puffin', 'horse'] },
   };
 
   root.SCENES = SCENES;
@@ -12880,6 +13000,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
     whoosh() { this.tone(500, .25, 'triangle', .02, 0, 900); },
+    /** The bus driver's friendly horn: a soft "bíb bíb". */
+    horn() { this.tone(523, .16, 'triangle', .05, 0); this.tone(659, .2, 'triangle', .05, .2); },
     /** A heart lands in the jar: two soft bell notes. */
     heart() { this.tone(1318, .3, 'sine', .035); this.tone(1568, .4, 'sine', .03, .1); },
     /** Full jar: a short music-box tune (C major, up and back down to a happy end). */
@@ -13243,10 +13365,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   window.addEventListener('resize', () => { clearTimeout(renderScene.t); renderScene.t = setTimeout(renderScene, 250); });
   function renderScene() {
     const sc = SCENES[state.scene] || SCENES.meadow;
-    sceneEl.innerHTML = sc.svg();
+    const opts = sc.layout ? busOptions() : undefined;     // the bus is drawn to fit where the doll stands
+    sceneEl.innerHTML = sc.svg(opts);
     stage.style.setProperty('--wind', sc.wind + 's');
     critterLayer.innerHTML = '';
-    sc.creatures.concat(friendsHere()).forEach((c, i) => {
+    if (sc.layout) seatPassengers(sc, opts);
+    (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
       if (c.friend) el.dataset.friend = c.k;
@@ -13271,6 +13395,51 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     }
     document.querySelectorAll('.scene-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scene === state.scene)));
   }
+  /* ---- the bus scene: passengers in the windows ---- */
+  /** How the 1600×1000 scene maps onto the stage (preserveAspectRatio xMidYMax slice). */
+  function sceneMap() {
+    const r = stage.getBoundingClientRect(), s = Math.max(r.width / 1600, r.height / 1000);
+    return { r, s, ox: (r.width - 1600 * s) / 2, oy: r.height - 1000 * s };
+  }
+  /** Where the doll stands, in scene units: the door goes behind her and is a bit taller than she is. */
+  function busOptions() {
+    const m = sceneMap(), d = dollRect();
+    const toX = px => (px - m.r.left - m.ox) / m.s, toY = py => (py - m.r.top - m.oy) / m.s;
+    const head = toY(d.top + d.height * 50 / 780), feet = toY(d.top + d.height * 752 / 780);   // the doll drawing spans y 50–752 of 780
+    return { doorX: toX(d.left + d.width / 2), groundY: feet, k: (feet - head) / 860, left: toX(m.r.left), right: toX(m.r.right) };
+  }
+  // side-view animals are wide with the head on the right: one per window, pushed right so the head shows
+  const WIDE = ['unicorn', 'horse', 'sheep', 'fox', 'foalpink', 'foalmint', 'seal'];
+  /** Put passengers in the bus windows (her friends first, newest first) and the driver at the front. */
+  function seatPassengers(sc, opts) {
+    const L = sc.layout(opts), m = sceneMap();
+    const friends = state.settings.rewards ? state.rewards.friends.filter(k => CREATURES[k] && friendOf(k)).slice().reverse() : [];
+    const queue = friends.concat(sc.passengers);
+    const seat = (w, key, slot, of) => {
+      const box = document.createElement('div'); box.className = 'seat-window';
+      Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
+      const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
+      const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
+      el.setAttribute('role', 'button'); el.setAttribute('aria-label', f ? f.is : key);
+      el.innerHTML = `<div class="inner">${CREATURES[key]()}</div>`;
+      const H = w.h * m.s * (key === 'driver' ? 1.05 : WIDE.includes(key) ? .95 : .85);   // creature height in px
+      const vb = (el.querySelector('svg').getAttribute('viewBox') || '0 0 1 1').split(/\s+/).map(Number);
+      const Wd = H * vb[2] / vb[3], bw = w.w * m.s;
+      el.style.height = H + 'px';
+      el.style.top = (w.h * m.s + H * (key === 'driver' ? .32 : .36)) + 'px';             // the lower third sits below the window: they are sitting
+      el.style.left = (key === 'driver' ? bw * .46 : WIDE.includes(key) ? bw - Wd / 2 + bw * .06 : bw * (of === 1 ? .5 : slot ? .72 : .3)) + 'px';
+      el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
+      box.appendChild(el); critterLayer.appendChild(box);
+    };
+    for (const w of L.windows) {
+      if (!queue.length) break;
+      const first = queue.shift();
+      if (WIDE.includes(first) || !queue.length || WIDE.includes(queue[0])) seat(w, first, 0, 1);
+      else { seat(w, first, 0, 2); seat(w, queue.shift(), 1, 2); }
+    }
+    seat(L.driver, 'driver', 0, 1);
+  }
+
   /**
    * Move animals sideways so none overlap each other, the doll, the chest or the buttons.
    * Works in screen pixels after layout, then writes the result back as % positions.
@@ -13287,7 +13456,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
       grow(document.querySelector('.bar.left-low').getBoundingClientRect(), 6),
     ];
     // her friends are placed first so they always find a spot; then left to right
-    const els = [...critterLayer.children].sort((a, b) => (b.dataset.friend ? 1 : 0) - (a.dataset.friend ? 1 : 0) ||
+    const els = [...critterLayer.children].filter(el => el.classList.contains('creature')).sort((a, b) => (b.dataset.friend ? 1 : 0) - (a.dataset.friend ? 1 : 0) ||
       a.getBoundingClientRect().left - b.getBoundingClientRect().left);
     for (const el of els) {
       let placed = false;
@@ -13318,7 +13487,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** Every animal is drawn facing right; mirror the ones standing right of the doll so they all look at her. */
   function faceTheDoll() {
     const [dx] = centre(dollRect());
-    for (const el of critterLayer.children) {
+    for (const el of critterLayer.querySelectorAll('.creature:not(.seated)')) {   // bus passengers keep facing forward
       const [cx] = centre(el.getBoundingClientRect());
       el.classList.toggle('flip', cx > dx);
     }
@@ -13327,12 +13496,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   /** What each creature does when tapped. Elves and unicorns help with clothes. */
   function creatureTap(c, el) {
     Sound.init();
-    const cls = c.k === 'horse' ? 'react-tolt' : c.k === 'elf' ? 'react-wave' : 'react';
+    const cls = c.k === 'horse' && !c.seat ? 'react-tolt' : c.k === 'elf' || c.k === 'driver' ? 'react-wave' : 'react';
     el.classList.remove('react', 'react-tolt', 'react-wave'); void el.offsetWidth; el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 1100);
     if (c.friend) { Sound.voice(c.voice); sparkleAt(el.getBoundingClientRect(), 4); return; }
     ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.tone(300, .2, 'triangle', .04, 0, 420),
        unicorn: () => { Sound.sparkle(); showRainbow(); sparkleAt(el.getBoundingClientRect(), 10); },
+       driver: () => Sound.horn(),
        elf: () => { Sound.bell(); surprise(el); } })[c.k]?.();
   }
   /** The rainbow shows for a while (unicorn magic). */

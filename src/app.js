@@ -148,6 +148,8 @@
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
     whoosh() { this.tone(500, .25, 'triangle', .02, 0, 900); },
+    /** The bus driver's friendly horn: a soft "bíb bíb". */
+    horn() { this.tone(523, .16, 'triangle', .05, 0); this.tone(659, .2, 'triangle', .05, .2); },
     /** A heart lands in the jar: two soft bell notes. */
     heart() { this.tone(1318, .3, 'sine', .035); this.tone(1568, .4, 'sine', .03, .1); },
     /** Full jar: a short music-box tune (C major, up and back down to a happy end). */
@@ -511,10 +513,12 @@
   window.addEventListener('resize', () => { clearTimeout(renderScene.t); renderScene.t = setTimeout(renderScene, 250); });
   function renderScene() {
     const sc = SCENES[state.scene] || SCENES.meadow;
-    sceneEl.innerHTML = sc.svg();
+    const opts = sc.layout ? busOptions() : undefined;     // the bus is drawn to fit where the doll stands
+    sceneEl.innerHTML = sc.svg(opts);
     stage.style.setProperty('--wind', sc.wind + 's');
     critterLayer.innerHTML = '';
-    sc.creatures.concat(friendsHere()).forEach((c, i) => {
+    if (sc.layout) seatPassengers(sc, opts);
+    (sc.layout ? [] : sc.creatures.concat(friendsHere())).forEach((c, i) => {
       const el = document.createElement('div');
       el.className = 'creature' + (c.peek ? ' peek' : '') + (c.k === 'puffin' || c.k === 'seal' ? ' idle-bob' : '');
       if (c.friend) el.dataset.friend = c.k;
@@ -539,6 +543,51 @@
     }
     document.querySelectorAll('.scene-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scene === state.scene)));
   }
+  /* ---- the bus scene: passengers in the windows ---- */
+  /** How the 1600×1000 scene maps onto the stage (preserveAspectRatio xMidYMax slice). */
+  function sceneMap() {
+    const r = stage.getBoundingClientRect(), s = Math.max(r.width / 1600, r.height / 1000);
+    return { r, s, ox: (r.width - 1600 * s) / 2, oy: r.height - 1000 * s };
+  }
+  /** Where the doll stands, in scene units: the door goes behind her and is a bit taller than she is. */
+  function busOptions() {
+    const m = sceneMap(), d = dollRect();
+    const toX = px => (px - m.r.left - m.ox) / m.s, toY = py => (py - m.r.top - m.oy) / m.s;
+    const head = toY(d.top + d.height * 50 / 780), feet = toY(d.top + d.height * 752 / 780);   // the doll drawing spans y 50–752 of 780
+    return { doorX: toX(d.left + d.width / 2), groundY: feet, k: (feet - head) / 860, left: toX(m.r.left), right: toX(m.r.right) };
+  }
+  // side-view animals are wide with the head on the right: one per window, pushed right so the head shows
+  const WIDE = ['unicorn', 'horse', 'sheep', 'fox', 'foalpink', 'foalmint', 'seal'];
+  /** Put passengers in the bus windows (her friends first, newest first) and the driver at the front. */
+  function seatPassengers(sc, opts) {
+    const L = sc.layout(opts), m = sceneMap();
+    const friends = state.settings.rewards ? state.rewards.friends.filter(k => CREATURES[k] && friendOf(k)).slice().reverse() : [];
+    const queue = friends.concat(sc.passengers);
+    const seat = (w, key, slot, of) => {
+      const box = document.createElement('div'); box.className = 'seat-window';
+      Object.assign(box.style, { left: (m.ox + w.x * m.s) + 'px', top: (m.oy + w.y * m.s) + 'px', width: (w.w * m.s) + 'px', height: (w.h * m.s) + 'px' });
+      const f = friendOf(key), c = { k: key, friend: !!f, voice: f && f.voice, seat: true };
+      const el = document.createElement('div'); el.className = 'creature seated'; el.dataset.seat = key;
+      el.setAttribute('role', 'button'); el.setAttribute('aria-label', f ? f.is : key);
+      el.innerHTML = `<div class="inner">${CREATURES[key]()}</div>`;
+      const H = w.h * m.s * (key === 'driver' ? 1.05 : WIDE.includes(key) ? .95 : .85);   // creature height in px
+      const vb = (el.querySelector('svg').getAttribute('viewBox') || '0 0 1 1').split(/\s+/).map(Number);
+      const Wd = H * vb[2] / vb[3], bw = w.w * m.s;
+      el.style.height = H + 'px';
+      el.style.top = (w.h * m.s + H * (key === 'driver' ? .32 : .36)) + 'px';             // the lower third sits below the window: they are sitting
+      el.style.left = (key === 'driver' ? bw * .46 : WIDE.includes(key) ? bw - Wd / 2 + bw * .06 : bw * (of === 1 ? .5 : slot ? .72 : .3)) + 'px';
+      el.addEventListener('pointerdown', e => { e.preventDefault(); creatureTap(c, el); });
+      box.appendChild(el); critterLayer.appendChild(box);
+    };
+    for (const w of L.windows) {
+      if (!queue.length) break;
+      const first = queue.shift();
+      if (WIDE.includes(first) || !queue.length || WIDE.includes(queue[0])) seat(w, first, 0, 1);
+      else { seat(w, first, 0, 2); seat(w, queue.shift(), 1, 2); }
+    }
+    seat(L.driver, 'driver', 0, 1);
+  }
+
   /**
    * Move animals sideways so none overlap each other, the doll, the chest or the buttons.
    * Works in screen pixels after layout, then writes the result back as % positions.
@@ -555,7 +604,7 @@
       grow(document.querySelector('.bar.left-low').getBoundingClientRect(), 6),
     ];
     // her friends are placed first so they always find a spot; then left to right
-    const els = [...critterLayer.children].sort((a, b) => (b.dataset.friend ? 1 : 0) - (a.dataset.friend ? 1 : 0) ||
+    const els = [...critterLayer.children].filter(el => el.classList.contains('creature')).sort((a, b) => (b.dataset.friend ? 1 : 0) - (a.dataset.friend ? 1 : 0) ||
       a.getBoundingClientRect().left - b.getBoundingClientRect().left);
     for (const el of els) {
       let placed = false;
@@ -586,7 +635,7 @@
   /** Every animal is drawn facing right; mirror the ones standing right of the doll so they all look at her. */
   function faceTheDoll() {
     const [dx] = centre(dollRect());
-    for (const el of critterLayer.children) {
+    for (const el of critterLayer.querySelectorAll('.creature:not(.seated)')) {   // bus passengers keep facing forward
       const [cx] = centre(el.getBoundingClientRect());
       el.classList.toggle('flip', cx > dx);
     }
@@ -595,12 +644,13 @@
   /** What each creature does when tapped. Elves and unicorns help with clothes. */
   function creatureTap(c, el) {
     Sound.init();
-    const cls = c.k === 'horse' ? 'react-tolt' : c.k === 'elf' ? 'react-wave' : 'react';
+    const cls = c.k === 'horse' && !c.seat ? 'react-tolt' : c.k === 'elf' || c.k === 'driver' ? 'react-wave' : 'react';
     el.classList.remove('react', 'react-tolt', 'react-wave'); void el.offsetWidth; el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 1100);
     if (c.friend) { Sound.voice(c.voice); sparkleAt(el.getBoundingClientRect(), 4); return; }
     ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.tone(300, .2, 'triangle', .04, 0, 420),
        unicorn: () => { Sound.sparkle(); showRainbow(); sparkleAt(el.getBoundingClientRect(), 10); },
+       driver: () => Sound.horn(),
        elf: () => { Sound.bell(); surprise(el); } })[c.k]?.();
   }
   /** The rainbow shows for a while (unicorn magic). */
