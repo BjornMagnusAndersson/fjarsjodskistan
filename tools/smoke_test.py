@@ -93,6 +93,21 @@ try:
         ok(bool(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn || null')), 'dragging a piece onto the doll dresses her')
         ctx.close()
 
+        # ---- costume tab: tapping a look keeps the list where she scrolled to ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'cat': 'costume'})
+        pg.click('#chest'); pg.wait_for_timeout(800)
+        pg.evaluate("document.querySelector('#tabs').scrollLeft = 400"); pg.wait_for_timeout(100)
+        tabs_before = pg.evaluate("document.querySelector('#tabs').scrollLeft")
+        pg.evaluate("document.querySelector('#grid').scrollTop = 600"); pg.wait_for_timeout(400)
+        before = pg.evaluate("document.querySelector('#grid').scrollTop")
+        tile = pg.evaluate("(() => { const g = document.querySelector('#grid'), r = g.getBoundingClientRect(); const t = [...g.querySelectorAll('.tile.look')].find(t => { const b = t.getBoundingClientRect(); return b.top > r.top && b.bottom < r.bottom; }); t.click(); return t.dataset.look; })()")
+        pg.wait_for_timeout(900)
+        ok(before > 0 and pg.evaluate("document.querySelector('#grid').scrollTop") == before, 'tapping a costume keeps the list scrolled')
+        ok(pg.evaluate(f"document.querySelector('[data-look=\"{tile}\"]').classList.contains('worn')"), 'the tapped costume gets the gold border')
+        ok(tabs_before > 0 and pg.evaluate("document.querySelector('#tabs').scrollLeft") == tabs_before, 'the tab row stays where it was')
+        pg.close()
+
         # ---- heart jar and friends, both orientations ----
         for vp, tag in (({'width': 1280, 'height': 800}, 'landscape'), ({'width': 800, 'height': 1280}, 'portrait')):
             pg = b.new_page(viewport=vp)

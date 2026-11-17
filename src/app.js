@@ -315,8 +315,9 @@
     }
     state.worn = worn;
     if (l.hair && HAIR_OK(l.hair)) state.hair = l.hair;
+    // happy() redraws the doll, which also moves the gold borders; the list itself is NOT rebuilt,
+    // so it stays where she has scrolled to
     Sound.sparkle(); happy(1400); sparkleAt(dollRect(), 12); persist();
-    renderGrid();
   }
   const HAIR_OK = h => DOLL.hairstyles.includes(h);
   /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
@@ -328,6 +329,7 @@
 
   /** Build the category tabs; each tab icon is the first piece in that category. */
   function renderTabs() {
+    const keep = tabsEl.scrollLeft;          // rebuilding the row must not jump it back to the start
     tabsEl.innerHTML = '';
     for (const c of catsWithItems()) {
       const b = document.createElement('button');
@@ -339,6 +341,7 @@
       b.addEventListener('click', () => { state.cat = c.id; Sound.tone(880, .08, 'sine', .03); renderTabs(); renderGrid(); persist(); });
       tabsEl.appendChild(b);
     }
+    tabsEl.scrollLeft = keep;
     syncDefs();
   }
 
@@ -351,7 +354,8 @@
         t.innerHTML = DOLL.renderHairThumb(h);
         t.addEventListener('click', () => {
           const first = !state.rewards.hairSeen.includes(h), from = t.getBoundingClientRect();
-          state.hair = h; Sound.snap(); happy(); renderGrid(); renderTabs(); persist();
+          state.hair = h; Sound.snap(); happy(); renderTabs(); persist();
+          gridEl.querySelectorAll('.tile').forEach(x => x.classList.toggle('worn', x === t));   // move the gold border, keep the scroll
           if (first) { state.rewards.hairSeen.push(h); giveHeart(from); }   // first try of a hairstyle earns a heart
         });
         gridEl.appendChild(t);
