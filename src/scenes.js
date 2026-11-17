@@ -137,7 +137,7 @@
       <linearGradient id="n-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#081634"/><stop offset=".7" stop-color="#1d3d70"/><stop offset="1" stop-color="#2e5688"/></linearGradient>
       <linearGradient id="au-g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4dffb0" stop-opacity="0"/><stop offset=".3" stop-color="#4dffb0"/><stop offset=".7" stop-color="#6bf0d8"/><stop offset="1" stop-color="#6bf0d8" stop-opacity="0"/></linearGradient>
       <linearGradient id="au-p" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8bd8" stop-opacity="0"/><stop offset=".5" stop-color="#d79bff"/><stop offset="1" stop-color="#ff8bd8" stop-opacity="0"/></linearGradient>
-      <linearGradient id="n-snow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3eefa"/><stop offset="1" stop-color="#b9cfe8"/></linearGradient>
+      <linearGradient id="n-snow" gradientUnits="userSpaceOnUse" x1="0" y1="650" x2="0" y2="1000"><stop offset="0" stop-color="#e3eefa"/><stop offset="1" stop-color="#b9cfe8"/></linearGradient>
       <radialGradient id="moonglow"><stop offset="0" stop-color="#fffbe6" stop-opacity=".7"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/></radialGradient>
       <radialGradient id="winglow"><stop offset="0" stop-color="#ffd36b" stop-opacity=".9"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient></defs>
       <rect width="1600" height="1000" fill="url(#n-sky)"/>${stars}
@@ -147,12 +147,18 @@
       <path d="M0,620 L200,480 L330,560 L520,440 L700,560 L900,470 L1080,570 L1260,480 L1440,560 L1600,500 L1600,760 L0,760Z" fill="#203a62"/>
       <path d="M520,440 L480,480 L520,474 L556,486Z M900,470 L860,505 L900,500 L935,512Z M1260,480 L1222,514 L1260,510 L1295,520Z" fill="#dfe9f6"/>
       <path d="M0,720 Q420,650 860,730 T1600,710 L1600,1000 L0,1000Z" fill="url(#n-snow)"/>
-      <g transform="translate(1170,700)">
+      <g transform="translate(1170,724)">
+        <!-- turf house: grass roof with snow on top, a stone chimney with soft smoke, wooden gable front -->
+        <rect x="58" y="-74" width="16" height="34" fill="#8f8a90" stroke="#5f5a66" stroke-width="3"/>
+        ${[0, 1, 2].map(i => `<circle class="smoke" style="animation-delay:${-i * 1.4}s" cx="66" cy="-80" r="9" fill="#e8f1fb" opacity=".7"/>`).join('')}
         <path d="M-120,40 L-120,-10 Q0,-110 120,-10 L120,40Z" fill="#4f7d4a"/><path d="M-120,-10 Q0,-110 120,-10" fill="none" stroke="#e8f1fb" stroke-width="12" stroke-linecap="round"/>
         <path d="M-40,40 L-40,-30 L0,-62 L40,-30 L40,40Z" fill="#8a5a3c" stroke="#5e3b26" stroke-width="4"/>
         <rect x="-14" y="2" width="28" height="38" rx="4" fill="#5e3b26"/>
         <circle cx="0" cy="-28" r="40" fill="url(#winglow)" class="glow"/><rect x="-11" y="-38" width="22" height="20" rx="3" fill="#ffd36b" stroke="#5e3b26" stroke-width="3"/>
       </g>
+      <!-- snowdrift in front of the house so it sits down in the snow (dips at the door so the door stays clear) -->
+      <path d="M1010,820 L1010,776 Q1060,752 1124,758 Q1170,768 1216,758 Q1280,752 1330,776 L1330,820Z" fill="url(#n-snow)"/>
+      <path d="M1010,776 Q1060,752 1124,758 Q1170,768 1216,758 Q1280,752 1330,776" fill="none" stroke="#f4f8fd" stroke-width="5" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -191,9 +197,10 @@
       `<path d="M${x - 40},${y - 12} H${x + 46}" stroke="#fff" stroke-width="3"/>` +
       `<rect x="${x - 22}" y="${y - 42}" width="30" height="24" rx="3" fill="#fbfaf6" stroke="#9a9ca6" stroke-width="2"/><rect x="${x - 17}" y="${y - 37}" width="9" height="8" fill="#8fc6e2"/><rect x="${x - 4}" y="${y - 37}" width="9" height="8" fill="#8fc6e2"/>` +
       `<path d="M${x + 22},${y - 18} V${y - 66}" stroke="#7a7f8a" stroke-width="3"/><path d="M${x + 22},${y - 64} L${x + 40},${y - 58} L${x + 22},${y - 52}Z" fill="#ef6f6c"/></g>`;
-    // Hallgrímskirkja: tall concrete tower with stepped columns falling away on both sides like basalt
+    // Hallgrímskirkja: tall concrete tower with stepped columns falling away on both sides like basalt.
+    // base 578 is a little below the hilltop, so every column stands on the hill (none over the sea).
     let church = '';
-    const cx = 1010, base = 548;
+    const cx = 1010, base = 578;
     for (let i = 5; i >= 0; i--) {
       const top = 312 + i * 40, w = 15;
       for (const s of [-1, 1]) {
@@ -208,20 +215,30 @@
       `<circle cx="${cx}" cy="306" r="11" fill="#fdfbf6" stroke="#8a857e" stroke-width="2"/><path d="M${cx},306 v-7 M${cx},306 h5" stroke="#4a4a52" stroke-width="2" stroke-linecap="round"/>` +
       `<path d="M${cx},150 V122 M${cx - 8},131 H${cx + 8}" stroke="#a9a49c" stroke-width="4" stroke-linecap="round"/>` +
       `<path d="M${cx - 9},${base} V${base - 46} Q${cx},${base - 60} ${cx + 9},${base - 46} V${base}Z" fill="#7a6a5e"/>`;
-    // Harpa: glass concert hall on the waterfront; some panes glint in colours (three groups twinkle in turn)
-    const HARPA = 'M1236,692 V586 L1300,540 L1470,532 L1536,566 V692Z';
+    /* Harpa: the glass concert hall on the harbour. A crystal-like block with a slanted, folded roof
+       (low on the left, highest just right of the middle, sloping down to the right), three glass faces
+       lit differently, and the honeycomb glass bricks all over. Some bricks glint in colours (three
+       groups twinkle in turn), like the coloured panes on the real building. */
+    const HARPA = 'M1232,696 V598 L1266,568 L1338,524 L1420,516 L1478,542 L1542,592 V696Z';
+    const facets = [   // [corner points, gradient id] left face (sunlit), middle face, right face (in shade)
+      ['1232,696 1232,598 1266,568 1300,696', 'r-h1'],
+      ['1266,568 1338,524 1420,516 1446,696 1300,696', 'r-h2'],
+      ['1420,516 1478,542 1542,592 1542,696 1446,696', 'r-h3'],
+    ].map(([p, g]) => `<polygon points="${p}" fill="url(#${g})"/>`).join('');
+    // honeycomb: pointy-top hexagons of radius 9 (one row every 13.5, every other row shifted half a cell)
+    const HX = 9, HW = HX * Math.sqrt(3);
+    const hex = (x, y) => `M${x},${y - HX} L${(x + HW / 2).toFixed(1)},${y - HX / 2} V${y + HX / 2} L${x},${y + HX} L${(x - HW / 2).toFixed(1)},${y + HX / 2} V${y - HX / 2}Z`;
+    const hexTile = [[HW / 2, HX], [0, 2.5 * HX], [HW, 2.5 * HX], [0, -.5 * HX], [HW, -.5 * HX], [HW / 2, 4 * HX]].map(([x, y]) => hex(+x.toFixed(1), y)).join('');
     let panes = '';
     for (let gx = 0; gx < 3; gx++) {
       panes += `<g class="twinkle" style="animation-delay:${-gx * 1.1}s">`;
-      for (let k = 0; k < 9; k++) {
-        const px = 1250 + Math.floor(r() * 270), py = 556 + Math.floor(r() * 120);
-        panes += `<rect x="${px}" y="${py}" width="16" height="12" fill="${['#ffe27a', '#9ff0d0', '#d7b4ff'][gx]}" opacity=".85"/>`;
+      for (let k = 0; k < 11; k++) {
+        const row = 38 + Math.floor(r() * 12), col = 79 + Math.floor(r() * 20);   // a cell somewhere on the facade
+        const x = +(col * HW + (row % 2 ? 0 : HW / 2)).toFixed(1), y = HX + row * 1.5 * HX;
+        panes += `<path d="${hex(x, y)}" fill="${['#ffe27a', '#9ff0d0', '#d7b4ff'][gx]}" opacity=".8"/>`;
       }
       panes += '</g>';
     }
-    let grid = '';
-    for (let x = 1252; x < 1536; x += 18) grid += `M${x},540 V692`;
-    for (let y = 552; y < 692; y += 14) grid += `M1236,${y} H1536`;
     // the Sun Voyager: a steel boat skeleton on a stone by the shore
     const solfar = `<g transform="translate(150,700)"><path d="M-70,0 H80 L70,14 H-60Z" fill="#9aa0aa" stroke="#6c7280" stroke-width="2"/>` +
       `<path d="M-90,-30 Q0,-6 100,-34" stroke="#cdd3dc" stroke-width="6" fill="none" stroke-linecap="round"/>` +
@@ -231,13 +248,17 @@
     // colourful houses on the hill below the church: [left, ground line, width, height, wall, roof, chimney smoke?, smoke delay]
     const houses = [
       [940, 616, 46, 42, '#f7d16a', '#c4504a', true, 0], [1090, 594, 50, 44, '#8fc6e2', '#c4504a'], [1150, 602, 46, 40, '#f4f1ea', '#4f9a6a', true, -2],
-      [1560, 560, 48, 42, '#f7d16a', '#5a7fae'], [928, 682, 56, 52, '#a58be0', '#4f9a6a'], [992, 684, 50, 44, '#f48c7a', '#4a5f8a'],
+      [928, 682, 56, 52, '#a58be0', '#4f9a6a'], [992, 684, 50, 44, '#f48c7a', '#4a5f8a'],
       [1050, 688, 54, 48, '#9edb8a', '#c4504a', true, -3], [1112, 692, 48, 44, '#6fb3e6', '#e2564c'], [1172, 696, 56, 50, '#ef8a7a', '#5a7fae'],
     ].map(h => house(...h)).join('');
     return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
       <linearGradient id="r-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86c8ee"/><stop offset="1" stop-color="#e6f6fc"/></linearGradient>
       <linearGradient id="r-sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f88bb"/><stop offset="1" stop-color="#78bddc"/></linearGradient>
-      <linearGradient id="r-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7fb4c9"/><stop offset=".5" stop-color="#3f7393"/><stop offset="1" stop-color="#2c5671"/></linearGradient>
+      <linearGradient id="r-h1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b4e0ee"/><stop offset="1" stop-color="#6fa8c4"/></linearGradient>
+      <linearGradient id="r-h2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb8d4"/><stop offset="1" stop-color="#3f7697"/></linearGradient>
+      <linearGradient id="r-h3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f84a6"/><stop offset="1" stop-color="#2a5674"/></linearGradient>
+      <pattern id="r-hex" patternUnits="userSpaceOnUse" width="${HW.toFixed(3)}" height="${3 * HX}"><path d="${hexTile}" fill="none" stroke="#e4f6fc" stroke-width="1.3" opacity=".55"/></pattern>
+      <clipPath id="r-harpa"><path d="${HARPA}"/></clipPath>
       <linearGradient id="r-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86c96f"/><stop offset="1" stop-color="#57a24b"/></linearGradient>
       <clipPath id="r-water"><rect x="0" y="0" width="1600" height="636"/></clipPath></defs>
       <rect width="1600" height="1000" fill="url(#r-sky)"/>
@@ -251,14 +272,22 @@
         <path d="M-58,-74 C-40,-74 -22,-64 -12,-48" stroke="#7d9cba" stroke-width="3" fill="none" stroke-linecap="round"/>
         <path d="M-30,-12 q-10,-14 -4,-26 M30,-12 q10,-14 4,-26" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/></g></g></g>
       <ellipse class="foam" cx="690" cy="638" rx="46" ry="6" fill="#fff" opacity=".5"/>
-      ${boat(830, 662, '#e2564c', 0)}
-      <path d="M880,706 C930,600 960,550 1060,542 Q1350,520 1600,530 L1600,720 L880,720Z" fill="#9cc37e"/>
+      ${boat(800, 662, '#e2564c', 0)}
+      <!-- Skólavörðuholt: the hill rises steeply from the shore and is flat on top right under the church -->
+      <path d="M846,706 C858,640 864,582 904,564 Q1010,540 1140,546 Q1350,524 1600,532 L1600,720 L846,720Z" fill="#9cc37e"/>
       ${church}${houses}
-      <path d="${HARPA}" fill="url(#r-glass)" stroke="#1f3f56" stroke-width="3" stroke-linejoin="round"/>
-      <path d="${grid}" stroke="#a9d3e6" stroke-width="1.2" opacity=".45"/>${panes}
-      <path d="M1300,540 L1470,532 L1536,566 L1300,572Z" fill="#fff" opacity=".18"/>
-      <g transform="translate(1520,532)"><path d="M0,0 V-70" stroke="#c9ccd4" stroke-width="4"/>
-        <g class="flag"><path d="M2,-70 H50 V-38 H2Z" fill="#2457a6"/><path d="M2,-54 H50 M18,-70 V-38" stroke="#fff" stroke-width="9"/><path d="M2,-54 H50 M18,-70 V-38" stroke="#d72830" stroke-width="5"/></g></g>
+      <!-- Harpa: three glass faces, honeycomb bricks, coloured glints, a light roof edge and a glowing lobby -->
+      <g clip-path="url(#r-harpa)">${facets}
+        <path d="${HARPA}" fill="url(#r-hex)"/>${panes}
+        <path d="M1244,676 L1330,540 L1352,540 L1266,676Z M1280,676 L1372,532 L1384,532 L1292,676Z" fill="#fff" opacity=".16"/>
+        <path d="M1232,680 H1542 V696 H1232Z" fill="#1f3f56"/>
+        ${[1262, 1310, 1358, 1406, 1454, 1502].map(x => `<rect x="${x}" y="683" width="30" height="13" fill="#ffe9a8" opacity=".9"/>`).join('')}
+        <path d="M1300,696 L1266,568 M1446,696 L1420,516" stroke="#1f3f56" stroke-width="2" opacity=".5"/></g>
+      <path d="M1232,598 L1266,568 L1338,524 L1420,516 L1478,542 L1542,592" fill="none" stroke="#eaf8fd" stroke-width="4" stroke-linejoin="round" opacity=".85"/>
+      <path d="${HARPA}" fill="none" stroke="#1f3f56" stroke-width="3" stroke-linejoin="round"/>
+      <!-- Icelandic flag on the hill just right of Harpa -->
+      <g transform="translate(1554,606)"><path d="M0,0 V-104" stroke="#c9ccd4" stroke-width="4"/>
+        <g class="flag"><path d="M2,-104 H44 V-76 H2Z" fill="#2457a6"/><path d="M2,-90 H44 M16,-104 V-76" stroke="#fff" stroke-width="8"/><path d="M2,-90 H44 M16,-104 V-76" stroke="#d72830" stroke-width="4.5"/></g></g>
       <path d="M0,706 H1600 V722 H0Z" fill="#8e939c"/><path d="M0,706 H1600" stroke="#b9bdc4" stroke-width="3"/>
       ${solfar}
       <path d="M0,722 L1600,722 L1600,1000 L0,1000Z" fill="url(#r-grass)"/>
@@ -290,14 +319,39 @@
       <path d="M-30,38 V-28 Q0,-130 30,-28 V38Z" fill="url(#k-glass)" stroke="#8a857e" stroke-width="2.5"/>
       <path d="M-10,38 V-80 M10,38 V-80 M-30,0 H30 M-26,-40 H26" stroke="#efece6" stroke-width="3" opacity=".8"/>
       <path d="M0,-112 V-150 M-11,-138 H11" stroke="#a9a49c" stroke-width="5" stroke-linecap="round"/></g>`;
-    // tall glass tower and apartment blocks behind the valley
-    let tower = `<path d="M1300,620 V270 L1340,240 L1380,262 V620Z" fill="url(#k-tower)" stroke="#3a5a72" stroke-width="2.5"/>`;
-    for (let y = 280; y < 620; y += 16) tower += `<path d="M1302,${y} H1378" stroke="#bfe0ee" stroke-width="1.2" opacity=".5"/>`;
-    tower += `<path d="M1312,272 V610" stroke="#fff" stroke-width="5" opacity=".35"/>`;
-    const block = (x, y, w, h, bal) => { let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f2efe8" stroke="#a9a49c" stroke-width="2"/>`;
-      for (let fy = y + 14; fy < y + h - 14; fy += 24) for (let fx = x + 10; fx < x + w - 16; fx += 26) s += `<rect x="${fx}" y="${fy}" width="16" height="12" fill="#a9d3e6"/><rect x="${fx - 2}" y="${fy + 12}" width="20" height="5" fill="${bal}"/>`;
-      return s; };
-    const blocks = block(1110, 470, 120, 150, '#f48c7a') + block(1420, 500, 110, 120, '#6fb3e6') + block(1220, 520, 70, 100, '#f7d16a');
+    /* Turninn (the Smáratorg tower): the tallest building in Iceland, a flat-topped slim block of dark
+       blue glass, 20 floors, with a light crown at the top. It stands at the end of Smáralind. */
+    let tower = `<rect x="1088" y="292" width="78" height="372" fill="url(#k-tower)" stroke="#2f4a62" stroke-width="2.5"/>` +
+      `<rect x="1088" y="292" width="30" height="372" fill="#fff" opacity=".12"/>`;           // the sunlit side
+    for (let i = 1; i < 20; i++) tower += `<path d="M1090,${292 + i * 17} H1164" stroke="#bfe0ee" stroke-width="1.2" opacity=".45"/>`;   // floors
+    tower += `<path d="M1127,296 V660" stroke="#bfe0ee" stroke-width="1.5" opacity=".35"/>` +
+      `<rect x="1084" y="282" width="86" height="14" rx="3" fill="#e9eef2" stroke="#8a9aa8" stroke-width="2"/>` +    // crown
+      `<path d="M1100,288 H1154" stroke="#fff" stroke-width="2" opacity=".8"/>`;
+    /* Smáralind: the big shopping centre. A long low building with a soft wave-shaped roof, a band
+       of windows, and a round glass winter garden at the far end. (No signs or logos.) */
+    const mall = `<path d="M1170,664 V590 Q1240,560 1310,578 Q1380,594 1440,566 V664Z" fill="#eceae4" stroke="#a9a49c" stroke-width="2.5"/>` +
+      `<path d="M1170,590 Q1240,560 1310,578 Q1380,594 1440,566" fill="none" stroke="#f7b267" stroke-width="7" stroke-linecap="round"/>` +
+      `<path d="M1176,606 H1434 V622 H1176Z" fill="#a9d3e6"/>` +
+      [1206, 1246, 1286, 1326, 1366, 1406].map(x => `<path d="M${x},606 V622" stroke="#eceae4" stroke-width="3"/>`).join('') +
+      `<path d="M1420,664 V600 Q1420,548 1475,546 Q1530,548 1530,600 V664Z" fill="url(#k-dome)" stroke="#3a6788" stroke-width="2.5"/>` +
+      `<path d="M1440,664 V594 Q1444,562 1475,558 M1475,546 V664 M1510,664 V594 Q1506,562 1475,558 M1421,598 H1529" stroke="#e4f6fc" stroke-width="2" fill="none" opacity=".7"/>` +
+      `<path d="M1432,598 Q1436,566 1462,556" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".45"/>`;
+    /* Little wooden footbridge over the stream. The stream runs left-right across the picture, so the
+       bridge runs away from us: the near end sits on the grass in front of the stream (y 752), the far
+       end on the far bank (y 690), and it gets narrower further away. The ducks swim under it.
+       t = 0 near end ... 1 far end. */
+    const bY = t => 752 - 62 * t, bL = t => 1136 + 20 * t, bR = t => 1224 - 20 * t, bH = t => 32 - 12 * t;
+    const pt = (x, y) => `${x.toFixed(1)},${y.toFixed(1)}`;
+    let bridge = `<path d="M1166,662 H1194 L1204,690 H1156Z M1136,760 H1224 Q1236,880 1290,1000 H1070 Q1124,880 1136,760Z" fill="#e6dcc4" opacity=".8"/>` +    // gravel path on both banks
+      `<polygon points="${pt(bL(0), bY(0))} ${pt(bR(0), bY(0))} ${pt(bR(1), bY(1))} ${pt(bL(1), bY(1))}" fill="#c48a52" stroke="#8a5a34" stroke-width="2.5" stroke-linejoin="round"/>`;
+    for (let k = 1; k < 9; k++) { const t = k / 9; bridge += `<path d="M${pt(bL(t), bY(t))} L${pt(bR(t), bY(t))}" stroke="#8a5a34" stroke-width="1.6" opacity=".6"/>`; }   // planks
+    bridge += `<rect x="1136" y="752" width="88" height="9" fill="#8a5a34"/>`;   // front edge of the deck
+    for (const side of [bL, bR]) {
+      const ts = [0, .5, 1];
+      bridge += ts.map(t => `<path d="M${pt(side(t), bY(t))} V${(bY(t) - bH(t)).toFixed(1)}" stroke="#7a4e2c" stroke-width="${(6 - 2 * t).toFixed(1)}" stroke-linecap="round"/>`).join('') +   // posts
+        `<path d="M${ts.map(t => pt(side(t), bY(t) - bH(t))).join(' L')}" stroke="#b47a45" stroke-width="5" fill="none" stroke-linecap="round"/>` +   // top rail
+        `<path d="M${ts.map(t => pt(side(t), bY(t) - bH(t) / 2)).join(' L')}" stroke="#b47a45" stroke-width="3" fill="none" stroke-linecap="round"/>`;   // middle rail
+    }
     // swing set: A-frame with one swing that swings
     const swing = `<g transform="translate(1440,640)"><path d="M-80,160 L-60,0 L-40,160 M80,160 L60,0 L40,160" stroke="#d0473f" stroke-width="9" stroke-linecap="round" fill="none"/>
       <path d="M-66,0 H66" stroke="#8a5a34" stroke-width="10" stroke-linecap="round"/>
@@ -315,7 +369,8 @@
     return `<svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${commonDefs}
       <linearGradient id="k-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ccdf0"/><stop offset="1" stop-color="#eef8fc"/></linearGradient>
       <linearGradient id="k-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset=".35" stop-color="#f48cc0"/><stop offset=".7" stop-color="#8f7fe0"/><stop offset="1" stop-color="#5aa9ec"/></linearGradient>
-      <linearGradient id="k-tower" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7fb4d0"/><stop offset=".6" stop-color="#4f86a8"/><stop offset="1" stop-color="#3a6788"/></linearGradient>
+      <linearGradient id="k-tower" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f86a6"/><stop offset="1" stop-color="#35536e"/></linearGradient>
+      <linearGradient id="k-dome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b4e0ee"/><stop offset="1" stop-color="#5f96b8"/></linearGradient>
       <linearGradient id="k-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd06f"/><stop offset="1" stop-color="#5aa64c"/></linearGradient>
       <linearGradient id="k-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6ec0e6"/><stop offset="1" stop-color="#3f92c4"/></linearGradient></defs>
       <rect width="1600" height="1000" fill="url(#k-sky)"/>
@@ -323,7 +378,7 @@
       ${rainbow(860, 620, 420)}
       <path d="M0,560 Q200,470 420,520 Q600,460 820,510 Q1050,450 1280,510 Q1450,480 1600,520 L1600,640 L0,640Z" fill="#a9b8d8"/>
       <path d="M380,500 l-20,16 l16,-2 l8,10 l10,-20Z M1050,462 l-16,14 l14,-2 l6,8 l8,-16Z" fill="#fff" opacity=".85"/>
-      ${blocks}${tower}
+      ${mall}${tower}
       <path d="M600,660 Q870,500 1140,660Z" fill="#7dbf63"/>
       ${kirk}
       ${kite}
@@ -331,8 +386,7 @@
       <path d="M-60,692 Q300,704 560,700 Q900,680 1200,700 T1660,720 L1660,752 Q1300,730 1200,734 T560,734 Q300,738 -60,726Z" fill="url(#k-water)" stroke="#3f86b6" stroke-width="2"/>
       ${[0, 1, 2].map(i => `<path d="M${640 + i * 300},${712 + i * 3} q40,-6 80,0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="16 22" class="flow" style="animation-duration:${2.2 + i * .4}s"/>`).join('')}
       ${ducks}
-      <g transform="translate(1180,716)"><path d="M-70,6 Q0,-46 70,6" stroke="#8a5a34" stroke-width="12" fill="none"/><path d="M-70,-10 Q0,-62 70,-10" stroke="#b47a45" stroke-width="5" fill="none"/>
-        ${[-50, -25, 0, 25, 50].map(x => `<path d="M${x},${-Math.round(26 - x * x / 120)} V${Math.round(-10 - (26 - x * x / 120) * .6 + 20)}" stroke="#b47a45" stroke-width="4"/>`).join('')}</g>
+      ${bridge}
       ${birch(1020, 650, 1, 0)}${birch(1590, 660, 1.1, -1.5)}${birch(440, 655, .85, -2.4)}
       ${slide}${swing}
       ${Array.from({ length: 40 }, (_, i) => `<circle cx="${(i * 389) % 1600}" cy="${780 + (i * 97) % 210}" r="${3 + (i % 3)}" fill="${['#ffd84d', '#fff', '#b59be6'][i % 3]}"/>`).join('')}
