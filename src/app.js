@@ -65,7 +65,8 @@
       lastBackup: '',           // when parents last saved a backup file (ISO time), for the reminder in the menu
       backupOutfits: 0,         // how many saved outfits there were then
       // sound: on/off; volume: 0.1–1 (1 = the original loudness); animals: animal and friend sounds on/off
-      settings: { sound: true, calm: false, rewards: true, volume: 1, animals: true },
+      // vibrate: buzzes on/off (off until a parent turns it on); vibrateStrength: 1 soft, 2 normal, 3 strong
+      settings: { sound: true, calm: false, rewards: true, volume: 1, animals: true, vibrate: false, vibrateStrength: 2 },
       cat: 'top',               // open chest tab
       // heart jar: hearts in the jar now, friends earned (keys of FRIENDS, in order),
       // hairstyles and hair colours already tried (colours as 'c:copper')
@@ -113,6 +114,8 @@
     // the newer settings: a strange or missing value falls back to the default
     s.settings.volume = Number.isFinite(+s.settings.volume) && +s.settings.volume > 0 ? Math.max(.1, Math.min(1, +s.settings.volume)) : 1;
     s.settings.animals = s.settings.animals !== false;
+    s.settings.vibrate = s.settings.vibrate === true;
+    s.settings.vibrateStrength = [1, 2, 3].includes(s.settings.vibrateStrength) ? s.settings.vibrateStrength : 2;
     if (isObj(d.rewards)) {
       const r = d.rewards, strs = a => (Array.isArray(a) ? a : []).filter(x => typeof x === 'string');
       s.rewards.hearts = Math.max(0, Math.min(JAR_SIZE - 1, Math.floor(+r.hearts) || 0));
@@ -277,7 +280,78 @@
       else if (v === 'sparkle') this.sparkle();
       else { this.tone(523, .22, 'sine', .035); this.tone(784, .3, 'sine', .03, .12); }
     },
+    /** The seal: one low, soft slide up. */
+    seal() { this.tone(300, .2, 'triangle', .04, 0, 420); },
+    /** Tapping the doll herself: a little giggle of two notes. */
+    giggle() { this.tone(988, .1); this.tone(1318, .12, 'sine', .04, .08); },
   };
+
+  /* ---------------------------------------------------------------
+     Vibration ("Titringur" in the parent menu, off until a parent switches it on).
+     She seeks touch and pressure, so things can also be FELT: every sound above has a matching
+     little buzz, tapping the doll tickles, holding the doll gives a slow heartbeat "hug", and
+     holding an animal or friend makes it purr. Patterns are [buzz ms, pause ms, buzz ms, ...];
+     the strength setting makes the buzzes longer (the web can't set how hard the motor shakes).
+     Works on Android phones and tablets that have a vibration motor (many tablets don't).
+     --------------------------------------------------------------- */
+  /** Repeat [buzz, pause] n times, as one pattern. */
+  const pulses = (buzz, pause, n) => Array.from({ length: n * 2 - 1 }, (_, i) => (i % 2 ? pause : buzz));
+  const FEEL = {
+    snap: [18], off: [10], save: [15, 60, 15, 60, 30], chirp: [8, 50, 8], baa: [20, 30, 20, 30, 20],
+    clop: pulses(12, 128, 4),                // hoof beats in time with the sound
+    sparkle: pulses(6, 54, 5), magic: [8, 42, 8, 42, 12], bell: [30], whoosh: [6, 25, 8, 25, 10, 25, 12],
+    horn: [40, 160, 50], heart: [15, 85, 20], melody: pulses(20, 150, 8), arrive: [20, 60, 30, 60, 40], seal: [25, 40, 15],
+    giggle: pulses(6, 25, 6),                // a tickle: many tiny flutters
+    voice: v => (v === 'mew' ? pulses(10, 40, 3) : v === 'yip' ? [15, 60, 15] : v === 'sparkle' ? pulses(6, 54, 5) : [25, 80, 25]),
+  };
+  const PURR = pulses(16, 24, 30);           // holding an animal or friend: 1.2 s of soft purring, repeated while held
+  const HUG = [35, 110, 50, 600];            // holding the doll: a slow "lub-dub" heartbeat, repeated while held
+  const GRAB = [8];                          // a piece is lifted to drag it
+  const Haptic = {
+    /** Can this browser vibrate at all? (Even then the device may have no motor.) */
+    can: typeof navigator.vibrate === 'function',
+    /** Vibrate a pattern, made longer or shorter by the strength setting (1 soft, 2 normal, 3 strong). */
+    play(pattern) {
+      if (!state.settings.vibrate || !this.can) return;
+      const k = [0, .6, 1, 1.6][state.settings.vibrateStrength] || 1;
+      try { navigator.vibrate(pattern.map((v, i) => (i % 2 ? v : Math.round(v * k)))); } catch (e) { /* not allowed right now: just no buzz */ }
+    },
+    /** Stop any buzz right away. */
+    stop() { if (this.can) try { navigator.vibrate(0); } catch (e) { /* nothing to stop */ } },
+  };
+  // Every sound with a FEEL entry also buzzes (even with the sound switched off: vibration has its own switch).
+  // Only the outermost sound buzzes, so a sound that plays other sounds (arrive → sparkle) keeps its own pattern.
+  let feelDepth = 0;
+  for (const k of Object.keys(FEEL)) {
+    const orig = Sound[k];
+    /** The sound k, with its buzz. */
+    Sound[k] = function (...a) {
+      if (!feelDepth) Haptic.play(typeof FEEL[k] === 'function' ? FEEL[k](...a) : FEEL[k]);
+      feelDepth++;
+      try { return orig.apply(this, a); } finally { feelDepth--; }
+    };
+  }
+  let holdWait = 0, holdNext = 0, holding = false;
+  /**
+   * Holding something for a moment (0.35 s, so a quick tap doesn't count) starts a buzz that repeats every `every` ms
+   * until she lets go. Never longer than 20 seconds in one go.
+   */
+  function holdBuzz(pattern, every) {
+    stopHold();
+    if (!state.settings.vibrate || !Haptic.can) return;
+    let rounds = Math.ceil(20000 / every);
+    holdWait = setTimeout(function again() {
+      if (rounds-- <= 0) return stopHold();
+      holding = true; Haptic.play(pattern); holdNext = setTimeout(again, every);
+    }, 350);
+  }
+  /** She let go: stop the hold buzz (only if one is running, so other buzzes are not cut short). */
+  function stopHold() {
+    clearTimeout(holdWait); clearTimeout(holdNext); holdWait = holdNext = 0;
+    if (holding) { holding = false; Haptic.stop(); }
+  }
+  ['pointerup', 'pointercancel', 'blur'].forEach(ev => window.addEventListener(ev, stopHold));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopHold(); });
 
   /* ---------------------------------------------------------------
      Shared SVG defs (gradients and patterns registered by the drawings)
@@ -620,7 +694,7 @@
       if (Math.hypot(dx, dy) < 10) return;
       drag.moved = true;
       const g = document.createElement('div'); g.className = 'ghost dragging'; g.innerHTML = DOLL.renderThumb(DOLL.byId[drag.id]);
-      document.body.appendChild(g); drag.ghost = g; syncDefs();
+      document.body.appendChild(g); drag.ghost = g; syncDefs(); Haptic.play(GRAB);
       if (drag.origin === 'doll') { unequip(drag.id); Sound.off(); }
       if (drag.origin === 'friend') { undressFriend(drag.friend, drag.id); Sound.off(); }
       if (drag.origin === 'loose') { drag.el.remove(); state.loose = state.loose.filter(p => p !== drag.loosePiece); }
@@ -710,7 +784,8 @@
   dollEl.addEventListener('pointerdown', e => {
     const g = e.target.closest('[data-item]');
     if (g) startDrag(e, g.dataset.item, 'doll', g);
-    else if (e.target.closest('.body,.face,.hair-front,.hair-back')) { Sound.tone(988, .1); Sound.tone(1318, .12, 'sine', .04, .08); happy(900); }
+    // tapping her giggles (and tickles, with vibration on); holding her gives a slow heartbeat "hug"
+    else if (e.target.closest('.body,.face,.hair-front,.hair-back')) { Sound.giggle(); happy(900); holdBuzz(HUG, 800); }
   });
   chestEl.innerHTML = CHEST_SVG;
   chestEl.addEventListener('click', () => setChest(trayEl.hidden));
@@ -878,9 +953,10 @@
     const cls = c.k === 'horse' && !c.seat ? 'react-tolt' : c.k === 'elf' || c.k === 'driver' ? 'react-wave' : 'react';
     el.classList.remove('react', 'react-tolt', 'react-wave'); void el.offsetWidth; el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 1100);
+    holdBuzz(PURR, 1200);   // keep holding the animal or friend: it purrs (with vibration on)
     // all of these sounds are "animal sounds": the parent menu can switch them off (Sound.animal)
     if (c.friend) { Sound.animal(() => Sound.voice(c.voice)); sparkleAt(el.getBoundingClientRect(), 4); return; }
-    Sound.animal(() => ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.tone(300, .2, 'triangle', .04, 0, 420),
+    Sound.animal(() => ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.seal(),
        unicorn: () => { Sound.sparkle(); showRainbow(); sparkleAt(el.getBoundingClientRect(), 10); },
        driver: () => Sound.horn(),
        // the elf only waves and rings his bell; he never puts clothes on her by himself (she chooses her clothes)
@@ -1129,6 +1205,9 @@
   function renderMenu() {
     $('#optSound').checked = state.settings.sound; $('#optCalm').checked = state.settings.calm; $('#optRewards').checked = state.settings.rewards;
     $('#optVolume').value = Math.round(state.settings.volume * 100); $('#optAnimals').checked = state.settings.animals;
+    $('#optVibrate').checked = state.settings.vibrate; $('#optVibStrength').value = state.settings.vibrateStrength;
+    $('#optVibStrength').disabled = !state.settings.vibrate;
+    $('#vibMsg').textContent = Haptic.can ? 'Titrar aðeins ef tækið er með titring (margar spjaldtölvur eru það ekki).' : 'Þessi vafri getur ekki titrað.';
     $('#backupMsg').hidden = true;
     flush();
     $('#storeMsg').textContent = Store.ok
@@ -1224,6 +1303,12 @@
   $('#optVolume').addEventListener('input', e => { state.settings.volume = Math.max(.1, Math.min(1, e.target.value / 100)); Sound.init(); Sound.setVolume(); persist(); });
   $('#optVolume').addEventListener('change', () => Sound.snap());
   $('#optAnimals').addEventListener('change', e => { state.settings.animals = e.target.checked; persist(); if (e.target.checked) Sound.animal(() => Sound.voice('soft')); });
+  // vibration: switching it on (or changing the strength) gives a short sample, so a parent feels whether the tablet can buzz
+  $('#optVibrate').addEventListener('change', e => {
+    state.settings.vibrate = e.target.checked; $('#optVibStrength').disabled = !e.target.checked; persist();
+    if (e.target.checked) Haptic.play(pulses(16, 24, 12).concat(200, 18));   // a little purr, then a click
+  });
+  $('#optVibStrength').addEventListener('change', e => { state.settings.vibrateStrength = +e.target.value; persist(); Haptic.play([18, 80, 18]); });
   $('#optCalm').addEventListener('change', e => { state.settings.calm = e.target.checked; stage.classList.toggle('calm', state.settings.calm); persist(); });
   $('#optRewards').addEventListener('change', e => { state.settings.rewards = e.target.checked; friendsEl.hidden = true; renderJar(); renderScene(); persist(); });
   $('#menuClose').addEventListener('click', () => { menuEl.hidden = true; });
