@@ -1202,6 +1202,7 @@
   const EAR_GAP = 13;                                  // each earring sits this far left / right of the middle
   const [EX, EY] = G.earlobes[0];
   addDef('thumb-ear-clip', `<clipPath id="thumb-ear-clip"><rect x="${EX - 15}" y="${EY - 10}" width="30" height="48"/></clipPath>`);
+  /** The chest picture of a pair of earrings: the left one, and its mirror image beside it (see above). */
   function earringPairThumb(item) {
     const out = DOLL.drawItem(item), one = `<g clip-path="url(#thumb-ear-clip)">${out.back}${out.front}</g>`;
     return `<svg viewBox="${EX - 28} ${EY - 17} 56 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
