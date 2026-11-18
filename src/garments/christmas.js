@@ -961,7 +961,9 @@
     { id: 'face-xmas-nose', shape: 'xm-nose', cat: 'face', name: { is: 'Rautt hreindýranef', en: 'Red reindeer nose' }, colors: ['#e2363e'] },
     { id: 'neck-xmas-lights', shape: 'xm-lights', cat: 'necklace', name: { is: 'Jólaljósahálsmen', en: 'Christmas lights necklace' }, colors: ['#2f5a3a', '#ef4a4f', '#f6c63d', '#4cbf6a', '#4aa8e8', '#f27ab6'] },
     { id: 'ear-xmas-bauble-red', shape: 'xm-bauble', cat: 'earrings', name: { is: 'Rauðir jólakúlueyrnalokkar', en: 'Red bauble earrings' }, colors: ['#e0313c', '#e0313c', '#f2c34d', '#ffffff'] },
-    { id: 'ear-xmas-bauble-mix', shape: 'xm-bauble', cat: 'earrings', name: { is: 'Grænir og rauðir jólakúlueyrnalokkar', en: 'Green and red bauble earrings' }, colors: ['#2f9a52', '#e0313c', '#f2c34d', '#ffffff'] },
+    // this one was green on one ear and red on the other; she wants matching pairs, so it is now green on both.
+    // The id keeps its old "mix" name on purpose: saved outfits refer to it (ids must never change).
+    { id: 'ear-xmas-bauble-mix', shape: 'xm-bauble', cat: 'earrings', name: { is: 'Grænir jólakúlueyrnalokkar', en: 'Green bauble earrings' }, colors: ['#2f9a52', '#2f9a52', '#f2c34d', '#ffffff'] },
 
     // --- mittens, scarf ---
     { id: 'mittens-xmas-red', shape: 'xm-mitten', cat: 'mittens', name: { is: 'Rauðir jólavettlingar', en: 'Red Christmas mittens' }, colors: ['#d8343c', FUR, '#ffffff'] },
