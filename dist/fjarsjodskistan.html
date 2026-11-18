@@ -470,7 +470,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   root.FJ = FJ;
 })(window);
 
-FJ.build = 'cdca7c6ee6';
+FJ.build = '4fbcd6692d';
 </script>
 <script>
 FJ.loading('core.js');
@@ -1664,10 +1664,26 @@ FJ.loading('core.js');
   /** Thumbnail svg markup for one item (used in the chest and for loose pieces). */
   DOLL.renderThumb = function (item) {
     const shp = DOLL.shapes[item.shape];
+    if (shp.slot === 'earrings') return earringPairThumb(item);
     const box = item.thumb || shp.thumb || SLOTS[shp.slot].thumb;
     const out = DOLL.drawItem(item);
     return `<svg viewBox="${box.join(' ')}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${out.back}${out.front}</svg>`;
   };
+
+  /**
+   * Earrings come in pairs, so their picture shows the pair: the left earring (cut out around the left earlobe),
+   * and next to it the same earring mirrored, like the one on her right ear. Without the cut-out, the real right
+   * earring (drawn at the other ear) would hang outside the picture's box.
+   */
+  const EAR_GAP = 13;                                  // each earring sits this far left / right of the middle
+  const [EX, EY] = G.earlobes[0];
+  addDef('thumb-ear-clip', `<clipPath id="thumb-ear-clip"><rect x="${EX - 15}" y="${EY - 10}" width="30" height="48"/></clipPath>`);
+  function earringPairThumb(item) {
+    const out = DOLL.drawItem(item), one = `<g clip-path="url(#thumb-ear-clip)">${out.back}${out.front}</g>`;
+    return `<svg viewBox="${EX - 28} ${EY - 17} 56 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
+      `<g transform="translate(${-EAR_GAP},0)">${one}</g>` +
+      `<g transform="translate(${EX + EAR_GAP},0) scale(-1,1) translate(${-EX},0)">${one}</g></svg>`;
+  }
 
   /** Hairstyles shown in the chest (old "style in a colour" keys are left out: the colour dots make them). */
   DOLL.hairstyles = Object.keys(HAIRSTYLES).filter(k => !LEGACY_HAIR[k]);
