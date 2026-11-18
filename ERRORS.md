@@ -30,6 +30,7 @@ It keeps the newest 40 problems.
 | **FJ-D02** | A hairstyle failed to draw, so her own hair was used. Detail = style key. | `HAIRSTYLES` in `src/core.js` |
 | **FJ-D03** | A scene failed to draw (or doesn't exist), so the meadow was used. Detail = scene key. | `SCENES` in `src/scenes.js` |
 | **FJ-D04** | An animal or friend failed to draw and is left out. Detail = creature key. | `CREATURES` in `src/scenes.js` |
+| **FJ-P01** | Printing or saving a picture of the doll (colouring page or colour picture) failed. Detail = which one. | `pictureSVG`, `svgToPng`, `printColouring` in `src/app.js` |
 | **FJ-A01** | An unexpected error that nothing caught. Detail = file:line. | the message and "@ where" in the copied text |
 | **FJ-A02** | An unexpected error in something that ran later (a promise). | the message |
 | **FJ-A03** | The sound could not start. The game stays silent. | `Sound.init` in `src/app.js` |

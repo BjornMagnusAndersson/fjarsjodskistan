@@ -1263,6 +1263,125 @@
   /** Short note under the backup buttons. */
   function backupNote(text) { const m = $('#backupMsg'); m.textContent = text; m.hidden = false; }
 
+  /* ---------------------------------------------------------------
+     Pictures of the doll (parent menu), as she is dressed right now:
+     - a colouring page to print: only thin outlines on white paper, so she can colour it herself
+       (and it uses very little ink),
+     - the same colouring page saved as a picture file (to print from another device),
+     - a picture in colour (to send to grandparents).
+     Problems are logged with code FJ-P01.
+     --------------------------------------------------------------- */
+  const LINE = '#3a3040';                 // the colouring page's line colour: dark plum, like the game's outlines
+  // shading, blush and glows: they are fills, not lines, so the colouring page leaves them out
+  const SHADING = /^url\(#(soft-|sk-shadow|sk-blush|sk-glow|ground-sh)/;
+  /** The doll as she is dressed now, as a complete SVG file (with every gradient it needs). */
+  function dollSVG() {
+    const inner = DOLL.renderDoll({ hair: state.hair, hairColor: state.hairColor, worn: state.worn, mood: 'smile' });
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 800" width="400" height="800"><defs>${DOLL.defsString()}</defs>${inner}</svg>`;
+  }
+  /**
+   * Turn the doll's SVG into a picture file's SVG text. The eyelids are removed (in the game a style keeps them
+   * folded away until she blinks; a picture has no styles, so they would close her eyes).
+   * lines = true makes the colouring page:
+   *   shading, glows, blush and see-through decorations go; every other fill becomes white paper;
+   *   lines become dark plum; bigger shapes without a line get one; tiny dark spots (pupils) stay dark.
+   */
+  function pictureSVG(lines) {
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;height:800px;visibility:hidden';
+    holder.innerHTML = dollSVG(); document.body.appendChild(holder);   // in the page, so shapes can be measured
+    const svg = holder.firstElementChild;
+    try {
+      svg.querySelectorAll('.lid').forEach(el => el.remove());
+      if (lines) toLineArt(svg);
+      return new XMLSerializer().serializeToString(svg);
+    } finally { holder.remove(); }
+  }
+  /** The colouring-page rules (see pictureSVG), applied to every shape of the drawing. */
+  function toLineArt(svg) {
+    for (const el of svg.querySelectorAll('path,ellipse,circle,rect,polygon,polyline,line')) {
+      if (el.closest('defs,clipPath,pattern,mask')) continue;     // clip shapes and pattern tiles are not drawn as such
+      const fill = el.getAttribute('fill'), hasFill = fill !== null && fill !== 'none';
+      const faint = +(el.getAttribute('opacity') ?? 1) < .9 || +(el.getAttribute('fill-opacity') ?? 1) < .9;
+      if (hasFill && (SHADING.test(fill) || faint)) { el.remove(); continue; }
+      const stroke = el.getAttribute('stroke'), hasStroke = stroke !== null && stroke !== 'none';
+      if (hasStroke) el.setAttribute('stroke', LINE);
+      // a very thick line is a painted band (a swim ring, a strap): draw it as an outline to colour in,
+      // a dark band with a white band on top, instead of a solid dark stripe (less ink, more to colour)
+      const sw = parseFloat(el.getAttribute('stroke-width') || '1');
+      if (hasStroke && sw >= 5) {
+        const inner = el.cloneNode(false);
+        inner.setAttribute('stroke', '#ffffff'); inner.setAttribute('stroke-width', String(sw - 3)); inner.setAttribute('fill', 'none');
+        el.after(inner);
+      }
+      if (!hasFill) continue;
+      const box = el.getBBox(), m = /^#([0-9a-f]{6})$/i.exec(fill);
+      const dark = m && [0, 2, 4].reduce((s, i, k) => s + parseInt(m[1].slice(i, i + 2), 16) * [.3, .6, .1][k], 0) < 70;
+      if (dark && box.width * box.height < 400) { el.setAttribute('fill', LINE); continue; }   // pupils and small dark details
+      el.setAttribute('fill', '#ffffff');
+      if (!hasStroke && box.width > 10 && box.height > 10) {
+        el.setAttribute('stroke', LINE); el.setAttribute('stroke-width', '2'); el.setAttribute('stroke-linejoin', 'round');
+      }
+    }
+  }
+  /** Draw SVG text onto a white canvas of w × h (the drawing centred, as big as fits) and return a PNG file. */
+  async function svgToPng(svgText, w, h, name) {
+    const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+    await img.decode();
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), k = Math.min(w * .92 / 400, h * .94 / 800);   // the doll is 400 × 800
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    g.drawImage(img, (w - 400 * k) / 2, (h - 800 * k) / 2, 400 * k, 800 * k);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('the picture could not be made');
+    return new File([blob], name, { type: 'image/png' });
+  }
+  /** Note under the picture buttons. */
+  function picNote(text) { const m = $('#picMsg'); m.textContent = text; m.hidden = !text; }
+  /** Give a file to the parent: the share sheet on Android (Drive, email, messages, …) if share is true, otherwise a download. */
+  async function handOver(file, share) {
+    try {
+      if (share && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: file.name }); return 'shared'; }
+    } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; report('FJ-P01', 'share (now trying a download)', e); }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return 'downloaded';
+  }
+  /**
+   * Save a picture file: the colouring page (lines = true, A4-shaped, 150 dpi) goes straight to Downloads, ready to
+   * print; the doll in colour opens the share sheet, to send it to family.
+   */
+  async function savePicture(lines) {
+    picNote('Augnablik …');
+    const day = new Date().toISOString().slice(0, 10);
+    try {
+      const file = lines ? await svgToPng(pictureSVG(true), 1240, 1754, `litamynd-${day}.png`)
+                         : await svgToPng(pictureSVG(false), 900, 1500, `dukkan-${day}.png`);
+      const how = await handOver(file, !lines);
+      picNote(how === 'downloaded' ? 'Myndin er í niðurhali (Downloads).' : how === 'shared' ? 'Mynd send.' : '');
+    } catch (e) { report('FJ-P01', lines ? 'colouring page' : 'colour picture', e); picNote('Ekki tókst að búa til myndina. Sjá villukóða.'); }
+  }
+  /**
+   * Print the colouring page. The page goes into #printPage as a picture (an <img>, so it keeps its own
+   * gradients and clip shapes); the print style hides everything else and fits it on one A4 sheet.
+   */
+  async function printColouring() {
+    const page = $('#printPage');
+    try {
+      const img = new Image(); img.alt = '';
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pictureSVG(true));
+      await img.decode();
+      page.replaceChildren(img);
+      menuEl.hidden = true;
+      window.print();
+    } catch (e) { report('FJ-P01', 'print', e); picNote('Ekki tókst að prenta. Prófaðu „Vista litamynd“.'); }
+  }
+  // the print picture stays in #printPage until the next print (it is small); clearing it right after print()
+  // could blank the page on tablets that prepare the print preview a moment later
+  $('#menuPrint').addEventListener('click', printColouring);
+  $('#menuColouring').addEventListener('click', () => savePicture(true));
+  $('#menuPhoto').addEventListener('click', () => savePicture(false));
+
   /*  Backup file for parents: all saved outfits and settings as JSON.
       On Android it opens the share sheet (Drive, email, …); elsewhere it downloads. */
   $('#menuExport').addEventListener('click', async () => {

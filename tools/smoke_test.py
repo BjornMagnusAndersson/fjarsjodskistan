@@ -253,6 +253,28 @@ try:
         ok(codes(pg) == [], f'vibration logs no errors {codes(pg)}')
         ctx.close()
 
+        # ---- pictures: colouring page (print and file) and a picture in colour ----
+        # (window.print and the share sheet are replaced: the test browser can't show their windows)
+        ctx = b.new_context(viewport={'width': 1280, 'height': 800}, accept_downloads=True); pg = ctx.new_page()
+        ctx.add_init_script("window.print = () => { window.__printed = (window.__printed || 0) + 1; }; navigator.canShare = () => false;")
+        seed(pg, {'version': 1, 'hair': 'braids', 'worn': worn})
+        g = pg.locator('#btnGear').bounding_box(); pg.mouse.move(g['x'] + 20, g['y'] + 20); pg.mouse.down(); pg.wait_for_timeout(1200); pg.mouse.up()
+        for btn, name in (('#menuColouring', 'litamynd-'), ('#menuPhoto', 'dukkan-')):
+            with pg.expect_download() as dl: pg.click(btn)
+            data = pathlib.Path(dl.value.path()).read_bytes()
+            ok(dl.value.suggested_filename.startswith(name) and data[:8] == b'\x89PNG\r\n\x1a\n' and len(data) > 50000, f'{btn} saves a picture file ({len(data) // 1024} KB)')
+        pg.click('#menuPrint'); pg.wait_for_timeout(500)
+        src = pg.evaluate("decodeURIComponent(document.querySelector('#printPage img')?.src || '')")
+        ok(pg.evaluate('window.__printed') == 1 and pg.is_hidden('#menu'), 'printing a colouring page opens the print window')
+        ok('class="lid"' not in src and 'url(#soft-' not in src and 'url(#sk-blush' not in src and '#3a3040' in src,
+           'the colouring page has open eyes, outlines and no shading')
+        pg.emulate_media(media='print')
+        ok(pg.is_hidden('#stage') and pg.is_visible('#printPage img'), 'only the colouring page is printed')
+        pg.emulate_media(media='screen')
+        ok(pg.is_hidden('#printPage'), 'the print page never shows in the game')
+        ok(codes(pg) == [], f'pictures log no errors {codes(pg)}')
+        ctx.close()
+
         # calm mode: no sparkles or puffs, even though they use a different kind of animation than the scenery
         pg = b.new_page(viewport={'width': 1280, 'height': 800})
         seed(pg, {'version': 1, 'settings': {'calm': True}})

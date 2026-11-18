@@ -161,6 +161,16 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* sparkle burst */
 .spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }
 .spark svg { width: 100%; height: 100%; }
+/* printing the colouring page: only #printPage is printed, on one A4 sheet. @page margin 0 also leaves out the
+   browser's own header and footer (page title, web address), and the padding gives the paper its white edge. */
+#printPage { display: none; }
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  html, body { background: #fff !important; overflow: visible !important; height: auto !important; }
+  body > *:not(#printPage) { display: none !important; }
+  #printPage { display: flex !important; align-items: center; justify-content: center; box-sizing: border-box; width: 210mm; height: 296mm; padding: 12mm; }
+  #printPage img { height: 100%; width: auto; max-width: 100%; }
+}
 /* magic rainbow puff when a helper puts a piece on her (magicPuff in app.js sets size, colour and movement) */
 .puff { position: absolute; border-radius: 50%; pointer-events: none; z-index: 44; opacity: 0; }
 
@@ -331,6 +341,9 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     <p id="fullMsg" hidden>Vafrinn leyfir ekki allan skjá hér.</p>
     <div class="row"><button id="menuExport">Vista afrit</button><button id="menuImport">Opna afrit</button></div>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
+    <p>Myndir af dúkkunni eins og hún er klædd núna:</p>
+    <div class="row"><button id="menuPrint">Prenta litamynd</button><button id="menuColouring">Vista litamynd</button><button id="menuPhoto">Vista mynd í lit</button></div>
+    <p id="picMsg" hidden></p>
     <p id="backupWhen"></p>
     <p id="backupMsg" hidden></p>
     <p id="storeMsg">Allt er vistað á þessu tæki. Taktu afrit af og til.</p>
@@ -341,6 +354,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     </details>
   </div>
 </div>
+<div id="printPage" aria-hidden="true"></div>
 <script>
 /* =====================================================================
    Fjársjóðskistan – error codes
@@ -378,6 +392,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
     'FJ-D02': ['Hárgreiðsla teiknaðist ekki', 'A hairstyle threw while drawing; the default hair was used. Detail = style key; HAIRSTYLES in core.js.'],
     'FJ-D03': ['Bakgrunnur teiknaðist ekki', 'A scene threw while drawing (or is unknown); the meadow was used. Detail = scene key; SCENES in scenes.js.'],
     'FJ-D04': ['Dýr teiknaðist ekki', 'A creature or friend threw while drawing; it is left out. Detail = creature key; CREATURES in scenes.js.'],
+    // P: pictures of the doll (app.js, "Pictures of the doll")
+    'FJ-P01': ['Gat ekki búið til mynd', 'Printing or saving a picture of the doll failed. Detail = which picture. pictureSVG / svgToPng / printColouring in app.js.'],
     // A: the app itself
     'FJ-A01': ['Óvænt villa', 'An unexpected error nobody caught. Detail = where (file:line) and the message.'],
     'FJ-A02': ['Óvænt villa (bið)', 'An unexpected error in something that runs later (a promise). Detail = the message.'],
@@ -454,7 +470,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   root.FJ = FJ;
 })(window);
 
-FJ.build = '4d72cd1ce8';
+FJ.build = 'dce544e417';
 </script>
 <script>
 FJ.loading('core.js');
@@ -16092,6 +16108,125 @@ FJ.loading('app.js');
   $('#errBox').addEventListener('toggle', () => { if ($('#errBox').open) renderErrors(); });   // always fresh when opened
   /** Short note under the backup buttons. */
   function backupNote(text) { const m = $('#backupMsg'); m.textContent = text; m.hidden = false; }
+
+  /* ---------------------------------------------------------------
+     Pictures of the doll (parent menu), as she is dressed right now:
+     - a colouring page to print: only thin outlines on white paper, so she can colour it herself
+       (and it uses very little ink),
+     - the same colouring page saved as a picture file (to print from another device),
+     - a picture in colour (to send to grandparents).
+     Problems are logged with code FJ-P01.
+     --------------------------------------------------------------- */
+  const LINE = '#3a3040';                 // the colouring page's line colour: dark plum, like the game's outlines
+  // shading, blush and glows: they are fills, not lines, so the colouring page leaves them out
+  const SHADING = /^url\(#(soft-|sk-shadow|sk-blush|sk-glow|ground-sh)/;
+  /** The doll as she is dressed now, as a complete SVG file (with every gradient it needs). */
+  function dollSVG() {
+    const inner = DOLL.renderDoll({ hair: state.hair, hairColor: state.hairColor, worn: state.worn, mood: 'smile' });
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 800" width="400" height="800"><defs>${DOLL.defsString()}</defs>${inner}</svg>`;
+  }
+  /**
+   * Turn the doll's SVG into a picture file's SVG text. The eyelids are removed (in the game a style keeps them
+   * folded away until she blinks; a picture has no styles, so they would close her eyes).
+   * lines = true makes the colouring page:
+   *   shading, glows, blush and see-through decorations go; every other fill becomes white paper;
+   *   lines become dark plum; bigger shapes without a line get one; tiny dark spots (pupils) stay dark.
+   */
+  function pictureSVG(lines) {
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:400px;height:800px;visibility:hidden';
+    holder.innerHTML = dollSVG(); document.body.appendChild(holder);   // in the page, so shapes can be measured
+    const svg = holder.firstElementChild;
+    try {
+      svg.querySelectorAll('.lid').forEach(el => el.remove());
+      if (lines) toLineArt(svg);
+      return new XMLSerializer().serializeToString(svg);
+    } finally { holder.remove(); }
+  }
+  /** The colouring-page rules (see pictureSVG), applied to every shape of the drawing. */
+  function toLineArt(svg) {
+    for (const el of svg.querySelectorAll('path,ellipse,circle,rect,polygon,polyline,line')) {
+      if (el.closest('defs,clipPath,pattern,mask')) continue;     // clip shapes and pattern tiles are not drawn as such
+      const fill = el.getAttribute('fill'), hasFill = fill !== null && fill !== 'none';
+      const faint = +(el.getAttribute('opacity') ?? 1) < .9 || +(el.getAttribute('fill-opacity') ?? 1) < .9;
+      if (hasFill && (SHADING.test(fill) || faint)) { el.remove(); continue; }
+      const stroke = el.getAttribute('stroke'), hasStroke = stroke !== null && stroke !== 'none';
+      if (hasStroke) el.setAttribute('stroke', LINE);
+      // a very thick line is a painted band (a swim ring, a strap): draw it as an outline to colour in,
+      // a dark band with a white band on top, instead of a solid dark stripe (less ink, more to colour)
+      const sw = parseFloat(el.getAttribute('stroke-width') || '1');
+      if (hasStroke && sw >= 5) {
+        const inner = el.cloneNode(false);
+        inner.setAttribute('stroke', '#ffffff'); inner.setAttribute('stroke-width', String(sw - 3)); inner.setAttribute('fill', 'none');
+        el.after(inner);
+      }
+      if (!hasFill) continue;
+      const box = el.getBBox(), m = /^#([0-9a-f]{6})$/i.exec(fill);
+      const dark = m && [0, 2, 4].reduce((s, i, k) => s + parseInt(m[1].slice(i, i + 2), 16) * [.3, .6, .1][k], 0) < 70;
+      if (dark && box.width * box.height < 400) { el.setAttribute('fill', LINE); continue; }   // pupils and small dark details
+      el.setAttribute('fill', '#ffffff');
+      if (!hasStroke && box.width > 10 && box.height > 10) {
+        el.setAttribute('stroke', LINE); el.setAttribute('stroke-width', '2'); el.setAttribute('stroke-linejoin', 'round');
+      }
+    }
+  }
+  /** Draw SVG text onto a white canvas of w × h (the drawing centred, as big as fits) and return a PNG file. */
+  async function svgToPng(svgText, w, h, name) {
+    const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+    await img.decode();
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), k = Math.min(w * .92 / 400, h * .94 / 800);   // the doll is 400 × 800
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    g.drawImage(img, (w - 400 * k) / 2, (h - 800 * k) / 2, 400 * k, 800 * k);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('the picture could not be made');
+    return new File([blob], name, { type: 'image/png' });
+  }
+  /** Note under the picture buttons. */
+  function picNote(text) { const m = $('#picMsg'); m.textContent = text; m.hidden = !text; }
+  /** Give a file to the parent: the share sheet on Android (Drive, email, messages, …) if share is true, otherwise a download. */
+  async function handOver(file, share) {
+    try {
+      if (share && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: file.name }); return 'shared'; }
+    } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; report('FJ-P01', 'share (now trying a download)', e); }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return 'downloaded';
+  }
+  /**
+   * Save a picture file: the colouring page (lines = true, A4-shaped, 150 dpi) goes straight to Downloads, ready to
+   * print; the doll in colour opens the share sheet, to send it to family.
+   */
+  async function savePicture(lines) {
+    picNote('Augnablik …');
+    const day = new Date().toISOString().slice(0, 10);
+    try {
+      const file = lines ? await svgToPng(pictureSVG(true), 1240, 1754, `litamynd-${day}.png`)
+                         : await svgToPng(pictureSVG(false), 900, 1500, `dukkan-${day}.png`);
+      const how = await handOver(file, !lines);
+      picNote(how === 'downloaded' ? 'Myndin er í niðurhali (Downloads).' : how === 'shared' ? 'Mynd send.' : '');
+    } catch (e) { report('FJ-P01', lines ? 'colouring page' : 'colour picture', e); picNote('Ekki tókst að búa til myndina. Sjá villukóða.'); }
+  }
+  /**
+   * Print the colouring page. The page goes into #printPage as a picture (an <img>, so it keeps its own
+   * gradients and clip shapes); the print style hides everything else and fits it on one A4 sheet.
+   */
+  async function printColouring() {
+    const page = $('#printPage');
+    try {
+      const img = new Image(); img.alt = '';
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pictureSVG(true));
+      await img.decode();
+      page.replaceChildren(img);
+      menuEl.hidden = true;
+      window.print();
+    } catch (e) { report('FJ-P01', 'print', e); picNote('Ekki tókst að prenta. Prófaðu „Vista litamynd“.'); }
+  }
+  // the print picture stays in #printPage until the next print (it is small); clearing it right after print()
+  // could blank the page on tablets that prepare the print preview a moment later
+  $('#menuPrint').addEventListener('click', printColouring);
+  $('#menuColouring').addEventListener('click', () => savePicture(true));
+  $('#menuPhoto').addEventListener('click', () => savePicture(false));
 
   /*  Backup file for parents: all saved outfits and settings as JSON.
       On Android it opens the share sheet (Drive, email, …); elsewhere it downloads. */

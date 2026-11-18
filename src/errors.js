@@ -34,6 +34,8 @@
     'FJ-D02': ['Hárgreiðsla teiknaðist ekki', 'A hairstyle threw while drawing; the default hair was used. Detail = style key; HAIRSTYLES in core.js.'],
     'FJ-D03': ['Bakgrunnur teiknaðist ekki', 'A scene threw while drawing (or is unknown); the meadow was used. Detail = scene key; SCENES in scenes.js.'],
     'FJ-D04': ['Dýr teiknaðist ekki', 'A creature or friend threw while drawing; it is left out. Detail = creature key; CREATURES in scenes.js.'],
+    // P: pictures of the doll (app.js, "Pictures of the doll")
+    'FJ-P01': ['Gat ekki búið til mynd', 'Printing or saving a picture of the doll failed. Detail = which picture. pictureSVG / svgToPng / printColouring in app.js.'],
     // A: the app itself
     'FJ-A01': ['Óvænt villa', 'An unexpected error nobody caught. Detail = where (file:line) and the message.'],
     'FJ-A02': ['Óvænt villa (bið)', 'An unexpected error in something that runs later (a promise). Detail = the message.'],
