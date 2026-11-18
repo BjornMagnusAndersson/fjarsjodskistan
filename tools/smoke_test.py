@@ -184,6 +184,52 @@ try:
         ok(codes(pg) == [], f'elf, puff and gear log no errors {codes(pg)}')
         ctx.close()
 
+        # ---- back / forward: the last 5 looks ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'hair': 'loose', 'hairColor': '', 'worn': {'top': worn['top'], 'hat': worn['hat']}})
+        hc = lambda: pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}")').get('hairColor', '')
+        click = lambda sel: pg.evaluate(f"document.querySelector('{sel}').click()")
+        ok(pg.evaluate("document.querySelector('#btnBack').disabled && document.querySelector('#btnForward').disabled"), 'back and forward are dimmed when there is nothing to go back to')
+        click('#btnUndress'); pg.wait_for_timeout(200)
+        click('#btnBack'); pg.wait_for_timeout(1500)
+        ok(pg.evaluate("document.querySelectorAll('#doll [data-item]').length") > 0, 'back puts the clothes she took off back on')
+        click('#btnForward'); pg.wait_for_timeout(300)
+        ok(pg.evaluate("document.querySelectorAll('#doll [data-item]').length") == 0, 'forward takes them off again')
+        # seven hair colour changes: only the last 5 can be undone
+        click('#chest'); pg.wait_for_timeout(700); click('#tabs [data-cat=hair]'); pg.wait_for_timeout(300)
+        cols = pg.evaluate("[...document.querySelectorAll('.hair-dot')].map(d => d.dataset.color)")[:7]
+        for c in cols: click(f'.hair-dot[data-color={c}]'); pg.wait_for_timeout(120)
+        for _ in range(7): click('#btnBack'); pg.wait_for_timeout(1050)
+        pg.wait_for_timeout(1500)
+        ok(pg.evaluate("document.querySelector('#btnBack').disabled"), 'after 5 steps back there is no more to go back to')
+        ok(pg.evaluate("document.querySelector('.hair-dot.on')?.dataset.color || ''") == cols[1], 'going back 5 colour changes lands on the 2nd colour (history keeps the last 5)')
+        click('#btnForward'); pg.wait_for_timeout(1050)
+        ok(pg.evaluate("document.querySelector('.hair-dot.on')?.dataset.color || ''") == cols[2], 'forward goes one colour on again')
+        click(f'.hair-dot[data-color={cols[5]}]'); pg.wait_for_timeout(300)
+        ok(pg.evaluate("document.querySelector('#btnForward').disabled"), 'a new change starts the forward list over')
+        ok(codes(pg) == [], f'back and forward log no errors {codes(pg)}')
+        pg.close()
+
+        # ---- sound settings and calm mode ----
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'settings': {'volume': 'loud', 'animals': 'yes'}})
+        g = pg.locator('#btnGear').bounding_box(); pg.mouse.move(g['x'] + 20, g['y'] + 20); pg.mouse.down(); pg.wait_for_timeout(1200); pg.mouse.up()
+        ok(pg.evaluate("document.querySelector('#optVolume').value") == '100' and pg.evaluate("document.querySelector('#optAnimals').checked"), 'a strange saved volume shows as 100% and animal sounds on')
+        pg.evaluate("(() => { const v = document.querySelector('#optVolume'); v.value = 40; v.dispatchEvent(new Event('input')); })()"); pg.wait_for_timeout(1500)
+        ok(pg.evaluate('JSON.parse(localStorage.getItem("fjarsjodskistan.v1")).settings.volume') == .4, 'the volume slider is saved')
+        ok(codes(pg) == [], f'the sound settings log no errors {codes(pg)}')
+        pg.close()
+        # calm mode: no sparkles or puffs, even though they use a different kind of animation than the scenery
+        pg = b.new_page(viewport={'width': 1280, 'height': 800})
+        seed(pg, {'version': 1, 'settings': {'calm': True}})
+        pg.evaluate("document.querySelector('#chest').click()"); pg.wait_for_timeout(800)
+        pg.evaluate("document.querySelector('#tabs [data-cat=top]').click()"); pg.wait_for_timeout(200)
+        t = pg.locator('#grid .tile[data-id]').first.bounding_box(); pg.mouse.click(t['x'] + t['width'] / 2, t['y'] + t['height'] / 2)
+        seen = 0
+        for _ in range(25): pg.wait_for_timeout(60); seen = max(seen, pg.evaluate("document.querySelectorAll('.puff, .spark').length"))
+        ok(seen == 0 and bool(pg.evaluate('JSON.parse(localStorage.getItem("fjarsjodskistan.v1") || "{}").worn?.top')), f'calm mode: the helper still dresses her, with no sparkles or puffs ({seen} seen)')
+        pg.close()
+
         # ---- costume tab: tapping a look keeps the list where she scrolled to ----
         pg = b.new_page(viewport={'width': 1280, 'height': 800})
         seed(pg, {'version': 1, 'cat': 'costume'})

@@ -101,6 +101,12 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 .btn.scene-btn[aria-pressed="true"] { border-color: var(--gold); transform: scale(1.1); }
 .btn:focus-visible, .tab:focus-visible, .tile:focus-visible { outline: 4px solid #2c6bb2; outline-offset: 2px; }
 .btn.pop { animation: pop .5s ease; }
+/* back / forward: two smaller round buttons side by side, dimmed when there is nothing to go back or forward to */
+.pair { display: flex; gap: 8px; }
+.btn.small { width: 52px; height: 52px; border-width: 3px; }
+.btn.small svg { width: 30px; height: 30px; }
+.btn:disabled { opacity: .4; cursor: default; }
+.menu input[type="range"] { width: 150px; height: 28px; accent-color: #3f8fd2; }
 
 /* heart jar (end of the scene row) and the friends it brings */
 .btn.jar-btn { width: 58px; height: 58px; padding: 2px; margin-left: 6px; }
@@ -265,7 +271,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 @media (max-height: 520px) and (min-aspect-ratio: 4/5) {
   .bar.top-left .btn.scene-btn, .bar.top-left .btn.jar-btn { width: 44px; height: 44px; border-width: 3px; }
   .bar.left-low { bottom: auto; top: calc(max(8px, env(safe-area-inset-top, 0px)) + 54px); gap: 6px; }
-  .bar.left-low .btn { width: min(44px, calc((100vh - 86px) / 5.5)); height: min(44px, calc((100vh - 86px) / 5.5)); border-width: 3px; }
+  .bar.left-low .btn { width: min(44px, calc((100vh - 86px) / 6.5)); height: min(44px, calc((100vh - 86px) / 6.5)); border-width: 3px; }
   .bar.left-low .btn svg { width: 62%; height: 62%; }
   .bar.top-left { top: max(8px, env(safe-area-inset-top, 0px)); }
   .tab { width: 50px; height: 50px; border-width: 3px; padding: 4px; }
