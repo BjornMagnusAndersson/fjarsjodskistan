@@ -529,7 +529,9 @@
      Registry
      --------------------------------------------------------------- */
   const DOLL = {
-    shapes: {}, items: [], byId: {},
+    // byId has no built-in names (Object.create(null)): a saved id like "constructor" from a strange
+    // backup file then finds nothing, instead of something that isn't a clothing piece
+    shapes: {}, items: [], byId: Object.create(null),
 
     /**
      * Register a garment shape.
@@ -1147,7 +1149,7 @@
    */
   function drawHair(style, o = {}, color = '') {
     const pal = paletteOf(color), opts = pal ? Object.assign({}, o, { pal }) : o;
-    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(opts);
+    if (!Object.prototype.hasOwnProperty.call(HAIRSTYLES, style)) return HAIRSTYLES.loose(opts);   // only real styles, never a built-in name
     try { return HAIRSTYLES[style](opts); }
     catch (e) { fail('FJ-D02', style + (color ? ' / ' + color : ''), e); return HAIRSTYLES.loose(o); }
   }

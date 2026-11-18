@@ -77,6 +77,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* backup reminder: a small soft dot on the gear (parents only), and the menu line in a warmer colour */
 #btnGear { position: relative; }
 #btnGear.remind::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #f2a65a; }
+/* holding the gear: a gold ring fills around it in 1 second (pathLength 100: offset 100 = empty, 0 = full) */
+#btnGear .hold-ring { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }
+#btnGear.holding .hold-ring { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+/* the small "Haltu inni" note above the gear after a short tap (never catches taps itself) */
+#holdHint { position: fixed; z-index: 50; transform: translate(-50%, -100%); padding: 6px 12px; border-radius: 12px; background: #fff;
+  color: var(--ink); font: 600 16px var(--font); box-shadow: 0 3px 10px rgba(30, 40, 60, .25); pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+#holdHint.show { opacity: 1; }
 .menu p#backupWhen.due { color: #b8481e; font-weight: 600; }
 .tile.look { aspect-ratio: 4 / 5; background: linear-gradient(#e6f4fb, #f4fbef); }
 
@@ -144,6 +151,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* sparkle burst */
 .spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }
 .spark svg { width: 100%; height: 100%; }
+/* magic rainbow puff when a helper puts a piece on her (magicPuff in app.js sets size, colour and movement) */
+.puff { position: absolute; border-radius: 50%; pointer-events: none; z-index: 44; opacity: 0; }
 
 /* snow */
 .snow { position: absolute; top: -5%; width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: .85; animation: fall linear infinite; pointer-events: none; }

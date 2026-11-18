@@ -46,9 +46,15 @@ try:
 
         # ---- saving, backup, offline ----
         ctx = b.new_context(viewport={'width': 1280, 'height': 800}, accept_downloads=True)
-        pg = ctx.new_page(); errors = []
+        pg = ctx.new_page(); errors = []; blocked = []
         pg.on('pageerror', lambda e: errors.append(str(e)))
+        # anything the security rules (Content-Security-Policy) block shows up as a console message
+        pg.on('console', lambda m: blocked.append(m.text) if 'Content Security Policy' in m.text else None)
         pg.goto(URL); pg.wait_for_timeout(1200)
+        ok('Content-Security-Policy' in pg.content() and "script-src 'sha256-" in pg.content(), 'the page has its security rules (only its own scripts may run)')
+        pg.evaluate("""(() => { const d = document.createElement('div'); d.innerHTML = '<img src="x" onerror="window.pwned = 1">'; document.body.appendChild(d);
+          const s = document.createElement('script'); s.textContent = 'window.pwned = 2'; document.body.appendChild(s); })()"""); pg.wait_for_timeout(300)
+        ok(pg.evaluate('window.pwned === undefined'), 'injected code is blocked by the browser'); blocked.clear()
         worn = pg.evaluate('(() => { const t = DOLL.items.find(i => DOLL.slotOf(i) === "top"), h = DOLL.items.find(i => DOLL.slotOf(i) === "hat"); return { top: t.id, hat: h.id }; })()')
         st = lambda: pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}"))')
         seed(pg, {'version': 1, 'hair': 'braids', 'worn': worn, 'outfits': [{'id': 'oa', 'createdAt': '2026-01-01', 'hair': 'braids', 'worn': worn}, {'junk': 1}], 'settings': {'sound': False}})
@@ -82,10 +88,36 @@ try:
         ctx.set_offline(True); pg.reload(); pg.wait_for_timeout(1500)
         ok(pg.locator('#doll svg').count() == 1, 'starts offline'); ctx.set_offline(False)
         ok(not errors, f'no page errors {errors}')
+        ok(not blocked, f'the security rules block nothing the game needs {blocked[:2]}')
+        ctx.close()
+
+        # ---- a tampered backup file: odd ids and HTML/script text must not break anything or run ----
+        ctx = b.new_context(viewport={'width': 1280, 'height': 800}); pg = ctx.new_page(); errors = []; dialogs = []
+        pg.on('pageerror', lambda e: errors.append(str(e))); pg.on('dialog', lambda d: (dialogs.append(d.message), d.dismiss()))
+        pg.goto(URL); pg.wait_for_timeout(1000)
+        evil = {'app': 'fjarsjodskistan', 'outfits': [
+            {'id': 'evil1', 'createdAt': '2026-11-02', 'hair': 'constructor', 'hairColor': '"><img src=x onerror=alert(1)>',
+             'worn': {'top': 'constructor', 'hat': '__proto__', '<img src=x onerror=alert(2)>': 'toString', 'x': 'a' * 5000}},
+            {'id': 'evil2', 'createdAt': {'toString': 1}, 'hair': 'toString', 'worn': {'top': '<svg onload=alert(3)>'}},
+            {'id': 'x' * 500, 'worn': {}}, 'junk', None]}
+        f = tmpdir / 'evil.json'; f.write_text(json.dumps(evil), encoding='utf-8')
+        g = pg.locator('#btnGear').bounding_box(); pg.mouse.move(g['x'] + 20, g['y'] + 20); pg.mouse.down(); pg.wait_for_timeout(1200); pg.mouse.up()
+        pg.set_input_files('#importFile', str(f)); pg.wait_for_timeout(400); pg.click('#menuClose')
+        pg.evaluate("document.querySelector('#btnGallery').click()"); pg.wait_for_timeout(800)
+        saved = pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}")).outfits')
+        ok(len(saved) == 2 and all(len(json.dumps(o)) < 600 for o in saved), 'a tampered backup keeps only clean, small outfits')
+        ok(pg.evaluate("document.querySelectorAll('#gallery img, #gallery [onerror], #gallery [onload]').length") == 0 and not dialogs,
+           f'text from a backup file is never turned into page code {dialogs}')
+        pg.evaluate("document.querySelector('#gallery .card').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}))")
+        pg.evaluate("document.querySelector('#gallery .card').dispatchEvent(new PointerEvent('pointerup', {bubbles: true}))"); pg.wait_for_timeout(400)
+        ok(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn') == {} or pg.evaluate("Object.keys(JSON.parse(localStorage.getItem('fjarsjodskistan.v1')).worn).length") == 0,
+           'wearing a tampered outfit puts nothing strange on her')
+        ok(not errors, f'a tampered backup causes no page errors {errors}')
         ctx.close()
 
         # ---- error codes: a broken piece is skipped, a broken file is named ----
-        pg = b.new_page(viewport={'width': 1280, 'height': 800}); pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate('FJ.clear()')
+        # (bypass_csp: this test adds its own scripts on purpose, which the security rules would rightly block)
+        pg = b.new_page(viewport={'width': 1280, 'height': 800}, bypass_csp=True); pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate('FJ.clear()')
         drawn = pg.evaluate("""(() => { DOLL.shape('test-broken', { slot: 'top', draw() { throw new Error('boom'); } });
           DOLL.add([{ id: 'top-test-broken', shape: 'test-broken', cat: 'top', colors: [] }]);
           return DOLL.renderDoll({ hair: 'loose', worn: { top: 'top-test-broken' } }).length; })()""")
@@ -119,6 +151,37 @@ try:
         T('touchEnd', []); pg.wait_for_timeout(900)
         ok(bool(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn || null')), 'dragging a piece onto the doll dresses her')
         ok(codes(pg) == [], f'normal play logs no errors {codes(pg)}')
+
+        # the elf only waves: tapping him never puts clothes on her
+        seed(pg, {'version': 1, 'scene': 'meadow', 'worn': {}})
+        for _ in range(3):
+            pg.evaluate("document.querySelector('.creature[aria-label=elf]').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}))"); pg.wait_for_timeout(500)
+        pg.wait_for_timeout(1500)
+        ok(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn || {{}}') == {} and pg.evaluate("document.querySelectorAll('#doll [data-item]').length") == 0,
+           'tapping the elf does not dress her')
+
+        # a tap on a piece in the chest: a helper brings it, and a rainbow puff shows where it lands
+        pg.evaluate("document.querySelector('#chest').click()"); pg.wait_for_timeout(800)
+        pg.evaluate("document.querySelector('#tabs [data-cat=top]').click()"); pg.wait_for_timeout(200)
+        t = pg.locator('#grid .tile[data-id]').first.bounding_box(); tx, ty = t['x'] + t['width'] / 2, t['y'] + t['height'] / 2
+        T('touchStart', [(1, tx, ty)]); T('touchEnd', [])
+        puffs = 0
+        for _ in range(25):
+            pg.wait_for_timeout(60); puffs = max(puffs, pg.evaluate("document.querySelectorAll('.puff').length"))
+        ok(puffs == 6, f'a helper putting a piece on her makes a rainbow puff ({puffs} clouds)')
+        pg.wait_for_timeout(1800)
+        ok(pg.evaluate("document.querySelectorAll('.puff, .spark, .ghost').length") == 0, 'the puff cleans itself up')
+        ok(bool(pg.evaluate(f'JSON.parse(localStorage.getItem("{KEY}") || "{{}}").worn?.top')), 'the helper put the piece on')
+
+        # the gear (finger): a short tap shows "Haltu inni" but no menu; holding it 1 second opens the menu
+        g = pg.locator('#btnGear').bounding_box(); gx, gy = g['x'] + g['width'] / 2, g['y'] + g['height'] / 2
+        T('touchStart', [(1, gx, gy)]); pg.wait_for_timeout(150); T('touchEnd', []); pg.wait_for_timeout(200)
+        ok(pg.is_hidden('#menu') and pg.evaluate("document.querySelector('#holdHint')?.classList.contains('show')"), 'a short tap on the gear says "Haltu inni" and opens nothing')
+        T('touchStart', [(1, gx, gy)]); pg.wait_for_timeout(500)
+        ok(pg.evaluate("document.querySelector('#btnGear').classList.contains('holding')"), 'holding the gear fills the ring')
+        T('touchMove', [(1, gx + 6, gy - 5)]); pg.wait_for_timeout(700); T('touchEnd', []); pg.wait_for_timeout(200)
+        ok(pg.is_visible('#menu'), 'holding the gear 1 second opens the parent menu (a small wobble is fine)')
+        ok(codes(pg) == [], f'elf, puff and gear log no errors {codes(pg)}')
         ctx.close()
 
         # ---- costume tab: tapping a look keeps the list where she scrolled to ----

@@ -68,6 +68,7 @@
    */
   function report(code, detail = '', err = null) {
     const msg = err ? String(err.message || err).slice(0, 200) : '';
+    detail = String(detail).slice(0, 120);   // keep every entry small, whatever it is about
     const now = new Date().toISOString();
     const log = list();
     const same = log.find(e => e.code === code && e.detail === String(detail) && e.msg === msg);

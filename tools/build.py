@@ -7,8 +7,10 @@ Writes two things:
   docs/                      – the installable web app that GitHub Pages serves:
                                index.html + manifest + service worker + icons
 """
+import base64
 import hashlib
 import pathlib
+import re
 import shutil
 
 root = pathlib.Path(__file__).resolve().parent.parent
@@ -66,6 +68,22 @@ page = head + page[:body_start] + '</head>\n<body>\n' + page[body_start:] + regi
 # the build id: a fingerprint of the whole page. It is shown with the error codes and names the offline cache.
 build = hashlib.sha1(page.encode('utf-8')).hexdigest()[:10]
 page = page.replace("FJ.build = 'BUILD_ID';", f"FJ.build = '{build}';")
+
+
+def security_policy(page):
+    """The page's security rules (Content-Security-Policy). The browser then runs ONLY the scripts written here at
+    build time (each is named by a fingerprint of its exact text), so code that sneaks in later can't run: no
+    injected scripts, no onclick="..." in drawings, nothing loaded from other websites. Allowed from outside: only
+    the Google font. Saving (localStorage) and the backup download are not affected."""
+    hashes = ' '.join("'sha256-" + base64.b64encode(hashlib.sha256(s.encode('utf-8')).digest()).decode() + "'"
+                      for s in re.findall(r'<script>(.*?)</script>', page, flags=re.S))
+    rules = ["default-src 'self'", f"script-src {hashes}", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+             "font-src https://fonts.gstatic.com", "img-src 'self' data: blob:", "connect-src 'self'", "worker-src 'self'",
+             "manifest-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"]
+    return f'<meta http-equiv="Content-Security-Policy" content="{"; ".join(rules)}">\n'
+
+
+page = page.replace('<meta charset="utf-8">\n', '<meta charset="utf-8">\n' + security_policy(page), 1)
 (docs / 'index.html').write_text(page, encoding='utf-8', newline='\n')
 (docs / 'sw.js').write_text(read(web / 'sw.js').replace('BUILD', build), encoding='utf-8', newline='\n')
 

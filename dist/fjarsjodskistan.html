@@ -81,6 +81,13 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* backup reminder: a small soft dot on the gear (parents only), and the menu line in a warmer colour */
 #btnGear { position: relative; }
 #btnGear.remind::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #f2a65a; }
+/* holding the gear: a gold ring fills around it in 1 second (pathLength 100: offset 100 = empty, 0 = full) */
+#btnGear .hold-ring { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }
+#btnGear.holding .hold-ring { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+/* the small "Haltu inni" note above the gear after a short tap (never catches taps itself) */
+#holdHint { position: fixed; z-index: 50; transform: translate(-50%, -100%); padding: 6px 12px; border-radius: 12px; background: #fff;
+  color: var(--ink); font: 600 16px var(--font); box-shadow: 0 3px 10px rgba(30, 40, 60, .25); pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+#holdHint.show { opacity: 1; }
 .menu p#backupWhen.due { color: #b8481e; font-weight: 600; }
 .tile.look { aspect-ratio: 4 / 5; background: linear-gradient(#e6f4fb, #f4fbef); }
 
@@ -148,6 +155,8 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
 /* sparkle burst */
 .spark { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 45; }
 .spark svg { width: 100%; height: 100%; }
+/* magic rainbow puff when a helper puts a piece on her (magicPuff in app.js sets size, colour and movement) */
+.puff { position: absolute; border-radius: 50%; pointer-events: none; z-index: 44; opacity: 0; }
 
 /* snow */
 .snow { position: absolute; top: -5%; width: 8px; height: 8px; border-radius: 50%; background: #fff; opacity: .85; animation: fall linear infinite; pointer-events: none; }
@@ -388,6 +397,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
    */
   function report(code, detail = '', err = null) {
     const msg = err ? String(err.message || err).slice(0, 200) : '';
+    detail = String(detail).slice(0, 120);   // keep every entry small, whatever it is about
     const now = new Date().toISOString();
     const log = list();
     const same = log.find(e => e.code === code && e.detail === String(detail) && e.msg === msg);
@@ -429,7 +439,7 @@ body { background: #bfe3f2; color: var(--ink); font-family: var(--font); overflo
   root.FJ = FJ;
 })(window);
 
-FJ.build = 'dd4607aa88';
+FJ.build = 'bc0c8e39b4';
 </script>
 <script>
 FJ.loading('core.js');
@@ -964,7 +974,9 @@ FJ.loading('core.js');
      Registry
      --------------------------------------------------------------- */
   const DOLL = {
-    shapes: {}, items: [], byId: {},
+    // byId has no built-in names (Object.create(null)): a saved id like "constructor" from a strange
+    // backup file then finds nothing, instead of something that isn't a clothing piece
+    shapes: {}, items: [], byId: Object.create(null),
 
     /**
      * Register a garment shape.
@@ -1582,7 +1594,7 @@ FJ.loading('core.js');
    */
   function drawHair(style, o = {}, color = '') {
     const pal = paletteOf(color), opts = pal ? Object.assign({}, o, { pal }) : o;
-    if (!HAIRSTYLES[style]) return HAIRSTYLES.loose(opts);
+    if (!Object.prototype.hasOwnProperty.call(HAIRSTYLES, style)) return HAIRSTYLES.loose(opts);   // only real styles, never a built-in name
     try { return HAIRSTYLES[style](opts); }
     catch (e) { fail('FJ-D02', style + (color ? ' / ' + color : ''), e); return HAIRSTYLES.loose(o); }
   }
@@ -14876,11 +14888,18 @@ FJ.loading('app.js');
   }
   /** True for a plain object (not null, not a list). */
   const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  /** Short text or '' (anything else, or very long text, from a file that was tampered with). */
+  const shortText = (v, max = 80) => (typeof v === 'string' && v.length <= max ? v : '');
+  /**
+   * Keep only short text ids (at most 40 pieces), so a strange file can't sneak anything else into her save.
+   * Slot names are NOT checked against today's slots: an old save must keep every piece it has.
+   */
+  const cleanWorn = w => Object.fromEntries(Object.entries(w).filter(([s, id]) => shortText(s) && shortText(id)).slice(0, 40));
   /** Keep only well-formed outfits (from storage or from an imported backup file). */
   function cleanOutfits(list) {
-    return (Array.isArray(list) ? list : []).filter(o => isObj(o) && typeof o.id === 'string' && isObj(o.worn))
-      .map(o => ({ id: o.id, createdAt: String(o.createdAt || ''), hair: typeof o.hair === 'string' ? o.hair : 'loose',
-        hairColor: typeof o.hairColor === 'string' ? o.hairColor : '', worn: Object.assign({}, o.worn), scene: o.scene }));
+    return (Array.isArray(list) ? list : []).slice(0, MAX_OUTFITS * 2).filter(o => isObj(o) && shortText(o.id) && isObj(o.worn))
+      .map(o => ({ id: o.id, createdAt: shortText(o.createdAt, 40), hair: shortText(o.hair) || 'loose',
+        hairColor: shortText(o.hairColor), worn: cleanWorn(o.worn), scene: shortText(o.scene) }));
   }
   /**
    * Turn whatever was stored into a valid current-version state.
@@ -14927,7 +14946,7 @@ FJ.loading('app.js');
   for (const k in state.friendWorn) for (const slot in state.friendWorn[k]) {
     if (!DOLL.byId[state.friendWorn[k][slot]]) { report('FJ-S06', k + ' wears ' + state.friendWorn[k][slot]); delete state.friendWorn[k][slot]; }
   }
-  if (!SCENES[state.scene]) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
+  if (!Object.prototype.hasOwnProperty.call(SCENES, state.scene)) { report('FJ-S06', 'scene ' + state.scene); state.scene = 'meadow'; }
 
   /**
    * The hairstyle and colour to wear for a stored [style, colour]. Old keys that were "a style in a colour"
@@ -14998,6 +15017,8 @@ FJ.loading('app.js');
     clop() { [0, .14, .28, .42].forEach(d => this.tone(180, .05, 'square', .02, d, 120)); },
     /** Unicorn magic: a quick run of high twinkles. */
     sparkle() { [1568, 1760, 2093, 2349, 2637].forEach((f, i) => this.tone(f, .2, 'sine', .03, i * .06)); },
+    /** Magic puff: a soft, quick shimmer of three high notes, quieter than the unicorn's sparkle. */
+    magic() { [2093, 2637, 3136].forEach((f, i) => this.tone(f, .22, 'sine', .022, .05 + i * .05)); },
     /** The elf's little bell. */
     bell() { this.tone(1318, .4, 'sine', .04); this.tone(1976, .3, 'sine', .02, .02); },
     /** Things fly back to the chest, or the scene changes. */
@@ -15126,12 +15147,43 @@ FJ.loading('app.js');
      Helpers who carry pieces: a puffin flies them over, or an elf does.
      --------------------------------------------------------------- */
   let helperTurn = 0;
-  /** A helper carries a piece from the chest to the doll and puts it on (puffin twice, then the elf). */
+  /** A helper carries a piece from the chest to the doll and puts it on (puffin twice, then the elf), with a magic puff. */
   function carry(id, fromRect) {
     const useElf = helperTurn++ % 3 === 2;
     Sound[useElf ? 'bell' : 'chirp']();
     const helper = guard('FJ-D04', useElf ? 'elf' : 'puffin', () => (useElf ? CREATURES.elf() : CREATURES.puffin()), '');
-    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, helper).then(() => equip(id));
+    return flyThumb(id, fromRect || chestRect(), dollRect(), 900, helper).then(() => { equip(id); magicPuff(id); });
+  }
+
+  const PUFF_COLS = ['#ff9aa8', '#ffbe7a', '#ffe680', '#9de59a', '#8fd0f5', '#c3a8f5'];   // soft rainbow, red → violet
+  /**
+   * A small glittery rainbow puff where a piece was just put on, as if by magic: six soft rainbow clouds
+   * spread out from the piece and fade, with a few twinkling stars. Only transform/opacity animate (cheap on
+   * the tablet), and every puff removes itself afterwards, so nothing is left behind.
+   */
+  function magicPuff(id) {
+    const sr = stage.getBoundingClientRect(), dr = dollRect();
+    // the piece on the doll (the doll was just redrawn by equip); if it can't be found, use the doll's middle
+    const piece = dollEl.querySelector(`[data-item="${CSS.escape(id)}"]`);
+    let r = piece ? piece.getBoundingClientRect() : null;
+    if (!r || !r.width || !r.height) r = { left: dr.left + dr.width * .3, top: dr.top + dr.height * .3, width: dr.width * .4, height: dr.height * .3 };
+    const [cx, cy] = centre(r), size = Math.max(36, Math.min(90, dr.width * .2));
+    const ring = Math.max(r.width, r.height) * .35 + size * .35;   // how far the clouds spread out
+    PUFF_COLS.forEach((col, i) => {
+      const p = document.createElement('div'); p.className = 'puff';
+      p.style.cssText = `left:${cx - sr.left}px;top:${cy - sr.top}px;width:${size}px;height:${size}px;background:radial-gradient(circle, ${col} 0 38%, ${col}00 70%)`;
+      stage.appendChild(p);
+      const a = (i / PUFF_COLS.length) * Math.PI * 2 - Math.PI / 2, dx = Math.cos(a) * ring, dy = Math.sin(a) * ring;
+      const anim = p.animate([
+        { transform: 'translate(-50%,-50%) scale(.2)', opacity: 0 },
+        { transform: `translate(calc(-50% + ${dx * .6}px),calc(-50% + ${dy * .6}px)) scale(1)`, opacity: .95, offset: .35 },
+        { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1.35)`, opacity: 0 },
+      ], { duration: 900, delay: i * 25, easing: 'ease-out', fill: 'backwards' });
+      // remove the cloud when it has faded (a timer too, in case the animation is interrupted)
+      const gone = () => p.remove(); anim.onfinish = gone; anim.oncancel = gone; setTimeout(gone, 1400);
+    });
+    sparkleAt(r, 10);   // the glitter
+    Sound.magic();
   }
 
   /* ---------------------------------------------------------------
@@ -15185,13 +15237,21 @@ FJ.loading('app.js');
   }
   /** Is h a hairstyle that exists (also the old keys)? */
   const HAIR_OK = h => DOLL.hairKeys.includes(h);
-  /** Draw a tile's picture only when it scrolls into view (a whole doll per tile is heavy for an old tablet). */
-  const lazyIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
-    if (!e.isIntersecting || !e.target._draw) return;
-    e.target.innerHTML = e.target._draw(); e.target._draw = null; lazyIO.unobserve(e.target); syncDefs();
-  }), { root: gridEl, rootMargin: '200px' }) : null;
-  /** Give a tile its picture later, when it scrolls into view (or right away in browsers without IntersectionObserver). */
-  function lazyThumb(el, draw) { if (lazyIO) { el._draw = draw; lazyIO.observe(el); } else el.innerHTML = draw(); }
+  /**
+   * A watcher that draws a picture only when its box scrolls into view inside `root` (a whole doll per picture
+   * is heavy for an old tablet). Returns null in browsers without IntersectionObserver.
+   */
+  function lazyWatcher(root, margin) {
+    if (!('IntersectionObserver' in window)) return null;
+    const io = new IntersectionObserver(entries => entries.forEach(e => {
+      if (!e.isIntersecting || !e.target._draw) return;
+      e.target.insertAdjacentHTML('afterbegin', e.target._draw()); e.target._draw = null; io.unobserve(e.target); syncDefs();
+    }), { root, rootMargin: margin });
+    return io;
+  }
+  const lazyIO = lazyWatcher(gridEl, '200px'), galleryIO = lazyWatcher(galleryEl, '0px 300px');
+  /** Give a box its picture later, when it scrolls into view (or right away in browsers without IntersectionObserver). */
+  function lazyThumb(el, draw, io = lazyIO) { if (io) { el._draw = draw; io.observe(el); } else el.insertAdjacentHTML('afterbegin', draw()); }
 
   /** Build the category tabs; each tab icon is the first piece in that category. */
   function renderTabs() {
@@ -15213,6 +15273,7 @@ FJ.loading('app.js');
 
   /** Build the grid of pieces for the open tab. */
   function renderGrid() {
+    if (lazyIO) lazyIO.disconnect();   // stop watching the old tiles, so they can be freed from memory
     gridEl.innerHTML = ''; gridEl.scrollTop = 0;
     if (state.cat === 'hair') {
       gridEl.appendChild(hairColorRow());
@@ -15564,7 +15625,7 @@ FJ.loading('app.js');
     }
   }
 
-  /** What each creature does when tapped. Elves and unicorns help with clothes. */
+  /** What each creature does when tapped: a sound and a little hop or wave. The unicorn shows the rainbow. */
   function creatureTap(c, el) {
     Sound.init();
     const cls = c.k === 'horse' && !c.seat ? 'react-tolt' : c.k === 'elf' || c.k === 'driver' ? 'react-wave' : 'react';
@@ -15574,20 +15635,14 @@ FJ.loading('app.js');
     ({ puffin: () => Sound.chirp(), sheep: () => Sound.baa(), horse: () => Sound.clop(), fox: () => Sound.chirp(), seal: () => Sound.tone(300, .2, 'triangle', .04, 0, 420),
        unicorn: () => { Sound.sparkle(); showRainbow(); sparkleAt(el.getBoundingClientRect(), 10); },
        driver: () => Sound.horn(),
-       elf: () => { Sound.bell(); surprise(el); } })[c.k]?.();
+       // the elf only waves and rings his bell; he never puts clothes on her by himself (she chooses her clothes)
+       elf: () => { Sound.bell(); sparkleAt(el.getBoundingClientRect(), 4); } })[c.k]?.();
   }
   /** The rainbow shows for a while (unicorn magic). */
   function showRainbow() {
     let rb = sceneEl.querySelector('#rainbow');
     if (!rb) return;
     rb.classList.add('show'); setTimeout(() => rb.classList.remove('show'), 7000);
-  }
-  /** An elf fetches a surprise piece from the chest and puts it on the doll. */
-  function surprise(elfEl) {
-    const pool = DOLL.items.filter(i => !Object.values(state.worn).includes(i.id));
-    if (!pool.length) return;
-    const it = pool[Math.floor(Math.random() * pool.length)];
-    setTimeout(() => flyThumb(it.id, chestRect(), dollRect(), 1000, guard('FJ-D04', 'elf', () => CREATURES.elf(), '')).then(() => { equip(it.id); renderDoll(); }), 400);
   }
 
   /* ---------------------------------------------------------------
@@ -15611,13 +15666,16 @@ FJ.loading('app.js');
   }
   /** The saved-outfits picture frame: tap one to wear it, long-press to delete. */
   function renderGallery() {
+    if (galleryIO) galleryIO.disconnect();   // forget the old cards
     galleryEl.innerHTML = '';
     if (!state.outfits.length) {
       galleryEl.innerHTML = `<div class="empty">${ICON.heart} Ýttu á hjartað til að vista föt</div>`; return;
     }
     for (const o of state.outfits) {
       const card = document.createElement('div'); card.className = 'card'; card.setAttribute('role', 'button');
-      card.innerHTML = `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, hairColor: o.hairColor, worn: o.worn })}</svg><button class="del" aria-label="Eyða">✕</button>`;
+      card.innerHTML = '<button class="del" aria-label="Eyða">✕</button>';
+      // the doll picture is drawn only when the card scrolls into view (with many saved outfits that is much lighter)
+      lazyThumb(card, () => `<svg viewBox="60 20 280 740">${DOLL.renderDoll({ hair: o.hair, hairColor: o.hairColor, worn: o.worn })}</svg>`, galleryIO);
       let pressTimer = 0, long = false;
       card.addEventListener('pointerdown', () => { long = false; pressTimer = setTimeout(() => { long = true; card.classList.add('deleting'); }, 800); });
       card.addEventListener('pointerup', e => {
@@ -15900,6 +15958,8 @@ FJ.loading('app.js');
   $('#importFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
+    // a real backup is well under 1 MB (200 outfits); a huge file is not ours and would only fill the memory
+    if (f.size > 5e6) { report('FJ-S04', f.name.slice(0, 60) + ' (' + Math.round(f.size / 1e6) + ' MB)'); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
     let d = null, why = null; try { d = JSON.parse(await f.text()); } catch (err) { why = err; }
     if (!isObj(d) || !Array.isArray(d.outfits)) { report('FJ-S04', f.name, why); backupNote('Þetta er ekki afrit úr Fjársjóðskistunni.'); return; }
     const have = new Set(state.outfits.map(o => o.id)), keys = new Set(state.outfits.map(o => outfitKey(o.hair, o.worn, o.hairColor)));
@@ -15927,11 +15987,35 @@ FJ.loading('app.js');
     if (b.dataset.armed) { state.worn = {}; state.loose = []; state.outfits = []; state.friendWorn = {}; renderAll(); flush(); b.textContent = 'Eyða öllu'; delete b.dataset.armed; menuEl.hidden = true; }
     else { b.dataset.armed = '1'; b.textContent = 'Ýttu aftur til að staðfesta'; }
   });
+  /**
+   * The gear opens the parent menu only when held for 1 second, so she doesn't open it by accident.
+   * While it is held a ring fills around the gear; a short tap shows a small "Haltu inni" (hold it) note
+   * above it, so a grown-up knows what to do. The finger is "captured", so a small wobble off the button
+   * doesn't cancel the hold, and Android's own long-press menu is switched off for the button.
+   */
   (function longPress(btn) {
-    let t = 0;
-    btn.addEventListener('pointerdown', () => { t = setTimeout(() => { renderMenu(); menuEl.hidden = false; }, 1000); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(t)));
+    let t = 0, downAt = 0;
+    /** Stop holding: empty the ring and forget the timer. */
+    const stop = () => { clearTimeout(t); btn.classList.remove('holding'); };
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+    btn.addEventListener('pointerdown', e => {
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* older browsers: the hold still works without it */ }
+      downAt = Date.now(); btn.classList.add('holding');
+      t = setTimeout(() => { stop(); downAt = 0; renderMenu(); menuEl.hidden = false; }, 1000);
+    });
+    btn.addEventListener('pointerup', () => { const short = downAt && Date.now() - downAt < 1000; stop(); downAt = 0; if (short) holdHint(btn); });
+    ['pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, () => { stop(); downAt = 0; }));
   })($('#btnGear'));
+  /** The little "Haltu inni" note above the gear for a moment (it never blocks a tap). */
+  function holdHint(btn) {
+    let n = $('#holdHint');
+    if (!n) { n = document.createElement('div'); n.id = 'holdHint'; n.textContent = 'Haltu inni'; document.body.appendChild(n); }
+    const r = btn.getBoundingClientRect();
+    n.style.left = Math.max(56, Math.min(innerWidth - 56, r.left + r.width / 2)) + 'px';
+    n.style.top = Math.max(8, r.top - 10) + 'px';
+    n.classList.remove('show'); void n.offsetWidth; n.classList.add('show');
+    clearTimeout(holdHint.t); holdHint.t = setTimeout(() => n.classList.remove('show'), 1600);
+  }
 
   /* ---------------------------------------------------------------
      Buttons
@@ -15941,7 +16025,8 @@ FJ.loading('app.js');
     frame: '<svg viewBox="0 0 40 40"><rect x="7" y="5" width="26" height="30" rx="4" fill="#ffe08a" stroke="#c4901e" stroke-width="2.5"/><rect x="11" y="9" width="18" height="22" rx="2" fill="#bfe3f2"/><circle cx="20" cy="16" r="4" fill="#f7d7c3"/><path d="M14,30 Q20,20 26,30Z" fill="#ef5b7a"/></svg>',
     undress: '<svg viewBox="0 0 40 40"><path d="M12,8 l-7,6 4,5 3,-2 v16 h16 v-16 l3,2 4,-5 -7,-6 q-4,4 -8,0 q-4,4 -8,0z" fill="#7fc3ea" stroke="#3f7fa8" stroke-width="2.4" stroke-linejoin="round"/><path d="M28,24 l8,8 M36,24 l-8,8" stroke="#e2505b" stroke-width="3.5" stroke-linecap="round"/></svg>',
     tidy: '<svg viewBox="0 0 40 40"><path d="M6,22 h28 v12 h-28z" fill="#b47a45" stroke="#5c3a1f" stroke-width="2.4"/><path d="M20,4 v14 M14,12 l6,6 6,-6" stroke="#3f8fd2" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    gear: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="7" fill="none" stroke="#7a6a7a" stroke-width="3"/><path d="M20,4v6M20,30v6M4,20h6M30,20h6M8.7,8.7l4.2,4.2M27.1,27.1l4.2,4.2M8.7,31.3l4.2,-4.2M27.1,12.9l4.2,-4.2" stroke="#7a6a7a" stroke-width="3" stroke-linecap="round"/></svg>',
+    // the gear; the outer "hold-ring" fills up while a grown-up holds the button
+    gear: '<svg viewBox="0 0 40 40"><circle class="hold-ring" cx="20" cy="20" r="18" pathLength="100" transform="rotate(-90 20 20)"/><circle cx="20" cy="20" r="7" fill="none" stroke="#7a6a7a" stroke-width="3"/><path d="M20,4v6M20,30v6M4,20h6M30,20h6M8.7,8.7l4.2,4.2M27.1,27.1l4.2,4.2M8.7,31.3l4.2,-4.2M27.1,12.9l4.2,-4.2" stroke="#7a6a7a" stroke-width="3" stroke-linecap="round"/></svg>',
   };
   $('#btnSave').innerHTML = ICON.heart; $('#btnGallery').innerHTML = ICON.frame; $('#btnUndress').innerHTML = ICON.undress; $('#btnTidy').innerHTML = ICON.tidy; $('#btnGear').innerHTML = ICON.gear;
   $('#btnSave').addEventListener('click', saveOutfit);
