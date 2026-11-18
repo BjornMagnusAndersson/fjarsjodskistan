@@ -1303,7 +1303,12 @@
       if (el.closest('defs,clipPath,pattern,mask')) continue;     // clip shapes and pattern tiles are not drawn as such
       const fill = el.getAttribute('fill'), hasFill = fill !== null && fill !== 'none';
       const faint = +(el.getAttribute('opacity') ?? 1) < .9 || +(el.getAttribute('fill-opacity') ?? 1) < .9;
-      if (hasFill && (SHADING.test(fill) || faint)) { el.remove(); continue; }
+      // The face is special: its soft see-through lines (eye creases, lower lashes, the ring around each eye,
+      // mouth corners, lower lip, freckles) look like dark make-up and tired eyes when drawn as hard lines,
+      // so in the face every faint thing goes, and no extra outlines are added (the eye whites stay plain).
+      // What is left is the cute part: iris ring, dark pupil with its white shine, upper lashes, brows, nose, smile.
+      const inFace = !!el.closest('.face');
+      if ((hasFill && (SHADING.test(fill) || faint)) || (inFace && faint)) { el.remove(); continue; }
       const stroke = el.getAttribute('stroke'), hasStroke = stroke !== null && stroke !== 'none';
       if (hasStroke) el.setAttribute('stroke', LINE);
       // a very thick line is a painted band (a swim ring, a strap): draw it as an outline to colour in,
@@ -1319,7 +1324,7 @@
       const dark = m && [0, 2, 4].reduce((s, i, k) => s + parseInt(m[1].slice(i, i + 2), 16) * [.3, .6, .1][k], 0) < 70;
       if (dark && box.width * box.height < 400) { el.setAttribute('fill', LINE); continue; }   // pupils and small dark details
       el.setAttribute('fill', '#ffffff');
-      if (!hasStroke && box.width > 10 && box.height > 10) {
+      if (!hasStroke && !inFace && box.width > 10 && box.height > 10) {
         el.setAttribute('stroke', LINE); el.setAttribute('stroke-width', '2'); el.setAttribute('stroke-linejoin', 'round');
       }
     }

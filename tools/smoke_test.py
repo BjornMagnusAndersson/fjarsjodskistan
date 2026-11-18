@@ -268,6 +268,10 @@ try:
         ok(pg.evaluate('window.__printed') == 1 and pg.is_hidden('#menu'), 'printing a colouring page opens the print window')
         ok('class="lid"' not in src and 'url(#soft-' not in src and 'url(#sk-blush' not in src and '#3a3040' in src,
            'the colouring page has open eyes, outlines and no shading')
+        ok(pg.evaluate("""(() => { const s = decodeURIComponent(document.querySelector('#printPage img').src).replace(/^data:image\\/svg\\+xml;charset=utf-8,/, '');
+             const d = new DOMParser().parseFromString(s, 'image/svg+xml');
+             return [...d.querySelectorAll('.face *')].filter(e => +(e.getAttribute('opacity') ?? 1) < .9).length; })()""") == 0,
+           'the colouring page face has no faint lines (no dark rings or bags around the eyes)')
         pg.emulate_media(media='print')
         ok(pg.is_hidden('#stage') and pg.is_visible('#printPage img'), 'only the colouring page is printed')
         pg.emulate_media(media='screen')
